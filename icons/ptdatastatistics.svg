@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512" role="img" aria-label="PT数据统计">
+  <defs>
+    <linearGradient id="bg" x1="48" y1="30" x2="460" y2="480" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#8b5cf6"/><stop offset=".52" stop-color="#4f46e5"/><stop offset="1" stop-color="#0ea5e9"/>
+    </linearGradient>
+    <linearGradient id="ring" x1="140" y1="110" x2="390" y2="400" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#d9f99d"/><stop offset=".47" stop-color="#5eead4"/><stop offset="1" stop-color="#38bdf8"/>
+    </linearGradient>
+    <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%"><feDropShadow dx="0" dy="18" stdDeviation="18" flood-opacity=".28"/></filter>
+  </defs>
+  <rect x="28" y="28" width="456" height="456" rx="112" fill="url(#bg)"/>
+  <circle cx="256" cy="256" r="142" fill="none" stroke="#fff" stroke-opacity=".18" stroke-width="54"/>
+  <path d="M256 114a142 142 0 1 1-117.8 62.7" fill="none" stroke="url(#ring)" stroke-width="54" stroke-linecap="round" filter="url(#shadow)"/>
+  <path d="M202 286v-82h69c45 0 72 22 72 62s-27 63-72 63h-21v55h-48v-98zm48-39v40h19c17 0 26-7 26-20s-9-20-26-20h-19z" fill="#fff"/>
+  <path d="M135 166l-28 38h19v37h18v-37h19zm242 180l28-38h-19v-37h-18v37h-19z" fill="#fff" fill-opacity=".92"/>
+</svg>

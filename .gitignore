@@ -1,0 +1,5 @@
+node_modules/
+.pnpm-store/
+.ruff_cache/
+__pycache__/
+*.py[cod]
