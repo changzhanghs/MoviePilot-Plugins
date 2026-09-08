@@ -52,7 +52,7 @@ from .core import (
     selected_export_fields,
 )
 from .exporters import build_csv
-from .models import PTSiteSnapshot
+from .models import PTSiteHourlySnapshot, PTSiteSnapshot
 from .repository import SnapshotRepository
 
 
@@ -62,7 +62,7 @@ class PTDataStatistics(_PluginBase):
     plugin_name = "PT数据统计"
     plugin_desc = "统计 PT 站点累计与每日上传下载，提供历史、通知和导出。"
     plugin_icon = "ptdatastatistics.svg"
-    plugin_version = "1.0.1"
+    plugin_version = "1.0.2"
     plugin_author = "cz"
     author_url = "https://github.com/changzhanghs"
     plugin_config_prefix = "ptdatastatistics_"
@@ -147,7 +147,7 @@ class PTDataStatistics(_PluginBase):
     def get_database_models(self) -> list[type]:
         """声明插件专属数据库模型。"""
 
-        return [PTSiteSnapshot]
+        return [PTSiteSnapshot, PTSiteHourlySnapshot]
 
     @staticmethod
     def get_command() -> list[dict[str, Any]]:
@@ -245,7 +245,7 @@ class PTDataStatistics(_PluginBase):
                 "endpoint": self.api_hourly_traffic,
                 "methods": ["GET"],
                 "auth": "bear",
-                "summary": "查询 MP 小时流量采样",
+                "summary": "查询随 MP 刷新保存的小时流量采样",
                 "response_model": HourlyTrafficResponse,
             },
             {
@@ -397,6 +397,12 @@ class PTDataStatistics(_PluginBase):
                     snapshots_by_day[key] = item
             snapshots = list(snapshots_by_day.values())
             imported = repository.upsert(snapshots)
+            captured_at = self._now()
+            server_day = captured_at.date().isoformat()
+            repository.capture_hourly(
+                (item for item in snapshots if item.get("updated_day") == server_day),
+                captured_at=captured_at.isoformat(sep=" ", timespec="seconds"),
+            )
             active_domains = {
                 site["domain"] for site in configured_sites if site["domain"] and site["is_active"]
             }
@@ -405,7 +411,7 @@ class PTDataStatistics(_PluginBase):
                 self.save_data("history_bootstrap_v1", True)
             deleted = repository.cleanup(
                 retention_days=self._retention_days,
-                server_day=self._now().date().isoformat(),
+                server_day=server_day,
             )
             completed_at = self._now().isoformat(timespec="seconds")
             self.save_data("last_sync", completed_at)
@@ -636,24 +642,16 @@ class PTDataStatistics(_PluginBase):
         day: str = Query(...),
         site_id: int | None = Query(default=None, ge=1),
     ) -> HourlyTrafficResponse:
-        """读取 MP 原始站点采样并计算指定自然日的小时增量。"""
+        """读取插件随 MP 刷新保存的时点快照并计算指定自然日的小时增量。"""
 
         try:
             selected_day = date.fromisoformat(day).isoformat()
         except ValueError as error:
             raise HTTPException(status_code=422, detail="日期格式必须为 YYYY-MM-DD") from error
 
-        site_oper = SiteOper()
-        configured_sites = [self._site_dict(site) for site in (site_oper.list() or [])]
-        sites_by_domain = {site["domain"]: site for site in configured_sites if site["domain"]}
+        configured_sites = self._configured_sites()
         selected_site = next((site for site in configured_sites if site.get("id") == site_id), None)
-        snapshots = []
-        for row in site_oper.get_userdata() or []:
-            item = self._snapshot_dict(row, sites_by_domain)
-            if site_id is not None and item.get("site_id") != site_id:
-                continue
-            snapshots.append(item)
-
+        snapshots = self._repository().hourly_for_day(selected_day, site_id=site_id)
         result = build_hourly_traffic(snapshots, selected_day)
         return HourlyTrafficResponse(
             day=selected_day,
