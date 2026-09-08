@@ -78,6 +78,7 @@ SiteSnapshotData = importlib.import_module("ptdatastatistics.api_models").SiteSn
 models = importlib.import_module("ptdatastatistics.models")
 PluginBase = models.PluginBase
 PTSiteSnapshot = models.PTSiteSnapshot
+PTSiteHourlySnapshot = models.PTSiteHourlySnapshot
 SnapshotRepository = importlib.import_module("ptdatastatistics.repository").SnapshotRepository
 
 
@@ -101,7 +102,7 @@ class HostContractTests(unittest.TestCase):
         plugin = PTDataStatistics.__new__(PTDataStatistics)
         plugin.init_plugin({"enabled": True})
         self.assertEqual(plugin.get_render_mode(), ("vue", "dist/assets"))
-        self.assertEqual(plugin.get_database_models(), [PTSiteSnapshot])
+        self.assertEqual(plugin.get_database_models(), [PTSiteSnapshot, PTSiteHourlySnapshot])
         self.assertEqual(plugin.get_sidebar_nav()[0]["nav_key"], "main")
         self.assertEqual(plugin.get_sidebar_nav()[0]["section"], "discovery")
         paths = {(item["path"], tuple(item["methods"])) for item in plugin.get_api()}
@@ -195,6 +196,90 @@ class HostContractTests(unittest.TestCase):
         repository.mark_active_domains(set())
         self.assertEqual(repository.latest(active_only=True), [])
         self.assertEqual(repository.latest(active_only=False)[0]["site_name"], "示例")
+
+    def test_repository_captures_distinct_mp_refreshes_for_hourly_traffic(self):
+        repository = SnapshotRepository(DatabaseHandle())
+        first = {
+            "site_id": 7,
+            "domain": "example.test",
+            "site_name": "示例",
+            "updated_day": "2026-09-08",
+            "updated_time": "09:00:00",
+            "source_updated_at": "2026-09-08 09:00:00",
+            "upload": 100,
+            "download": 50,
+            "err_msg": "",
+        }
+        second = {
+            **first,
+            "updated_time": "10:00:00",
+            "source_updated_at": "2026-09-08 10:00:00",
+            "upload": 140,
+            "download": 60,
+        }
+
+        self.assertEqual(repository.capture_hourly([first, second]), 2)
+        self.assertEqual(repository.capture_hourly([second]), 0)
+        rows = repository.hourly_for_day("2026-09-08", site_id=7)
+        self.assertEqual([row["upload"] for row in rows], [100, 140])
+        self.assertEqual(rows[1]["source_updated_at"], "2026-09-08 10:00:00")
+
+    def test_hourly_snapshots_follow_history_retention(self):
+        repository = SnapshotRepository(DatabaseHandle())
+        repository.capture_hourly(
+            [{
+                "site_id": 7,
+                "domain": "example.test",
+                "updated_day": day,
+                "updated_time": "09:00:00",
+                "source_updated_at": f"{day} 09:00:00",
+                "upload": 100,
+            } for day in ("2026-06-10", "2026-09-08")]
+        )
+
+        deleted = repository.cleanup(retention_days=90, server_day="2026-09-08")
+
+        self.assertEqual(deleted, 1)
+        self.assertEqual(repository.hourly_for_day("2026-06-10"), [])
+        self.assertEqual(len(repository.hourly_for_day("2026-09-08")), 1)
+
+    def test_hourly_api_reads_plugin_refresh_snapshots(self):
+        repository = SnapshotRepository(DatabaseHandle())
+        repository.capture_hourly(
+            [
+                {
+                    "site_id": 7,
+                    "domain": "example.test",
+                    "site_name": "示例",
+                    "updated_day": "2026-09-08",
+                    "updated_time": "09:00:00",
+                    "source_updated_at": "2026-09-08 09:00:00",
+                    "upload": 100,
+                    "download": 50,
+                },
+                {
+                    "site_id": 7,
+                    "domain": "example.test",
+                    "site_name": "示例",
+                    "updated_day": "2026-09-08",
+                    "updated_time": "10:00:00",
+                    "source_updated_at": "2026-09-08 10:00:00",
+                    "upload": 140,
+                    "download": 60,
+                },
+            ]
+        )
+        plugin = PTDataStatistics.__new__(PTDataStatistics)
+        plugin._repository = lambda: repository
+        plugin._configured_sites = lambda: [
+            {"id": 7, "name": "示例", "domain": "example.test", "is_active": True}
+        ]
+
+        result = plugin.api_hourly_traffic(day="2026-09-08", site_id=7)
+
+        self.assertTrue(result.baseline_valid)
+        self.assertEqual(result.points[10].upload, 40)
+        self.assertEqual(result.points[10].download, 10)
 
     def test_history_excludes_failed_snapshots(self):
         repository = SnapshotRepository(DatabaseHandle())
