@@ -1,32 +1,41 @@
 import { importShared } from './__federation_fn_import-JrT3xvdd.js';
-import { P as PTStatsWorkbench } from './PTStatsWorkbench-ZH_Zw6z8.js';
+import { P as PTStatsWorkbench } from './PTStatsWorkbench-BsLNx8pR.js';
 
 const {openBlock:_openBlock,createBlock:_createBlock} = await importShared('vue');
 
 
+const {onMounted} = await importShared('vue');
+
+
 const _sfc_main = {
-  __name: 'Page',
+  __name: 'Config',
   props: {
+  initialConfig: { type: Object, default: () => ({}) },
   api: { type: Object, default: () => ({}) },
   pluginId: { type: String, default: 'PTDataStatistics' },
   sourcePluginId: { type: String, default: '' },
   nativeSubscribe: { type: Function, default: null },
 },
-  emits: ['action', 'switch', 'close'],
-  setup(__props) {
+  emits: ['layout', 'save', 'close', 'switch'],
+  setup(__props, { emit: __emit }) {
 
 
+const emit = __emit;
 
+onMounted(() => emit('layout', { maxWidth: '80rem' }));
 
 return (_ctx, _cache) => {
   return (_openBlock(), _createBlock(PTStatsWorkbench, {
     api: __props.api,
     "plugin-id": __props.pluginId,
+    "initial-settings": __props.initialConfig,
+    "host-managed-config": "",
+    "initial-tab": "config",
     "show-close": "",
     compact: "",
-    onAction: _cache[0] || (_cache[0] = $event => (_ctx.$emit('action'))),
+    onSave: _cache[0] || (_cache[0] = $event => (_ctx.$emit('save', $event))),
     onClose: _cache[1] || (_cache[1] = $event => (_ctx.$emit('close')))
-  }, null, 8, ["api", "plugin-id"]))
+  }, null, 8, ["api", "plugin-id", "initial-settings"]))
 }
 }
 
