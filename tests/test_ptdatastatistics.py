@@ -199,6 +199,22 @@ class TwelveAndExportTests(unittest.TestCase):
         joined = [item for item in progress["items"] if item["state"] == "joined"]
         self.assertEqual([item["key"] for item in joined], ["u2", "ttg", "mteam"])
 
+    def test_joined_twelve_sites_use_full_join_timestamp_order(self):
+        progress = core.build_twelve_progress(
+            [
+                {"id": 1, "name": "TTG"},
+                {"id": 2, "name": "U2"},
+                {"id": 3, "name": "M-Team"},
+            ],
+            {
+                1: {"err_msg": "", "join_at": "2026-09-08 18:30:00"},
+                2: {"err_msg": "", "join_at": "2026-09-08 08:15:00"},
+                3: {"err_msg": "", "join_at": "2026-09-08 12:00:00"},
+            },
+        )
+        joined = [item for item in progress["items"] if item["state"] == "joined"]
+        self.assertEqual([item["key"] for item in joined], ["u2", "mteam", "ttg"])
+
     def test_export_field_filter_preserves_selection_order(self):
         self.assertEqual(
             core.selected_export_fields("download,unknown,site_name"),
@@ -271,7 +287,8 @@ class TwelveAndExportTests(unittest.TestCase):
         self.assertEqual(site["retirement_level"], "Extreme User")
         self.assertEqual(levels["Power User"]["eligible_date"], "2026-08-07")
         self.assertEqual(levels["Power User"]["min_download"], 120 * core.GIB)
-        self.assertEqual(levels["Power User"]["min_upload"], 0)
+        self.assertEqual(levels["Power User"]["min_upload"], 240 * core.GIB)
+        self.assertTrue(levels["Power User"]["min_upload_strict"])
         self.assertEqual(levels["Power User"]["min_ratio"], 2.0)
         self.assertTrue(levels["Power User"]["min_ratio_strict"])
         self.assertEqual(levels["Power User"]["min_seeding_points"], 100_000.0)
@@ -331,11 +348,14 @@ class TwelveAndExportTests(unittest.TestCase):
         self.assertEqual(site["next_level"], "Power User")
         self.assertEqual(levels["Power User"]["eligible_date"], "2026-01-30")
         self.assertEqual(levels["Power User"]["min_download"], 200 * core.GIB)
+        self.assertEqual(levels["Power User"]["min_upload"], 400 * core.GIB)
         self.assertTrue(levels["Power User"]["min_join_days_strict"])
+        self.assertTrue(levels["Power User"]["min_upload_strict"])
         self.assertTrue(levels["Power User"]["min_download_strict"])
         self.assertTrue(levels["Power User"]["min_ratio_strict"])
         self.assertIn("账号时间还差 1 天", levels["Power User"]["missing"])
         self.assertIn("下载需大于 200.0 GB", levels["Power User"]["missing"])
+        self.assertIn("上传还差 400.0 GB", levels["Power User"]["missing"])
         self.assertIn("分享率需大于 2", levels["Power User"]["missing"])
         self.assertTrue(levels["Extreme User"]["is_retirement"])
         self.assertIn("永久保号", levels["Extreme User"]["description"])
@@ -396,15 +416,16 @@ class PackagingTests(unittest.TestCase):
         manifest = json.loads((ROOT / "package.v3.json").read_text(encoding="utf-8"))
         meta = manifest["PTDataStatistics"]
         source = (PLUGIN / "__init__.py").read_text(encoding="utf-8")
-        self.assertEqual(meta["version"], "1.0.5")
+        self.assertEqual(meta["version"], "1.0.6")
+        self.assertEqual(meta["history"]["v1.0.6"], "更新了一些内容")
         self.assertEqual(meta["history"]["v1.0.5"], "更新了一些内容")
         self.assertEqual(meta["history"]["v1.0.4"], "更新了一些内容")
         self.assertEqual(meta["history"]["v1.0.3"], "更新了一些内容")
         self.assertEqual(meta["history"]["v1.0.2"], "更新了一些东西")
         self.assertEqual(meta["history"]["v1.0.1"], "更新了一些东西")
         self.assertEqual(meta["history"]["v1.0.0"], "更新了一些东西")
-        self.assertEqual(list(meta["history"]), ["v1.0.5", "v1.0.4", "v1.0.3", "v1.0.2", "v1.0.1", "v1.0.0"])
-        self.assertIn('plugin_version = "1.0.5"', source)
+        self.assertEqual(list(meta["history"]), ["v1.0.6", "v1.0.5", "v1.0.4", "v1.0.3", "v1.0.2", "v1.0.1", "v1.0.0"])
+        self.assertIn('plugin_version = "1.0.6"', source)
         self.assertEqual(meta["system_version"], ">=3.0.0")
         self.assertNotIn("release", meta)
 
@@ -444,7 +465,11 @@ class PackagingTests(unittest.TestCase):
             encoding="utf-8"
         )
         self.assertIn("item.state === 'joined' && item.site_id", source)
-        self.assertIn("item.state === 'joined' ? item.name : '未解锁'", source)
+        self.assertIn('v-if="item.state === \'joined\'" class="twelve-node__name"', source)
+        self.assertIn('v-if="item.state === \'joined\'" class="twelve-node__date"', source)
+        self.assertNotIn("item.state === 'joined' ? item.name : '未解锁'", source)
+        self.assertIn('class="twelve-node__latest">最近加入', source)
+        self.assertIn('class="twelve-remaining">还差', source)
         self.assertNotIn(":hint=\"`服务器日期 ${overview.server_date || '—'}`\"", source)
         self.assertNotIn("查询数据</VBtn>", source)
         self.assertIn(":label=\"panel.inputLabel\"", source)
@@ -488,6 +513,8 @@ class PackagingTests(unittest.TestCase):
         self.assertNotIn("<th>做种数 / 体积</th>", source)
         self.assertIn("<th>分享率</th><th>魔力</th><th>做种数</th><th>做种体积</th>", source)
         self.assertIn("小时曲线至少需要同一站点在当天产生 2 次数据刷新", source)
+        self.assertIn('<span><i class="legend__upload" />上传</span>', source)
+        self.assertIn('<span><i class="legend__download" />下载</span>', source)
         self.assertNotIn("history-line-chart--expanded", source)
         self.assertIn('>数据统计</VTab>', source)
         self.assertIn(">数据刷新</VBtn>", source)
@@ -516,7 +543,8 @@ class PackagingTests(unittest.TestCase):
         self.assertIn('class="retirement-route-rail"', source)
         self.assertIn('class="retirement-route-rail__track"', source)
         self.assertIn("--route-count", source)
-        self.assertIn("overflow-y:auto;overscroll-behavior:contain", source)
+        self.assertIn(".retirement-detail{min-width:0;min-height:0;overflow:visible", source)
+        self.assertNotIn(".retirement-detail{min-width:0;min-height:0;overflow-y:auto", source)
         self.assertNotIn("距离保号还差", source)
         self.assertNotIn("MoviePilot 不提供站点等级门槛和保号等级", source)
         self.assertIn('class="requirement-panel"', source)
