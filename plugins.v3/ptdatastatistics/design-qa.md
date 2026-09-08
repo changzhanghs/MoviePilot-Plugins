@@ -1,34 +1,32 @@
-# PTDataStatistics 历史数据页 Design QA
+# PTDataStatistics 养老进度页 Design QA
 
-- Source visual truth: `C:\Users\cz\.codex\generated_images\01a06dde-3ead-78b0-9af3-51dd41fad0fd\exec-7319e535-24fd-48dd-bdbd-2f04a1d0a4dc.png`
-- Implementation: 本地 Vite 预览 `http://127.0.0.1:4174/`，使用 Codex In-app Browser 校验。
-- Viewport: 1280 × 720 CSS px，device scale factor 1。
-- State: 深色主题，历史数据标签激活，31 天、7 个模拟站点；验证日、周和单站点筛选状态。
+- Source visual truth: `C:\Users\cz\.codex\generated_images\01a06dde-3ead-78b0-9af3-51dd41fad0fd\exec-9016ecdb-1a86-4c03-b6be-1910273d49c5.png`
+- Implementation: 本地 Vite 预览，使用 Codex In-app Browser 校验。
+- Viewport: 1264 × 720 CSS px，深色主题，养老进度标签激活。
+- State: 7 个已加入十二大站点、5 个未加入节点；观众站选中并展示完整等级路线。
 
-## Findings
+## Visual findings
 
 - 无 P0/P1/P2 遗留问题。
-- 历史导航固定为 190px 窄侧栏，右侧内容宽 1065px；周期和站点明细均保持独立滚动。
-- 站点表格容器 `clientWidth` 与 `scrollWidth` 均为 1005px，不存在横向滚动。
-- 小时曲线实际尺寸为 1022 × 245px，上传为绿色曲线、下载为红色曲线，曲线清晰且未遮挡标题和图例。
-- 页面不再包含“站点贡献”区域。
-- 点击“大青虫”行后，图表标题更新为“大青虫 · 每小时流量”，并出现“查看全部站点”操作；再次返回可恢复汇总曲线。
-- 切换到“周”后，左侧按周汇总，右侧标题和数据切换为“按日期流量”，不存在小时数据误用。
-- 字体、颜色、圆角和语义状态沿用 MoviePilot/Vuetify 主题；站点图标继续由现有 `SiteAvatar` 组件提供。
+- 十二大进度采用单条横向里程碑；已加入节点显示编号、站点图标、名称和加入日期，未加入节点仅显示编号与锁定状态，不泄露站点名称。
+- 汇总数据固定在标题右侧，最新加入站点有独立标记，底部保留“还差 5 个站点”。
+- 已加入站点按 MoviePilot 保存的完整加入时间排序；同一天加入时继续按时分秒判断真实先后。
+- 页面沿用现有 MoviePilot/Vuetify 深色主题、圆角、字体和语义色，不引入新的设计语言。
 
-## Data fidelity
+## Layout and scroll checks
 
-- 日视图小时曲线只使用 MoviePilot 同日原始采样之间的累计差值，不进行平均拆分或虚构小时数据。
-- 当同日相邻采样不足时，明确显示“暂无法计算小时增量”。
-- 周/月视图基于插件现有日级历史快照聚合，点击站点后仅展示该站点序列。
+- `.retirement-detail`：`clientHeight = 1308px`，`scrollHeight = 1308px`，`overflow-y = visible`。
+- `.retirement-explorer`：`clientHeight = 1308px`，`scrollHeight = 1308px`，`overflow-y = visible`。
+- 右侧站点明细没有内部纵向滚动条，下一等级、保号目标和完整等级路线全部撑开，由外层页面统一滚动。
+- 左侧站点列表继续保持独立滚动和桌面端粘性定位；移动端自动回到普通文档流。
 
 ## Interaction checks
 
-- [x] 日 / 周 / 月周期切换。
-- [x] 左侧周期选择联动右侧汇总和图表。
-- [x] 点击站点行筛选上方曲线。
-- [x] “查看全部站点”恢复汇总曲线。
-- [x] 站点贡献已移除。
-- [x] 表格无横向滚动。
+- [x] 养老进度标签可正常激活。
+- [x] 十二大已加入与未加入状态区分清晰。
+- [x] 未加入节点不显示站点名称。
+- [x] 右侧下一等级、保号目标和等级路线完整展开。
+- [x] 等级行展开/折叠能力保持不变。
+- [x] 左侧站点选择逻辑保持不变。
 
 final result: passed

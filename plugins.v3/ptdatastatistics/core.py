@@ -594,10 +594,21 @@ def build_twelve_progress(
             }
         )
 
+    def joined_at_sort_value(value: Any) -> float:
+        """使用 MP 保存的完整加入时间排序，同日加入时也保持真实先后。"""
+
+        raw = as_text(value).strip()
+        if not raw:
+            return float("inf")
+        try:
+            return datetime.fromisoformat(raw.replace("Z", "+00:00")).timestamp()
+        except (TypeError, ValueError, OSError):
+            return float("inf")
+
     items.sort(
         key=lambda item: (
             item["state"] != "joined",
-            as_text(item.get("join_at"))[:10] or "9999-12-31",
+            joined_at_sort_value(item.get("join_at")),
             as_text(item.get("name")),
         )
     )
@@ -669,6 +680,22 @@ def _requirement_missing(level: Mapping[str, Any], snapshot: Mapping[str, Any]) 
     return missing
 
 
+def _with_derived_upload(level: Mapping[str, Any]) -> dict[str, Any]:
+    """根据下载量与分享率补全等级隐含的最低上传量。"""
+
+    normalized = dict(level)
+    explicit_upload = max(as_int(level.get("min_upload")), 0)
+    minimum_download = max(as_int(level.get("min_download")), 0)
+    minimum_ratio = as_float(level.get("min_ratio"))
+    if explicit_upload or not minimum_download or minimum_ratio is None or minimum_ratio <= 0:
+        return normalized
+    normalized["min_upload"] = int(round(minimum_download * minimum_ratio))
+    normalized["min_upload_strict"] = bool(
+        level.get("min_download_strict") or level.get("min_ratio_strict")
+    )
+    return normalized
+
+
 def _eligible_date(join_at: Any, minimum_days: Any, strict: bool = False) -> str:
     """按加入日期和等级账号天数计算最早达标日期。"""
 
@@ -738,7 +765,8 @@ def build_retirement_progress(
             continue
 
         route: list[dict[str, Any]] = []
-        for index, level in enumerate(raw_levels):
+        for index, raw_level in enumerate(raw_levels):
+            level = _with_derived_upload(raw_level)
             level_name = as_text(level.get("name"))
             route.append(
                 {
