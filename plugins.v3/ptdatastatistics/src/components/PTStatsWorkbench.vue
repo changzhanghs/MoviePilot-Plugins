@@ -53,7 +53,6 @@ const settingsDraft = ref({
 const history = ref({ start_day: '', end_day: '', count: 0, records: [] })
 const historyFilters = ref({ startDay: '', endDay: '', siteIds: [], includeArchived: true })
 const historyScope = ref('day')
-const historyMetric = ref('both')
 const selectedHistoryPeriodKey = ref('')
 const selectedHistorySiteId = ref(null)
 const hourlyTraffic = ref({ day: '', site_id: null, site_name: '全部站点', baseline_valid: false, sample_count: 0, points: [] })
@@ -233,17 +232,6 @@ function selectHistorySite(item) {
   }
   selectedHistorySiteId.value = Number(selectedHistorySiteId.value) === value ? null : value
 }
-function resetHistoryView() {
-  historyScope.value = 'day'
-  historyMetric.value = 'both'
-  selectedHistorySiteId.value = null
-  historyFilters.value.siteIds = []
-  historyFilters.value.includeArchived = true
-  historyFilters.value.startDay = ''
-  historyFilters.value.endDay = ''
-  setDefaultRanges()
-  loadHistory()
-}
 async function loadHourlyTraffic() {
   const period = selectedHistoryPeriod.value
   if (historyScope.value !== 'day' || !period) return
@@ -300,7 +288,7 @@ function renderHistoryChart() {
           tension: .34,
           fill: true,
         },
-      ].filter(dataset => historyMetric.value === 'both' || dataset.label === (historyMetric.value === 'upload' ? '上传' : '下载')),
+      ],
     },
     options: {
       responsive: true,
@@ -414,6 +402,7 @@ async function syncFromMP() {
   try {
     const result = unwrapResponse(await props.api.post(`${pluginBase.value}/sync`, {})) || {}
     await loadAll()
+    await loadHistory()
     notify(`已同步 MoviePilot 数据：写入 ${result.imported || 0} 条`)
     emit('action')
   } catch (err) {
@@ -617,7 +606,7 @@ watch(
     renderHistoryChart()
   },
 )
-watch([historyChartSeries, historyMetric], async () => {
+watch(historyChartSeries, async () => {
   await nextTick()
   renderHistoryChart()
 }, { deep: true })
@@ -720,29 +709,18 @@ onBeforeUnmount(() => historyChart?.destroy())
 
       <VWindowItem value="history">
         <section class="history-console">
-          <div class="history-toolbar">
-            <VBtnToggle v-model="historyScope" mandatory color="primary" density="compact" variant="outlined" divided class="history-scope-toggle"><VBtn value="day">日</VBtn><VBtn value="week">周</VBtn><VBtn value="month">月</VBtn></VBtnToggle>
-            <VTextField v-model="historyFilters.startDay" type="date" label="开始日期" variant="outlined" density="compact" hide-details @click="openNativePicker" />
-            <VTextField v-model="historyFilters.endDay" type="date" label="结束日期" variant="outlined" density="compact" hide-details @click="openNativePicker" />
-            <VSelect v-model="historyFilters.siteIds" :items="historySites" item-title="site_name" item-value="site_id" label="站点范围" placeholder="留空表示全部站点" multiple chips closable-chips clearable persistent-placeholder variant="outlined" density="compact" hide-details />
-            <VBtnToggle v-model="historyMetric" mandatory color="primary" density="compact" variant="outlined" divided class="history-metric-toggle"><VBtn value="both">上传 + 下载</VBtn><VBtn value="upload">仅上传</VBtn><VBtn value="download">仅下载</VBtn></VBtnToggle>
-            <VBtn class="history-search-btn" color="primary" variant="flat" :loading="historyLoading" prepend-icon="mdi-magnify" @click="loadHistory">查询数据</VBtn>
-            <VBtn icon="mdi-refresh" variant="outlined" aria-label="重置数据统计筛选" @click="resetHistoryView" />
-          </div>
-          <div class="history-toolbar-secondary"><VSwitch v-model="historyFilters.includeArchived" label="含已删除站点" color="primary" density="compact" hide-details /><span v-if="selectedHistoryPeriod">{{ historyScope === 'day' ? '自然日 00:00–23:59' : `${selectedHistoryPeriod.startDay} — ${selectedHistoryPeriod.endDay}` }}</span></div>
-
           <div v-if="historyPeriods.length" class="history-period-strip" role="listbox" aria-label="数据统计周期">
             <button v-for="period in historyPeriods" :key="period.key" type="button" class="history-period-card" :class="{ 'is-selected': selectedHistoryPeriod?.key === period.key }" :aria-selected="selectedHistoryPeriod?.key === period.key" @click="selectHistoryPeriod(period)"><strong>{{ period.label }}</strong><span><b class="metric-upload">↑ {{ period.validCount ? formatBytes(period.upload) : '—' }}</b><b class="metric-download">↓ {{ period.validCount ? formatBytes(period.download) : '—' }}</b></span></button>
           </div>
 
           <template v-if="selectedHistoryPeriod">
             <header class="history-detail-summary">
-              <div class="history-detail-summary__title"><span class="section-kicker">DATA STATISTICS</span><h2>{{ selectedHistoryPeriod.label }}</h2><small>{{ selectedHistoryPeriod.siteCount }} 个站点</small></div>
               <div class="history-detail-metrics"><div><span>周期上传</span><strong class="metric-upload">{{ selectedHistoryPeriod.validCount ? formatBytes(selectedHistoryPeriod.upload) : '基线不足' }}</strong></div><div><span>周期下载</span><strong class="metric-download">{{ selectedHistoryPeriod.validCount ? formatBytes(selectedHistoryPeriod.download) : '基线不足' }}</strong></div><div><span>有效站点</span><strong>{{ selectedHistoryPeriod.siteCount }}</strong></div><div><span>统计范围</span><strong>{{ historyScope === 'day' ? '00:00–23:59' : `${selectedHistoryPeriod.startDay.slice(5)} 至 ${selectedHistoryPeriod.endDay.slice(5)}` }}</strong></div></div>
             </header>
 
             <section class="history-workspace">
               <aside class="history-site-sidebar" aria-label="数据统计站点列表">
+                <VBtnToggle v-model="historyScope" mandatory color="primary" density="compact" variant="outlined" divided class="history-sidebar-scope"><VBtn value="day">日</VBtn><VBtn value="week">周</VBtn><VBtn value="month">月</VBtn></VBtnToggle>
                 <div class="history-site-sidebar__heading"><strong>站点列表</strong><span>共 {{ selectedPeriodSites.length }} 个</span></div>
                 <div class="history-site-sidebar__items">
                   <button type="button" class="history-site-option" :class="{ 'is-selected': selectedHistorySiteId === null }" @click="selectHistorySite(null)">
@@ -771,7 +749,7 @@ onBeforeUnmount(() => historyChart?.destroy())
               </div>
             </section>
           </template>
-          <div v-else class="empty-state"><VIcon icon="mdi-database-search-outline" size="44" /><span>选择日期与站点后查询数据</span></div>
+          <div v-else class="empty-state"><VIcon icon="mdi-database-search-outline" size="44" /><span>暂无历史数据，请点击顶部“数据刷新”</span></div>
         </section>
       </VWindowItem>
 
@@ -935,9 +913,6 @@ onBeforeUnmount(() => historyChart?.destroy())
 .workbench-nav__actions{display:flex;flex:0 0 auto;align-items:center;gap:6px;padding-right:4px}
 .data-refresh-btn{border-radius:11px;font-weight:700}
 .history-console{min-width:0;margin-top:16px;overflow:hidden;border:1px solid var(--pt-border);border-radius:18px;background:rgba(var(--v-theme-surface),.55)}
-.history-toolbar{display:grid;grid-template-columns:auto minmax(145px,.7fr) minmax(145px,.7fr) minmax(210px,1.15fr) auto auto auto;align-items:center;gap:10px;padding:14px;border-bottom:1px solid var(--pt-border);background:rgba(var(--v-theme-surface-variant),.08)}
-.history-toolbar :deep(.v-field){border-radius:11px}.history-scope-toggle :deep(.v-btn){min-width:42px}.history-metric-toggle :deep(.v-btn){padding-inline:12px}
-.history-toolbar-secondary{display:flex;align-items:center;justify-content:space-between;gap:14px;padding:4px 16px 6px;border-bottom:1px solid var(--pt-border);color:rgba(var(--v-theme-on-surface),.58);font-size:.7rem}.history-toolbar-secondary :deep(.v-switch){flex:0 0 auto}
 .history-period-strip{display:flex;gap:7px;overflow-x:auto;padding:10px 14px;border-bottom:1px solid var(--pt-border);scrollbar-width:thin;scroll-snap-type:x proximity}
 .history-period-card{appearance:none;display:grid;flex:0 0 minmax(150px,1fr);min-width:150px;gap:7px;padding:10px 12px;border:1px solid var(--pt-border);border-radius:11px;background:rgba(var(--v-theme-surface),.34);color:inherit;font:inherit;text-align:left;cursor:pointer;scroll-snap-align:start;transition:background-color .16s ease,border-color .16s ease,box-shadow .16s ease}
 .history-period-card:hover,.history-period-card:focus-visible{border-color:rgba(var(--v-theme-primary),.46);background:rgba(var(--v-theme-primary),.07);outline:none}.history-period-card.is-selected{border-color:rgb(var(--v-theme-primary));background:rgba(var(--v-theme-primary),.15);box-shadow:inset 0 -2px rgb(var(--v-theme-primary))}
@@ -946,11 +921,11 @@ onBeforeUnmount(() => historyChart?.destroy())
 .history-pane-heading>div{display:flex;min-width:0;flex-direction:column;gap:2px}
 .history-pane-heading strong{font-size:.84rem}
 .history-pane-heading span{color:rgba(var(--v-theme-on-surface),.52);font-size:.68rem}
-.history-detail-summary{display:flex;align-items:center;justify-content:space-between;gap:22px;padding:16px 18px;border-bottom:1px solid var(--pt-border)}
-.history-detail-summary__title{display:grid;grid-template-columns:auto auto;align-items:end;gap:2px 9px;min-width:150px}.history-detail-summary__title .section-kicker{grid-column:1/-1}.history-detail-summary__title h2{margin:0;font-size:1.12rem}.history-detail-summary__title small{padding-bottom:2px;color:rgba(var(--v-theme-on-surface),.52)}
+.history-detail-summary{display:flex;align-items:center;justify-content:flex-end;gap:22px;padding:13px 18px;border-bottom:1px solid var(--pt-border)}
 .history-detail-metrics{display:grid;grid-template-columns:repeat(4,minmax(92px,1fr));gap:20px}.history-detail-metrics>div{display:flex;min-width:0;flex-direction:column;gap:3px}.history-detail-metrics span{color:rgba(var(--v-theme-on-surface),.52);font-size:.66rem}.history-detail-metrics strong{font-size:.8rem;white-space:nowrap}
 .history-workspace{display:grid;grid-template-columns:minmax(210px,255px) minmax(0,1fr);height:clamp(610px,calc(100vh - 230px),800px);min-height:0;overflow:hidden}
 .history-site-sidebar{display:flex;min-width:0;min-height:0;flex-direction:column;overflow:hidden;padding:12px;border-right:1px solid var(--pt-border);background:rgba(var(--v-theme-surface-variant),.08)}
+.history-sidebar-scope{align-self:stretch;margin-bottom:12px}.history-sidebar-scope :deep(.v-btn){min-width:0;flex:1 1 0}
 .history-site-sidebar__heading{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:2px 4px 11px}.history-site-sidebar__heading span{color:rgba(var(--v-theme-on-surface),.52);font-size:.68rem}
 .history-site-sidebar__items{display:grid;min-height:0;flex:1 1 auto;align-content:start;gap:6px;overflow-y:auto;overscroll-behavior:contain;scrollbar-gutter:stable}
 .history-site-option{appearance:none;display:grid;grid-template-columns:auto minmax(0,1fr);align-items:center;gap:9px;width:100%;padding:10px;border:1px solid transparent;border-radius:12px;background:transparent;color:inherit;font:inherit;text-align:left;cursor:pointer;transition:background-color .15s ease,border-color .15s ease}
@@ -1048,8 +1023,8 @@ onBeforeUnmount(() => historyChart?.destroy())
 .retirement-level-row__detail{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:10px;padding:0 15px 13px 147px;color:rgba(var(--v-theme-on-surface),.66);font-size:.72rem}
 .retirement-level-row__detail strong{color:rgb(var(--v-theme-warning))}
 .pt-workbench{--pt-border:rgba(var(--v-border-color),var(--v-border-opacity));min-width:0;padding:4px}.data-actions,.retirement-summary{display:flex;flex-wrap:wrap;gap:9px}.section-block{margin-top:16px;padding:20px;border:1px solid var(--pt-border);border-radius:20px;background:rgba(var(--v-theme-surface),.7)}.section-heading{display:flex;align-items:center;justify-content:space-between;gap:16px;margin-bottom:18px}.section-heading h2{margin:2px 0 0;font-size:1.18rem}.section-kicker{color:rgb(var(--v-theme-primary));font-size:.72rem;font-weight:800;letter-spacing:.12em}.section-note,.setting-hint,.row-label{color:rgba(var(--v-theme-on-surface),.56);font-size:.76rem}.metric-grid{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:12px}.distribution-panel,.twelve-panel{background:linear-gradient(135deg,rgba(var(--v-theme-primary),.07),rgba(var(--v-theme-surface),.72))}.distribution-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}.distribution-card{min-width:0;padding:18px;border:1px solid var(--pt-border);border-radius:17px;background:rgba(var(--v-theme-surface),.55)}.distribution-card__header{display:flex;align-items:center;justify-content:space-between;gap:14px;margin-bottom:14px}.distribution-card__header :deep(.v-input){max-width:190px}.pie-layout{display:grid;grid-template-columns:minmax(150px,40%) minmax(0,1fr);gap:20px;align-items:center}.pie{display:grid;place-items:center;width:min(100%,220px);margin:auto;aspect-ratio:1;border-radius:50%;box-shadow:0 12px 32px rgba(0,0,0,.15)}.pie__hole{display:flex;flex-direction:column;align-items:center;justify-content:center;width:66%;aspect-ratio:1;border-radius:50%;background:rgb(var(--v-theme-surface));text-align:center}.pie__hole span{color:rgba(var(--v-theme-on-surface),.58);font-size:.68rem}.pie__hole strong{margin-top:5px;font-size:1rem}.pie-legend{max-height:250px;overflow-y:auto}.pie-legend>div{display:grid;grid-template-columns:9px minmax(80px,1fr) auto auto;gap:8px;align-items:center;padding:6px 2px;font-size:.74rem}.pie-legend i{width:8px;height:8px;border-radius:50%}.pie-legend strong{font-size:.72rem}.pie-legend em{color:rgba(var(--v-theme-on-surface),.5);font-style:normal}.table-shell,.twelve-overflow{overflow-x:auto;border:1px solid var(--pt-border);border-radius:14px}.site-table{min-width:1450px;background:transparent}.history-detail-shell{overflow-x:auto}.history-detail-table{min-width:1050px}.site-table th{color:rgba(var(--v-theme-on-surface),.55)!important;font-size:.7rem;letter-spacing:.04em;white-space:nowrap}.site-table td{white-space:nowrap}.site-identity{display:flex;align-items:center;gap:10px}.cell-sub{display:block;max-width:220px;overflow:hidden;color:rgba(var(--v-theme-on-surface),.52);font-size:.68rem;text-overflow:ellipsis;white-space:nowrap}.metric-upload{color:rgb(var(--v-theme-success));font-weight:650}.metric-download{color:rgb(var(--v-theme-error));font-weight:650}.empty-cell{height:140px!important;text-align:center;color:rgba(var(--v-theme-on-surface),.52)}.legend{display:flex;align-items:center;gap:7px;font-size:.75rem;color:rgba(var(--v-theme-on-surface),.62)}.legend i{width:9px;height:9px;border-radius:2px}.legend__upload{background:rgb(var(--v-theme-success))}.legend__download{margin-left:8px;background:rgb(var(--v-theme-error))}.bar-chart{display:flex;align-items:stretch;gap:5px;height:250px;overflow-x:auto;padding:10px 3px 0;border-bottom:1px solid var(--pt-border)}.bar-column{display:flex;flex:1 0 28px;flex-direction:column;min-width:28px}.bar-column__bars{display:flex;flex:1;align-items:flex-end;justify-content:center;gap:2px}.bar{display:block;width:7px;border-radius:5px 5px 1px 1px}.bar--upload{background:rgb(var(--v-theme-success))}.bar--download{background:rgb(var(--v-theme-error))}.empty-state{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;min-height:180px;color:rgba(var(--v-theme-on-surface),.54)}.compact-empty{min-height:120px}.twelve-track{position:relative;display:grid;grid-template-columns:repeat(12,minmax(54px,1fr));min-width:760px;padding:20px 4px 4px}.twelve-track__line{position:absolute;z-index:0;top:38px;left:4.2%;right:4.2%;height:5px;overflow:hidden;border-radius:999px;background:rgba(var(--v-theme-on-surface),.12)}.twelve-track__line i{display:block;height:100%;border-radius:inherit;background:linear-gradient(90deg,rgb(var(--v-theme-primary)),rgb(var(--v-theme-success)))}.twelve-node{z-index:1;display:flex;flex-direction:column;align-items:center;gap:8px;min-width:0;text-align:center}.twelve-node span{max-width:100%;overflow:hidden;font-size:.72rem;text-overflow:ellipsis;white-space:nowrap}.twelve-node--missing,.twelve-node--waiting{opacity:.66}.settings-layout{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px;border:0;padding:0;background:transparent}.settings-card{padding:20px;border:1px solid var(--pt-border);border-radius:18px;background:rgba(var(--v-theme-surface),.76)}.settings-card--wide{grid-column:1/-1}.settings-actions{display:flex;align-items:center;justify-content:space-between;gap:20px}.settings-actions p{margin:4px 0 0;color:rgba(var(--v-theme-on-surface),.56)}
-@media(max-width:1280px){.metric-grid{grid-template-columns:repeat(3,minmax(0,1fr))}.retirement-target-grid{grid-template-columns:1fr}.history-toolbar{grid-template-columns:auto repeat(2,minmax(135px,.75fr)) minmax(190px,1.2fr) auto auto}.history-metric-toggle{grid-column:1/5}.history-search-btn{grid-column:5}.history-toolbar>button:last-child{grid-column:6}}
-@media(max-width:960px){.workbench-nav{align-items:stretch;flex-direction:column;gap:5px}.workbench-nav__actions{align-self:flex-end;padding-bottom:10px}.history-toolbar{grid-template-columns:repeat(2,minmax(0,1fr))}.history-scope-toggle,.history-metric-toggle{grid-column:1/-1}.history-search-btn{grid-column:auto}.history-toolbar>button:last-child{grid-column:auto}.history-workspace{grid-template-columns:1fr;height:auto;overflow:visible}.history-site-sidebar{overflow:visible;border-right:0;border-bottom:1px solid var(--pt-border)}.history-site-sidebar__items{display:flex;max-height:none;overflow-x:auto;overflow-y:hidden;scrollbar-gutter:auto}.history-site-option{width:210px;flex:0 0 210px}.history-workspace__main{overflow:visible;scrollbar-gutter:auto}.history-record-shell{overflow-x:auto}.history-record-table{min-width:900px;table-layout:auto}.distribution-grid{grid-template-columns:1fr}.retirement-explorer{grid-template-columns:1fr;height:auto;min-height:0;overflow:visible}.retirement-site-list{overflow:visible;border-right:0;border-bottom:1px solid var(--pt-border)}.retirement-site-list__items{display:flex;max-height:none;overflow-x:auto;overflow-y:hidden;scrollbar-gutter:auto}.retirement-site-option{width:245px;flex:0 0 245px}.retirement-detail{overflow:visible;scrollbar-gutter:auto}}
-@media(max-width:720px){.workbench-nav__actions{align-self:stretch}.data-refresh-btn{flex:1}.section-block{padding:14px}.metric-grid,.settings-layout{grid-template-columns:1fr}.settings-card--wide{grid-column:auto}.settings-actions{align-items:stretch;flex-direction:column}.section-heading,.distribution-heading{align-items:flex-start;flex-direction:column}.pie-layout{grid-template-columns:1fr}.pie{width:180px}.history-toolbar{grid-template-columns:1fr}.history-toolbar>*{grid-column:1!important}.history-toolbar-secondary{align-items:flex-start;flex-direction:column}.history-detail-summary{align-items:flex-start;flex-direction:column}.history-detail-metrics{width:100%;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}.history-period-card{min-width:142px}.history-line-chart{height:220px}.history-site-panel .history-detail-shell{overflow-x:auto}.history-site-panel .history-detail-table{min-width:720px}}
+@media(max-width:1280px){.metric-grid{grid-template-columns:repeat(3,minmax(0,1fr))}.retirement-target-grid{grid-template-columns:1fr}}
+@media(max-width:960px){.workbench-nav{align-items:stretch;flex-direction:column;gap:5px}.workbench-nav__actions{align-self:flex-end;padding-bottom:10px}.history-workspace{grid-template-columns:1fr;height:auto;overflow:visible}.history-site-sidebar{overflow:visible;border-right:0;border-bottom:1px solid var(--pt-border)}.history-site-sidebar__items{display:flex;max-height:none;overflow-x:auto;overflow-y:hidden;scrollbar-gutter:auto}.history-site-option{width:210px;flex:0 0 210px}.history-workspace__main{overflow:visible;scrollbar-gutter:auto}.history-record-shell{overflow-x:auto}.history-record-table{min-width:900px;table-layout:auto}.distribution-grid{grid-template-columns:1fr}.retirement-explorer{grid-template-columns:1fr;height:auto;min-height:0;overflow:visible}.retirement-site-list{overflow:visible;border-right:0;border-bottom:1px solid var(--pt-border)}.retirement-site-list__items{display:flex;max-height:none;overflow-x:auto;overflow-y:hidden;scrollbar-gutter:auto}.retirement-site-option{width:245px;flex:0 0 245px}.retirement-detail{overflow:visible;scrollbar-gutter:auto}}
+@media(max-width:720px){.workbench-nav__actions{align-self:stretch}.data-refresh-btn{flex:1}.section-block{padding:14px}.metric-grid,.settings-layout{grid-template-columns:1fr}.settings-card--wide{grid-column:auto}.settings-actions{align-items:stretch;flex-direction:column}.section-heading,.distribution-heading{align-items:flex-start;flex-direction:column}.pie-layout{grid-template-columns:1fr}.pie{width:180px}.history-detail-summary{align-items:flex-start;flex-direction:column}.history-detail-metrics{width:100%;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}.history-period-card{min-width:142px}.history-line-chart{height:220px}.history-site-panel .history-detail-shell{overflow-x:auto}.history-site-panel .history-detail-table{min-width:720px}}
 @media(max-width:720px){.site-sort-select{width:100%;flex:0 0 auto}.site-data-card{padding:12px}.site-data-card__header,.site-account-meta{align-items:flex-start;flex-direction:column}.site-stat-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.retirement-detail{padding:14px}.retirement-detail__header{align-items:flex-start;flex-direction:column}.retirement-detail__metrics{width:100%;justify-content:space-between;gap:10px}.retirement-route-rail{margin-right:-14px;margin-left:-14px;padding-right:14px;padding-left:14px}.requirement-row{grid-template-columns:auto minmax(0,1fr) minmax(0,1fr)}.requirement-row :deep(.v-progress-linear){grid-column:2/-1}.retirement-levels__heading{align-items:flex-start;flex-direction:column}.retirement-level-row__detail{padding-left:15px}}
 </style>
