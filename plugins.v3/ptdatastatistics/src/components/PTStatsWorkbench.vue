@@ -710,12 +710,12 @@ onBeforeUnmount(() => historyChart?.destroy())
       <VWindowItem value="history">
         <section class="history-console">
           <div v-if="historyPeriods.length" class="history-period-strip" role="listbox" aria-label="数据统计周期">
-            <VBtnToggle v-model="historyScope" mandatory color="primary" density="compact" variant="outlined" divided class="history-period-scope"><VBtn value="day">日</VBtn><VBtn value="week">周</VBtn><VBtn value="month">月</VBtn></VBtnToggle>
             <button v-for="period in historyPeriods" :key="period.key" type="button" class="history-period-card" :class="{ 'is-selected': selectedHistoryPeriod?.key === period.key }" :aria-selected="selectedHistoryPeriod?.key === period.key" @click="selectHistoryPeriod(period)"><strong>{{ period.label }}</strong><span><b class="metric-upload">↑ {{ period.validCount ? formatBytes(period.upload) : '—' }}</b><b class="metric-download">↓ {{ period.validCount ? formatBytes(period.download) : '—' }}</b></span></button>
           </div>
 
           <template v-if="selectedHistoryPeriod">
             <header class="history-detail-summary">
+              <VBtnToggle v-model="historyScope" mandatory color="primary" density="compact" variant="outlined" divided class="history-summary-scope"><VBtn value="day">日</VBtn><VBtn value="week">周</VBtn><VBtn value="month">月</VBtn></VBtnToggle>
               <div class="history-detail-metrics"><div><span>周期上传</span><strong class="metric-upload">{{ selectedHistoryPeriod.validCount ? formatBytes(selectedHistoryPeriod.upload) : '基线不足' }}</strong></div><div><span>周期下载</span><strong class="metric-download">{{ selectedHistoryPeriod.validCount ? formatBytes(selectedHistoryPeriod.download) : '基线不足' }}</strong></div><div><span>有效站点</span><strong>{{ selectedHistoryPeriod.siteCount }}</strong></div><div><span>统计范围</span><strong>{{ historyScope === 'day' ? '00:00–23:59' : `${selectedHistoryPeriod.startDay.slice(5)} 至 ${selectedHistoryPeriod.endDay.slice(5)}` }}</strong></div></div>
             </header>
 
@@ -914,7 +914,6 @@ onBeforeUnmount(() => historyChart?.destroy())
 .data-refresh-btn{border-radius:11px;font-weight:700}
 .history-console{min-width:0;margin-top:16px;overflow:hidden;border:1px solid var(--pt-border);border-radius:18px;background:rgba(var(--v-theme-surface),.55)}
 .history-period-strip{display:flex;gap:7px;overflow-x:auto;padding:10px 14px;border-bottom:1px solid var(--pt-border);scrollbar-width:thin;scroll-snap-type:x proximity}
-.history-period-scope{position:sticky;z-index:2;left:0;flex:0 0 auto;align-self:stretch;background:rgb(var(--v-theme-surface))}.history-period-scope :deep(.v-btn){min-width:42px}
 .history-period-card{appearance:none;display:grid;flex:0 0 minmax(150px,1fr);min-width:150px;gap:7px;padding:10px 12px;border:1px solid var(--pt-border);border-radius:11px;background:rgba(var(--v-theme-surface),.34);color:inherit;font:inherit;text-align:left;cursor:pointer;scroll-snap-align:start;transition:background-color .16s ease,border-color .16s ease,box-shadow .16s ease}
 .history-period-card:hover,.history-period-card:focus-visible{border-color:rgba(var(--v-theme-primary),.46);background:rgba(var(--v-theme-primary),.07);outline:none}.history-period-card.is-selected{border-color:rgb(var(--v-theme-primary));background:rgba(var(--v-theme-primary),.15);box-shadow:inset 0 -2px rgb(var(--v-theme-primary))}
 .history-period-card strong{font-size:.78rem}.history-period-card span{display:flex;align-items:center;justify-content:space-between;gap:10px;font-size:.66rem;white-space:nowrap}
@@ -922,7 +921,8 @@ onBeforeUnmount(() => historyChart?.destroy())
 .history-pane-heading>div{display:flex;min-width:0;flex-direction:column;gap:2px}
 .history-pane-heading strong{font-size:.84rem}
 .history-pane-heading span{color:rgba(var(--v-theme-on-surface),.52);font-size:.68rem}
-.history-detail-summary{display:flex;align-items:center;justify-content:flex-end;gap:22px;padding:13px 18px;border-bottom:1px solid var(--pt-border)}
+.history-detail-summary{display:flex;align-items:center;justify-content:space-between;gap:22px;padding:13px 18px;border-bottom:1px solid var(--pt-border)}
+.history-summary-scope{flex:0 0 auto}.history-summary-scope :deep(.v-btn){min-width:42px}
 .history-detail-metrics{display:grid;grid-template-columns:repeat(4,minmax(92px,1fr));gap:20px}.history-detail-metrics>div{display:flex;min-width:0;flex-direction:column;gap:3px}.history-detail-metrics span{color:rgba(var(--v-theme-on-surface),.52);font-size:.66rem}.history-detail-metrics strong{font-size:.8rem;white-space:nowrap}
 .history-workspace{display:grid;grid-template-columns:minmax(210px,255px) minmax(0,1fr);height:clamp(610px,calc(100vh - 230px),800px);min-height:0;overflow:hidden}
 .history-site-sidebar{display:flex;min-width:0;min-height:0;flex-direction:column;overflow:hidden;padding:12px;border-right:1px solid var(--pt-border);background:rgba(var(--v-theme-surface-variant),.08)}

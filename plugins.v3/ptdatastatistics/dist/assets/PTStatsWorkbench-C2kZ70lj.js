@@ -16612,38 +16612,6 @@ return (_ctx, _cache) => {
             _createElementVNode("section", _hoisted_25, [
               (historyPeriods.value.length)
                 ? (_openBlock(), _createElementBlock("div", _hoisted_26, [
-                    _createVNode(_component_VBtnToggle, {
-                      modelValue: historyScope.value,
-                      "onUpdate:modelValue": _cache[5] || (_cache[5] = $event => ((historyScope).value = $event)),
-                      mandatory: "",
-                      color: "primary",
-                      density: "compact",
-                      variant: "outlined",
-                      divided: "",
-                      class: "history-period-scope"
-                    }, {
-                      default: _withCtx(() => [
-                        _createVNode(_component_VBtn, { value: "day" }, {
-                          default: _withCtx(() => [...(_cache[38] || (_cache[38] = [
-                            _createTextVNode("日", -1)
-                          ]))]),
-                          _: 1
-                        }),
-                        _createVNode(_component_VBtn, { value: "week" }, {
-                          default: _withCtx(() => [...(_cache[39] || (_cache[39] = [
-                            _createTextVNode("周", -1)
-                          ]))]),
-                          _: 1
-                        }),
-                        _createVNode(_component_VBtn, { value: "month" }, {
-                          default: _withCtx(() => [...(_cache[40] || (_cache[40] = [
-                            _createTextVNode("月", -1)
-                          ]))]),
-                          _: 1
-                        })
-                      ]),
-                      _: 1
-                    }, 8, ["modelValue"]),
                     (_openBlock(true), _createElementBlock(_Fragment, null, _renderList(historyPeriods.value, (period) => {
                       return (_openBlock(), _createElementBlock("button", {
                         key: period.key,
@@ -16664,6 +16632,38 @@ return (_ctx, _cache) => {
               (selectedHistoryPeriod.value)
                 ? (_openBlock(), _createElementBlock(_Fragment, { key: 1 }, [
                     _createElementVNode("header", _hoisted_30, [
+                      _createVNode(_component_VBtnToggle, {
+                        modelValue: historyScope.value,
+                        "onUpdate:modelValue": _cache[5] || (_cache[5] = $event => ((historyScope).value = $event)),
+                        mandatory: "",
+                        color: "primary",
+                        density: "compact",
+                        variant: "outlined",
+                        divided: "",
+                        class: "history-summary-scope"
+                      }, {
+                        default: _withCtx(() => [
+                          _createVNode(_component_VBtn, { value: "day" }, {
+                            default: _withCtx(() => [...(_cache[38] || (_cache[38] = [
+                              _createTextVNode("日", -1)
+                            ]))]),
+                            _: 1
+                          }),
+                          _createVNode(_component_VBtn, { value: "week" }, {
+                            default: _withCtx(() => [...(_cache[39] || (_cache[39] = [
+                              _createTextVNode("周", -1)
+                            ]))]),
+                            _: 1
+                          }),
+                          _createVNode(_component_VBtn, { value: "month" }, {
+                            default: _withCtx(() => [...(_cache[40] || (_cache[40] = [
+                              _createTextVNode("月", -1)
+                            ]))]),
+                            _: 1
+                          })
+                        ]),
+                        _: 1
+                      }, 8, ["modelValue"]),
                       _createElementVNode("div", _hoisted_31, [
                         _createElementVNode("div", null, [
                           _cache[41] || (_cache[41] = _createElementVNode("span", null, "周期上传", -1)),
@@ -17430,6 +17430,6 @@ return (_ctx, _cache) => {
 }
 
 };
-const PTStatsWorkbench = /*#__PURE__*/_export_sfc(_sfc_main, [['__scopeId',"data-v-cea7511b"]]);
+const PTStatsWorkbench = /*#__PURE__*/_export_sfc(_sfc_main, [['__scopeId',"data-v-8009590e"]]);
 
 export { PTStatsWorkbench as P };
