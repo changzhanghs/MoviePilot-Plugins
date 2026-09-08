@@ -96,8 +96,11 @@ class LevelRequirementData(BaseModel):
     name: str
     description: str = ""
     min_join_days: int = 0
+    min_join_days_strict: bool = False
     min_upload: int = 0
+    min_upload_strict: bool = False
     min_download: int = 0
+    min_download_strict: bool = False
     min_ratio: float | None = None
     min_ratio_strict: bool = False
     min_bonus: float | None = None

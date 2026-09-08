@@ -114,9 +114,9 @@ class DeltaTests(unittest.TestCase):
         )
 
         self.assertTrue(result["baseline_valid"])
-        self.assertEqual(result["sample_count"], 3)
-        self.assertEqual(result["points"][0]["upload"], 80)
-        self.assertEqual(result["points"][0]["download"], 25)
+        self.assertEqual(result["sample_count"], 2)
+        self.assertEqual(result["points"][0]["upload"], 30)
+        self.assertEqual(result["points"][0]["download"], 5)
         self.assertEqual(result["points"][1]["samples"], 0)
         self.assertEqual(result["points"][2]["upload"], 20)
         self.assertEqual(result["points"][2]["download"], 15)
@@ -135,6 +135,32 @@ class DeltaTests(unittest.TestCase):
 
         self.assertFalse(result["baseline_valid"])
         self.assertEqual(sum(point["upload"] for point in result["points"]), 0)
+
+    def test_hourly_traffic_does_not_treat_previous_day_as_an_hourly_baseline(self):
+        result = core.build_hourly_traffic(
+            [
+                {
+                    "domain": "example.test",
+                    "updated_day": "2026-09-06",
+                    "updated_time": "09:00:00",
+                    "upload": 100,
+                    "download": 50,
+                },
+                {
+                    "domain": "example.test",
+                    "updated_day": "2026-09-07",
+                    "updated_time": "09:00:00",
+                    "upload": 200,
+                    "download": 80,
+                },
+            ],
+            "2026-09-07",
+        )
+
+        self.assertFalse(result["baseline_valid"])
+        self.assertEqual(result["sample_count"], 0)
+        self.assertEqual(sum(point["upload"] for point in result["points"]), 0)
+        self.assertEqual(sum(point["download"] for point in result["points"]), 0)
 
 
 class TwelveAndExportTests(unittest.TestCase):
@@ -285,6 +311,53 @@ class TwelveAndExportTests(unittest.TestCase):
         )
         self.assertIn("分享率需大于 2", power["missing"])
 
+    def test_mteam_retirement_rules_match_published_level_route(self):
+        progress = core.build_retirement_progress(
+            [{
+                "site_id": 1,
+                "site_name": "馒头",
+                "user_level": "小卒 / User",
+                "join_at": "2026-01-01",
+                "updated_day": "2026-01-29",
+                "download": 200 * core.GIB,
+                "ratio": 2,
+            }],
+        )
+        site = progress["sites"][0]
+        levels = {level["name"]: level for level in site["route"]}
+
+        self.assertEqual(site["status"], "upgrading")
+        self.assertEqual(site["retirement_level"], "Extreme User")
+        self.assertEqual(site["next_level"], "Power User")
+        self.assertEqual(levels["Power User"]["eligible_date"], "2026-01-30")
+        self.assertEqual(levels["Power User"]["min_download"], 200 * core.GIB)
+        self.assertTrue(levels["Power User"]["min_join_days_strict"])
+        self.assertTrue(levels["Power User"]["min_download_strict"])
+        self.assertTrue(levels["Power User"]["min_ratio_strict"])
+        self.assertIn("账号时间还差 1 天", levels["Power User"]["missing"])
+        self.assertIn("下载需大于 200.0 GB", levels["Power User"]["missing"])
+        self.assertIn("分享率需大于 2", levels["Power User"]["missing"])
+        self.assertTrue(levels["Extreme User"]["is_retirement"])
+        self.assertIn("永久保号", levels["Extreme User"]["description"])
+        self.assertEqual(levels["mTorrent Master"]["min_join_days"], 224)
+        self.assertEqual(levels["mTorrent Master"]["min_download"], 3000 * core.GIB)
+
+    def test_mteam_rule_matches_chinese_official_level_name(self):
+        progress = core.build_retirement_progress(
+            [{
+                "site_id": 1,
+                "site_name": "M-Team 馒头",
+                "user_level": "府尹",
+                "join_at": "2025-01-01",
+                "updated_day": "2026-09-08",
+            }],
+        )
+
+        site = progress["sites"][0]
+        self.assertEqual(site["status"], "retired")
+        self.assertEqual(site["current_level"], "府尹")
+        self.assertTrue(next(level for level in site["route"] if level["name"] == "Extreme User")["is_current"])
+
     def test_audiences_rule_matches_decorated_site_and_level_names(self):
         progress = core.build_retirement_progress(
             [{
@@ -323,10 +396,11 @@ class PackagingTests(unittest.TestCase):
         manifest = json.loads((ROOT / "package.v3.json").read_text(encoding="utf-8"))
         meta = manifest["PTDataStatistics"]
         source = (PLUGIN / "__init__.py").read_text(encoding="utf-8")
-        self.assertEqual(meta["version"], "1.0.0")
+        self.assertEqual(meta["version"], "1.0.1")
+        self.assertEqual(meta["history"]["v1.0.1"], "更新了一些东西")
         self.assertEqual(meta["history"]["v1.0.0"], "更新了一些东西")
-        self.assertEqual(list(meta["history"]), ["v1.0.0"])
-        self.assertIn('plugin_version = "1.0.0"', source)
+        self.assertEqual(list(meta["history"]), ["v1.0.1", "v1.0.0"])
+        self.assertIn('plugin_version = "1.0.1"', source)
         self.assertEqual(meta["system_version"], ">=3.0.0")
         self.assertNotIn("release", meta)
 

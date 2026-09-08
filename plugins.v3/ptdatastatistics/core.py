@@ -188,9 +188,114 @@ AUDIENCES_RETIREMENT_RULE: dict[str, Any] = {
     ],
 }
 
+MTEAM_RETIREMENT_RULE: dict[str, Any] = {
+    "retirement_level": "Extreme User",
+    "levels": [
+        {
+            "name": "User",
+            "aliases": ("小卒",),
+            "description": "可以发候选、发布趣味盒、兑换魔力。",
+        },
+        {
+            "name": "Power User",
+            "aliases": ("捕头",),
+            "min_join_days": 28,
+            "min_join_days_strict": True,
+            "min_download": 200 * GIB,
+            "min_download_strict": True,
+            "min_ratio": 2,
+            "min_ratio_strict": True,
+            "description": "继承小卒 / User 权限。",
+        },
+        {
+            "name": "Elite User",
+            "aliases": ("知县",),
+            "min_join_days": 56,
+            "min_join_days_strict": True,
+            "min_download": 400 * GIB,
+            "min_download_strict": True,
+            "min_ratio": 3,
+            "min_ratio_strict": True,
+            "description": "可以发送邀请。",
+        },
+        {
+            "name": "Crazy User",
+            "aliases": ("通判",),
+            "min_join_days": 84,
+            "min_join_days_strict": True,
+            "min_download": 500 * GIB,
+            "min_download_strict": True,
+            "min_ratio": 4,
+            "min_ratio_strict": True,
+            "description": "继承知县 / Elite User 权限。",
+        },
+        {
+            "name": "Insane User",
+            "aliases": ("知州",),
+            "min_join_days": 112,
+            "min_join_days_strict": True,
+            "min_download": 800 * GIB,
+            "min_download_strict": True,
+            "min_ratio": 5,
+            "min_ratio_strict": True,
+            "description": "继承知县 / Elite User 权限。",
+        },
+        {
+            "name": "Veteran User",
+            "aliases": ("府丞",),
+            "min_join_days": 140,
+            "min_join_days_strict": True,
+            "min_download": 1000 * GIB,
+            "min_download_strict": True,
+            "min_ratio": 6,
+            "min_ratio_strict": True,
+            "description": "封存账号时永久保号。",
+        },
+        {
+            "name": "Extreme User",
+            "aliases": ("府尹",),
+            "min_join_days": 168,
+            "min_join_days_strict": True,
+            "min_download": 2000 * GIB,
+            "min_download_strict": True,
+            "min_ratio": 7,
+            "min_ratio_strict": True,
+            "description": "永久保号。",
+        },
+        {
+            "name": "Ultimate User",
+            "aliases": ("总督", "總督"),
+            "min_join_days": 196,
+            "min_join_days_strict": True,
+            "min_download": 2500 * GIB,
+            "min_download_strict": True,
+            "min_ratio": 8,
+            "min_ratio_strict": True,
+            "description": "继承府尹 / Extreme User 权限。",
+        },
+        {
+            "name": "mTorrent Master",
+            "aliases": ("大臣",),
+            "min_join_days": 224,
+            "min_join_days_strict": True,
+            "min_download": 3000 * GIB,
+            "min_download_strict": True,
+            "min_ratio": 9,
+            "min_ratio_strict": True,
+            "description": "继承府尹 / Extreme User 权限。",
+        },
+    ],
+}
+
 DEFAULT_RETIREMENT_RULES: dict[str, Mapping[str, Any]] = {
-    alias: AUDIENCES_RETIREMENT_RULE
-    for alias in ("观众", "Audiences", "Audience")
+    **{
+        alias: AUDIENCES_RETIREMENT_RULE
+        for alias in ("观众", "Audiences", "Audience")
+    },
+    **{
+        alias: MTEAM_RETIREMENT_RULE
+        for alias in ("馒头", "MTeam", "M-Team")
+    },
 }
 
 
@@ -286,9 +391,10 @@ def build_hourly_traffic(
 ) -> dict[str, Any]:
     """把 MP 的站点累计采样转换为自然小时增量。
 
-    MP 可能在同一天保存多次站点用户数据。这里按站点和采样时间排序，使用
-    相邻成功采样的累计值差额，并把增量记入后一条采样所在小时。没有前序
-    采样的首条记录不会猜测流量；累计值回退时相应差额按零处理。
+    MP 可能在同一天保存多次站点用户数据。这里按站点和采样时间排序，只使用
+    同一自然日内相邻成功采样的累计值差额，并把增量记入后一条采样所在小时。
+    当天首条记录不会与前一天的记录相减，避免把整日增量误记为某个小时的
+    流量；累计值回退时相应差额按零处理。
     """
 
     points = [
@@ -324,7 +430,10 @@ def build_hourly_traffic(
         values.sort(key=lambda item: item[0])
         previous: tuple[datetime, Mapping[str, Any]] | None = None
         for timestamp, snapshot in values:
-            if timestamp.date().isoformat() == selected_day and previous is not None:
+            timestamp_day = timestamp.date().isoformat()
+            if timestamp_day != selected_day:
+                continue
+            if previous is not None:
                 upload_delta = as_int(snapshot.get("upload")) - as_int(previous[1].get("upload"))
                 download_delta = as_int(snapshot.get("download")) - as_int(previous[1].get("download"))
                 bucket = points[timestamp.hour]
@@ -419,13 +528,16 @@ def _match_level_index(current_level: Any, levels: Iterable[Mapping[str, Any]]) 
         return -1
     candidates: list[tuple[int, int]] = []
     for index, level in enumerate(levels):
-        level_identity = normalize_identity(level.get("name"))
-        if not level_identity:
-            continue
-        if level_identity == identity:
-            return index
-        if level_identity in identity or identity in level_identity:
-            candidates.append((len(level_identity), index))
+        level_identities = [
+            normalize_identity(value)
+            for value in (level.get("name"), *(level.get("aliases") or ()))
+            if normalize_identity(value)
+        ]
+        for level_identity in level_identities:
+            if level_identity == identity:
+                return index
+            if level_identity in identity or identity in level_identity:
+                candidates.append((len(level_identity), index))
     return max(candidates, default=(0, -1))[1]
 
 
@@ -513,8 +625,10 @@ def _requirement_missing(level: Mapping[str, Any], snapshot: Mapping[str, Any]) 
             )
         except (TypeError, ValueError):
             actual_days = 0
-        if actual_days < minimum_days:
-            missing.append(f"账号时间还差 {minimum_days - actual_days} 天")
+        strict_days = bool(level.get("min_join_days_strict"))
+        if actual_days <= minimum_days if strict_days else actual_days < minimum_days:
+            required_days = minimum_days + (1 if strict_days else 0)
+            missing.append(f"账号时间还差 {required_days - actual_days} 天")
     numeric_fields = (
         ("min_upload", "upload", "上传"),
         ("min_download", "download", "下载"),
@@ -529,10 +643,14 @@ def _requirement_missing(level: Mapping[str, Any], snapshot: Mapping[str, Any]) 
             missing.append(f"{label}数据未提供")
             continue
         current = current_value or 0
-        if target > current:
+        strict = bool(level.get(f"{rule_key}_strict"))
+        if current <= target if strict else current < target:
             difference = target - current
             if data_key in {"upload", "download"}:
-                missing.append(f"{label}还差 {format_bytes(difference)}")
+                if strict and difference <= 0:
+                    missing.append(f"{label}需大于 {format_bytes(target)}")
+                else:
+                    missing.append(f"{label}还差 {format_bytes(difference)}")
             else:
                 missing.append(f"{label}还差 {difference:g}")
     target_ratio = as_float(level.get("min_ratio"))
@@ -551,7 +669,7 @@ def _requirement_missing(level: Mapping[str, Any], snapshot: Mapping[str, Any]) 
     return missing
 
 
-def _eligible_date(join_at: Any, minimum_days: Any) -> str:
+def _eligible_date(join_at: Any, minimum_days: Any, strict: bool = False) -> str:
     """按加入日期和等级账号天数计算最早达标日期。"""
 
     try:
@@ -559,7 +677,7 @@ def _eligible_date(join_at: Any, minimum_days: Any) -> str:
         days = max(as_int(minimum_days), 0)
     except (TypeError, ValueError):
         return ""
-    return (joined + timedelta(days=days)).isoformat()
+    return (joined + timedelta(days=days + (1 if strict and days else 0))).isoformat()
 
 
 def build_retirement_progress(
@@ -627,14 +745,21 @@ def build_retirement_progress(
                     "name": level_name,
                     "description": as_text(level.get("description")),
                     "min_join_days": max(as_int(level.get("min_join_days")), 0),
+                    "min_join_days_strict": bool(level.get("min_join_days_strict")),
                     "min_upload": max(as_int(level.get("min_upload")), 0),
+                    "min_upload_strict": bool(level.get("min_upload_strict")),
                     "min_download": max(as_int(level.get("min_download")), 0),
+                    "min_download_strict": bool(level.get("min_download_strict")),
                     "min_ratio": as_float(level.get("min_ratio")),
                     "min_ratio_strict": bool(level.get("min_ratio_strict")),
                     "min_bonus": as_float(level.get("min_bonus")),
                     "min_seeding_points": as_float(level.get("min_seeding_points")),
                     "min_seeding": max(as_int(level.get("min_seeding")), 0),
-                    "eligible_date": _eligible_date(base["join_at"], level.get("min_join_days")),
+                    "eligible_date": _eligible_date(
+                        base["join_at"],
+                        level.get("min_join_days"),
+                        bool(level.get("min_join_days_strict")),
+                    ),
                     "reached": index <= current_index,
                     "is_current": index == current_index,
                     "is_retirement": index == retirement_index,

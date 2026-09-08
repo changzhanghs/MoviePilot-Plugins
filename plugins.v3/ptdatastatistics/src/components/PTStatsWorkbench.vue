@@ -542,21 +542,23 @@ function requirementRows(site, level) {
 
   if (level.min_join_days) {
     const currentDays = elapsedAccountDays(site)
-    const complete = reached || (currentDays !== null && currentDays >= level.min_join_days)
+    const strict = Boolean(level.min_join_days_strict)
+    const complete = reached || (currentDays !== null && (strict ? currentDays > level.min_join_days : currentDays >= level.min_join_days))
+    const requiredDays = Number(level.min_join_days) + (strict ? 1 : 0)
     rows.push({
       key: 'join-time',
       label: '注册时间',
       icon: 'mdi-calendar-check-outline',
       current: complete ? '注册时间已达成' : currentDays === null ? '加入时间未提供' : `已注册 ${durationLabel(currentDays)}`,
-      target: `≥ ${durationLabel(level.min_join_days)}`,
-      detail: complete ? '已达成' : currentDays === null ? '加入时间未提供' : `还差 ${durationLabel(level.min_join_days - currentDays)}`,
+      target: `${strict ? '>' : '≥'} ${durationLabel(level.min_join_days)}`,
+      detail: complete ? '已达成' : currentDays === null ? '加入时间未提供' : `还差 ${durationLabel(requiredDays - currentDays)}`,
       complete,
       unavailable: currentDays === null,
       progress: complete ? 100 : currentDays === null ? 0 : Math.max(0, Math.min(100, currentDays * 100 / level.min_join_days)),
     })
   }
-  pushNumeric({ key: 'upload', label: '上传量', icon: 'mdi-upload-outline', current: site.upload, target: level.min_upload, formatter: formatBytes })
-  pushNumeric({ key: 'download', label: '下载量', icon: 'mdi-download-outline', current: site.download, target: level.min_download, formatter: formatBytes })
+  pushNumeric({ key: 'upload', label: '上传量', icon: 'mdi-upload-outline', current: site.upload, target: level.min_upload, formatter: formatBytes, strict: level.min_upload_strict })
+  pushNumeric({ key: 'download', label: '下载量', icon: 'mdi-download-outline', current: site.download, target: level.min_download, formatter: formatBytes, strict: level.min_download_strict })
   pushNumeric({ key: 'ratio', label: '分享率', icon: 'mdi-chart-donut', current: site.ratio, target: level.min_ratio, formatter: value => formatNumber(value, 2), strict: level.min_ratio_strict })
   pushNumeric({ key: 'seeding-points', label: '做种积分', icon: 'mdi-star-circle-outline', current: site.seeding_points, target: level.min_seeding_points, formatter: value => formatNumber(value, 0), unavailable: site.seeding_points === null || site.seeding_points === undefined })
   pushNumeric({ key: 'bonus', label: '魔力', icon: 'mdi-lightning-bolt-circle', current: site.bonus, target: level.min_bonus, formatter: value => formatNumber(value, 0), unavailable: site.bonus === null || site.bonus === undefined })
@@ -564,8 +566,8 @@ function requirementRows(site, level) {
   return rows
 }
 function levelTrafficRequirement(level) {
-  if (level.min_download) return `下载 ${formatBytes(level.min_download)}`
-  if (level.min_upload) return `上传 ${formatBytes(level.min_upload)}`
+  if (level.min_download) return `下载 ${level.min_download_strict ? '>' : '≥'} ${formatBytes(level.min_download)}`
+  if (level.min_upload) return `上传 ${level.min_upload_strict ? '>' : '≥'} ${formatBytes(level.min_upload)}`
   return '—'
 }
 function levelRatioRequirement(level) {
@@ -869,7 +871,7 @@ onBeforeUnmount(() => historyChart?.destroy())
                   <details v-for="level in selectedRetirementSite.route" :key="level.name" class="retirement-level-row" :class="{ 'is-current': level.is_current, 'is-retirement': level.is_retirement }" :open="level.is_current">
                     <summary>
                       <strong>{{ level.name }}</strong>
-                      <span>{{ level.min_join_days ? `注册 ${durationLabel(level.min_join_days)}` : '注册无限制' }}</span>
+                      <span>{{ level.min_join_days ? `注册 ${level.min_join_days_strict ? '>' : '≥'} ${durationLabel(level.min_join_days)}` : '注册无限制' }}</span>
                       <span>{{ levelTrafficRequirement(level) }}</span>
                       <span>{{ levelRatioRequirement(level) }}</span>
                       <span>{{ levelPointsRequirement(level) }}</span>
