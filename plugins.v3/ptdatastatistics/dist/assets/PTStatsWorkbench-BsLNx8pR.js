@@ -16612,6 +16612,38 @@ return (_ctx, _cache) => {
             _createElementVNode("section", _hoisted_25, [
               (historyPeriods.value.length)
                 ? (_openBlock(), _createElementBlock("div", _hoisted_26, [
+                    _createVNode(_component_VBtnToggle, {
+                      modelValue: historyScope.value,
+                      "onUpdate:modelValue": _cache[5] || (_cache[5] = $event => ((historyScope).value = $event)),
+                      mandatory: "",
+                      color: "primary",
+                      density: "compact",
+                      variant: "outlined",
+                      divided: "",
+                      class: "history-period-scope"
+                    }, {
+                      default: _withCtx(() => [
+                        _createVNode(_component_VBtn, { value: "day" }, {
+                          default: _withCtx(() => [...(_cache[38] || (_cache[38] = [
+                            _createTextVNode("日", -1)
+                          ]))]),
+                          _: 1
+                        }),
+                        _createVNode(_component_VBtn, { value: "week" }, {
+                          default: _withCtx(() => [...(_cache[39] || (_cache[39] = [
+                            _createTextVNode("周", -1)
+                          ]))]),
+                          _: 1
+                        }),
+                        _createVNode(_component_VBtn, { value: "month" }, {
+                          default: _withCtx(() => [...(_cache[40] || (_cache[40] = [
+                            _createTextVNode("月", -1)
+                          ]))]),
+                          _: 1
+                        })
+                      ]),
+                      _: 1
+                    }, 8, ["modelValue"]),
                     (_openBlock(true), _createElementBlock(_Fragment, null, _renderList(historyPeriods.value, (period) => {
                       return (_openBlock(), _createElementBlock("button", {
                         key: period.key,
@@ -16634,57 +16666,25 @@ return (_ctx, _cache) => {
                     _createElementVNode("header", _hoisted_30, [
                       _createElementVNode("div", _hoisted_31, [
                         _createElementVNode("div", null, [
-                          _cache[38] || (_cache[38] = _createElementVNode("span", null, "周期上传", -1)),
+                          _cache[41] || (_cache[41] = _createElementVNode("span", null, "周期上传", -1)),
                           _createElementVNode("strong", _hoisted_32, _toDisplayString(selectedHistoryPeriod.value.validCount ? _unref(formatBytes)(selectedHistoryPeriod.value.upload) : '基线不足'), 1)
                         ]),
                         _createElementVNode("div", null, [
-                          _cache[39] || (_cache[39] = _createElementVNode("span", null, "周期下载", -1)),
+                          _cache[42] || (_cache[42] = _createElementVNode("span", null, "周期下载", -1)),
                           _createElementVNode("strong", _hoisted_33, _toDisplayString(selectedHistoryPeriod.value.validCount ? _unref(formatBytes)(selectedHistoryPeriod.value.download) : '基线不足'), 1)
                         ]),
                         _createElementVNode("div", null, [
-                          _cache[40] || (_cache[40] = _createElementVNode("span", null, "有效站点", -1)),
+                          _cache[43] || (_cache[43] = _createElementVNode("span", null, "有效站点", -1)),
                           _createElementVNode("strong", null, _toDisplayString(selectedHistoryPeriod.value.siteCount), 1)
                         ]),
                         _createElementVNode("div", null, [
-                          _cache[41] || (_cache[41] = _createElementVNode("span", null, "统计范围", -1)),
+                          _cache[44] || (_cache[44] = _createElementVNode("span", null, "统计范围", -1)),
                           _createElementVNode("strong", null, _toDisplayString(historyScope.value === 'day' ? '00:00–23:59' : `${selectedHistoryPeriod.value.startDay.slice(5)} 至 ${selectedHistoryPeriod.value.endDay.slice(5)}`), 1)
                         ])
                       ])
                     ]),
                     _createElementVNode("section", _hoisted_34, [
                       _createElementVNode("aside", _hoisted_35, [
-                        _createVNode(_component_VBtnToggle, {
-                          modelValue: historyScope.value,
-                          "onUpdate:modelValue": _cache[5] || (_cache[5] = $event => ((historyScope).value = $event)),
-                          mandatory: "",
-                          color: "primary",
-                          density: "compact",
-                          variant: "outlined",
-                          divided: "",
-                          class: "history-sidebar-scope"
-                        }, {
-                          default: _withCtx(() => [
-                            _createVNode(_component_VBtn, { value: "day" }, {
-                              default: _withCtx(() => [...(_cache[42] || (_cache[42] = [
-                                _createTextVNode("日", -1)
-                              ]))]),
-                              _: 1
-                            }),
-                            _createVNode(_component_VBtn, { value: "week" }, {
-                              default: _withCtx(() => [...(_cache[43] || (_cache[43] = [
-                                _createTextVNode("周", -1)
-                              ]))]),
-                              _: 1
-                            }),
-                            _createVNode(_component_VBtn, { value: "month" }, {
-                              default: _withCtx(() => [...(_cache[44] || (_cache[44] = [
-                                _createTextVNode("月", -1)
-                              ]))]),
-                              _: 1
-                            })
-                          ]),
-                          _: 1
-                        }, 8, ["modelValue"]),
                         _createElementVNode("div", _hoisted_36, [
                           _cache[45] || (_cache[45] = _createElementVNode("strong", null, "站点列表", -1)),
                           _createElementVNode("span", null, "共 " + _toDisplayString(selectedPeriodSites.value.length) + " 个", 1)
@@ -17430,6 +17430,6 @@ return (_ctx, _cache) => {
 }
 
 };
-const PTStatsWorkbench = /*#__PURE__*/_export_sfc(_sfc_main, [['__scopeId',"data-v-fabaa8ad"]]);
+const PTStatsWorkbench = /*#__PURE__*/_export_sfc(_sfc_main, [['__scopeId',"data-v-cea7511b"]]);
 
 export { PTStatsWorkbench as P };
