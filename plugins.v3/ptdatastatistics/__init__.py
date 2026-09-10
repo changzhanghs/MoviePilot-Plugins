@@ -53,6 +53,7 @@ from .core import (
 )
 from .exporters import build_csv
 from .models import PTSiteHourlySnapshot, PTSiteSnapshot
+from .ptd_webdav import PTDWebDAVError, fetch_latest_backup, match_metrics
 from .repository import SnapshotRepository
 
 
@@ -62,7 +63,7 @@ class PTDataStatistics(_PluginBase):
     plugin_name = "PT数据统计"
     plugin_desc = "统计 PT 站点累计与每日上传下载，提供历史、通知和导出。"
     plugin_icon = "ptdatastatistics.svg"
-    plugin_version = "1.0.7"
+    plugin_version = "1.0.8"
     plugin_author = "cz"
     author_url = "https://github.com/changzhanghs"
     plugin_config_prefix = "ptdatastatistics_"
@@ -75,6 +76,12 @@ class PTDataStatistics(_PluginBase):
     _notification_enabled = False
     _notification_cron = "0 9 * * *"
     _notification_modes: ClassVar[list[str]] = ["today"]
+    _ptd_webdav_enabled = False
+    _ptd_webdav_url = ""
+    _ptd_webdav_username = ""
+    _ptd_webdav_password = ""
+    _ptd_webdav_verify_ssl = True
+    _ptd_site_mappings = ""
 
     def init_plugin(self, config: dict | None = None) -> None:
         """读取配置；数据库建表由 V3 插件生命周期在本方法之后完成。"""
@@ -104,6 +111,12 @@ class PTDataStatistics(_PluginBase):
         self._notification_enabled = value.notification_enabled
         self._notification_cron = value.notification_cron
         self._notification_modes = list(value.notification_modes)
+        self._ptd_webdav_enabled = value.ptd_webdav_enabled
+        self._ptd_webdav_url = value.ptd_webdav_url
+        self._ptd_webdav_username = value.ptd_webdav_username
+        self._ptd_webdav_password = value.ptd_webdav_password
+        self._ptd_webdav_verify_ssl = value.ptd_webdav_verify_ssl
+        self._ptd_site_mappings = value.ptd_site_mappings
 
     def _settings(self) -> SettingsData:
         """返回当前设置模型。"""
@@ -115,6 +128,12 @@ class PTDataStatistics(_PluginBase):
             notification_enabled=self._notification_enabled,
             notification_cron=self._notification_cron,
             notification_modes=self._notification_modes,
+            ptd_webdav_enabled=self._ptd_webdav_enabled,
+            ptd_webdav_url=self._ptd_webdav_url,
+            ptd_webdav_username=self._ptd_webdav_username,
+            ptd_webdav_password=self._ptd_webdav_password,
+            ptd_webdav_verify_ssl=self._ptd_webdav_verify_ssl,
+            ptd_site_mappings=self._ptd_site_mappings,
         )
 
     def get_state(self) -> bool:
@@ -349,6 +368,55 @@ class PTDataStatistics(_PluginBase):
 
         return [self._site_dict(site) for site in (SiteOper().list() or [])]
 
+    def sync_from_ptd(self) -> tuple[int, str]:
+        """Import only PTD hourly magic and seeding points, replacing the last import."""
+
+        if not self._ptd_webdav_enabled:
+            return 0, ""
+        if not self._ptd_webdav_url:
+            raise PTDWebDAVError("请先填写 PTD WebDAV 地址")
+        backup = fetch_latest_backup(
+            url=self._ptd_webdav_url,
+            username=self._ptd_webdav_username,
+            password=self._ptd_webdav_password,
+            verify_ssl=self._ptd_webdav_verify_ssl,
+        )
+        matched = match_metrics(
+            backup.metrics,
+            backup.metadata,
+            self._configured_sites(),
+            self._ptd_site_mappings,
+        )
+        if not matched:
+            raise PTDWebDAVError(
+                "PTD 备份中有数据，但未能匹配任何 MoviePilot 站点；请补充站点映射"
+            )
+        # A single stable key is deliberately overwritten. The plugin therefore
+        # keeps no PTD history and never deletes the user's remote WebDAV files.
+        self.save_data(
+            "ptd_latest_metrics_v1",
+            {
+                "backup": backup.name,
+                "source_url": self._ptd_webdav_url,
+                "imported_at": self._now().isoformat(timespec="seconds"),
+                "metrics": matched,
+            },
+        )
+        return len(matched), backup.name
+
+    def _ptd_metrics_by_domain(self) -> dict[str, dict[str, Any]]:
+        """Return the latest PTD values only while the WebDAV source is enabled."""
+
+        if not self._ptd_webdav_enabled:
+            return {}
+        saved = self.get_data("ptd_latest_metrics_v1") or {}
+        values = saved.get("metrics") if isinstance(saved, dict) else []
+        return {
+            as_text(item.get("domain")).casefold(): item
+            for item in (values or [])
+            if isinstance(item, dict) and item.get("domain")
+        }
+
     def sync_from_mp(self, *, full: bool = False, site_id: int | None = None) -> SyncResponse:
         """只读 MoviePilot 的站点数据并复制到插件历史库。"""
 
@@ -438,6 +506,12 @@ class PTDataStatistics(_PluginBase):
             self.sync_from_mp(full=False, site_id=site_id)
         except Exception as error:  # noqa: BLE001 - 事件失败不得影响宿主刷新链
             logger.error(f"PT数据统计同步 MoviePilot 站点数据失败：{error}")
+        if self._ptd_webdav_enabled and raw_site_id in (None, "", "*"):
+            try:
+                # MP 通常会为单站刷新发出多次事件，只在整轮完成后读一次 WebDAV。
+                self.sync_from_ptd()
+            except PTDWebDAVError as error:
+                logger.warning(f"同步 PTD WebDAV 数据失败：{error}")
 
     def _build_overview(self) -> OverviewResponse:
         """构建可由侧栏和仪表盘共同复用的指标模型。"""
@@ -452,6 +526,7 @@ class PTDataStatistics(_PluginBase):
         latest_any = repository.latest(active_only=True, valid_only=False)
         history_sites = repository.latest(active_only=False, valid_only=False)
         previous_bonus_rows = repository.previous_successful(latest_valid_all)
+        ptd_by_domain = self._ptd_metrics_by_domain()
         day_rows = repository.records_for_days((server_day, yesterday), active_only=True)
         today_by_domain = {
             item["domain"]: item for item in day_rows if item["updated_day"] == server_day
@@ -508,7 +583,14 @@ class PTDataStatistics(_PluginBase):
                     latest_row,
                     previous_bonus_rows.get(domain),
                 ) if domain in valid_by_domain else None,
+                "seeding_points": None,
             }
+            ptd_metric = ptd_by_domain.get(domain)
+            if ptd_metric:
+                item["estimated_bonus_hourly"] = as_float(
+                    ptd_metric.get("estimated_bonus_hourly")
+                )
+                item["seeding_points"] = as_float(ptd_metric.get("seeding_points"))
             sites.append(item)
             if current and delta["baseline_valid"] and (
                 delta["daily_upload"] > 0 or delta["daily_download"] > 0
@@ -563,9 +645,13 @@ class PTDataStatistics(_PluginBase):
         retirement_snapshots = [
             {
                 **item,
-                "estimated_bonus_hourly": estimate_bonus_hourly(
-                    item,
-                    previous_bonus_rows.get(item["domain"]),
+                "estimated_bonus_hourly": as_float(
+                    ptd_by_domain.get(item["domain"], {}).get("estimated_bonus_hourly")
+                ) if item["domain"] in ptd_by_domain else estimate_bonus_hourly(
+                    item, previous_bonus_rows.get(item["domain"])
+                ),
+                "seeding_points": as_float(
+                    ptd_by_domain.get(item["domain"], {}).get("seeding_points")
                 ),
             }
             for item in latest_valid_all
@@ -737,9 +823,17 @@ class PTDataStatistics(_PluginBase):
         )
 
     def api_sync(self) -> SyncResponse:
-        """手工同步 MP 数据库，不触发 MP 访问 PT 站点。"""
+        """Refresh MP snapshots and, when configured, the newest PTD backup."""
 
-        return self.sync_from_mp(full=False)
+        result = self.sync_from_mp(full=False)
+        if not self._ptd_webdav_enabled:
+            return result
+        try:
+            imported, backup = self.sync_from_ptd()
+            return result.model_copy(update={"ptd_imported": imported, "ptd_backup": backup})
+        except PTDWebDAVError as error:
+            logger.warning(f"同步 PTD WebDAV 数据失败：{error}")
+            return result.model_copy(update={"ptd_error": str(error)})
 
     def api_settings(self) -> SettingsResponse:
         """返回当前设置与导出字段。"""

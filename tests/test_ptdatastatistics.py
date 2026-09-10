@@ -27,6 +27,65 @@ package.__path__ = [str(PLUGIN)]
 sys.modules.setdefault("ptdatastatistics", package)
 core = load_module("ptdatastatistics.core", PLUGIN / "core.py")
 exporters = load_module("ptdatastatistics.exporters", PLUGIN / "exporters.py")
+ptd_webdav = load_module("ptdatastatistics.ptd_webdav", PLUGIN / "ptd_webdav.py")
+
+
+class PTDWebDAVTests(unittest.TestCase):
+    def test_extracts_only_latest_seeding_metrics_per_site(self):
+        values = ptd_webdav._extract_metrics(
+            {
+                "audiences": {
+                    "2026-09-10": {
+                        "site": "audiences",
+                        "updateAt": 100,
+                        "seedingBonus": 1000,
+                        "seedingBonusPerHour": 2.5,
+                        "uploaded": 999,
+                    },
+                    "2026-09-11": {
+                        "site": "audiences",
+                        "updateAt": 200,
+                        "seedingBonus": 1200,
+                        "bonusPerHour": 3.5,
+                        "uploaded": 1999,
+                    },
+                }
+            }
+        )
+
+        self.assertEqual(values[0]["seeding_points"], 1200)
+        self.assertEqual(values[0]["estimated_bonus_hourly"], 3.5)
+        self.assertNotIn("uploaded", values[0])
+
+    def test_matches_known_alias_metadata_and_manual_mapping(self):
+        configured = [
+            {"id": 1, "name": "观众", "domain": "audiences.me"},
+            {"id": 2, "name": "示例站", "domain": "tracker.example"},
+        ]
+        values = [
+            {"ptd_site": "audiences", "seeding_points": 10},
+            {"ptd_site": "custom", "estimated_bonus_hourly": 4},
+        ]
+
+        matched = ptd_webdav.match_metrics(
+            values,
+            {},
+            configured,
+            "custom=tracker.example",
+        )
+
+        self.assertEqual({item["domain"] for item in matched}, {"audiences.me", "tracker.example"})
+
+    def test_selects_newest_ptd_backup_filename(self):
+        listing = b'''<?xml version="1.0"?><d:multistatus xmlns:d="DAV:">
+          <d:response><d:href>/dav/PTD_backup_20260910T0800.zip</d:href></d:response>
+          <d:response><d:href>/dav/PTD_backup_20260911T0900.zip</d:href></d:response>
+        </d:multistatus>'''
+
+        name, url = ptd_webdav._latest_backup_url(listing, "https://dav.test/dav/")
+
+        self.assertEqual(name, "PTD_backup_20260911T0900.zip")
+        self.assertEqual(url, "https://dav.test/dav/PTD_backup_20260911T0900.zip")
 
 
 class DeltaTests(unittest.TestCase):
@@ -416,8 +475,8 @@ class PackagingTests(unittest.TestCase):
         manifest = json.loads((ROOT / "package.v3.json").read_text(encoding="utf-8"))
         meta = manifest["PTDataStatistics"]
         source = (PLUGIN / "__init__.py").read_text(encoding="utf-8")
-        self.assertEqual(meta["version"], "1.0.7")
-        self.assertEqual(meta["history"]["v1.0.7"], "更新了一些东西")
+        self.assertEqual(meta["version"], "1.0.8")
+        self.assertEqual(meta["history"]["v1.0.8"], "更新了一些内容")
         self.assertEqual(meta["history"]["v1.0.6"], "更新了一些内容")
         self.assertEqual(meta["history"]["v1.0.5"], "更新了一些内容")
         self.assertEqual(meta["history"]["v1.0.4"], "更新了一些内容")
@@ -425,8 +484,8 @@ class PackagingTests(unittest.TestCase):
         self.assertEqual(meta["history"]["v1.0.2"], "更新了一些东西")
         self.assertEqual(meta["history"]["v1.0.1"], "更新了一些东西")
         self.assertEqual(meta["history"]["v1.0.0"], "更新了一些东西")
-        self.assertEqual(list(meta["history"]), ["v1.0.7", "v1.0.6", "v1.0.5", "v1.0.4", "v1.0.3", "v1.0.2", "v1.0.1", "v1.0.0"])
-        self.assertIn('plugin_version = "1.0.7"', source)
+        self.assertEqual(list(meta["history"]), ["v1.0.8", "v1.0.7", "v1.0.6", "v1.0.5", "v1.0.4", "v1.0.3", "v1.0.2", "v1.0.1", "v1.0.0"])
+        self.assertIn('plugin_version = "1.0.8"', source)
         self.assertEqual(meta["system_version"], ">=3.0.0")
         self.assertNotIn("release", meta)
 

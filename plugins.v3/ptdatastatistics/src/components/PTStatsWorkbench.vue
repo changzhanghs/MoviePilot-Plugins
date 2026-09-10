@@ -49,6 +49,8 @@ const exportFields = ref([])
 const settingsDraft = ref({
   enabled: false, show_sidebar: true, retention_days: 365,
   notification_enabled: false, notification_cron: '0 9 * * *', notification_modes: ['today'],
+  ptd_webdav_enabled: false, ptd_webdav_url: '', ptd_webdav_username: '',
+  ptd_webdav_password: '', ptd_webdav_verify_ssl: true, ptd_site_mappings: '',
 })
 const history = ref({ start_day: '', end_day: '', count: 0, records: [] })
 const historyFilters = ref({ startDay: '', endDay: '', siteIds: [], includeArchived: true })
@@ -410,7 +412,10 @@ async function syncFromMP() {
     const result = unwrapResponse(await props.api.post(`${pluginBase.value}/sync`, {})) || {}
     await loadAll()
     await loadHistory()
-    notify(`已同步 MoviePilot 数据：写入 ${result.imported || 0} 条`)
+    const ptdMessage = result.ptd_error
+      ? `；PTD 同步失败：${result.ptd_error}`
+      : result.ptd_backup ? `；PTD ${result.ptd_backup} 匹配 ${result.ptd_imported || 0} 个站点` : ''
+    notify(`已同步 MoviePilot 数据：写入 ${result.imported || 0} 条${ptdMessage}`, result.ptd_error ? 'warning' : 'success')
     emit('action')
   } catch (err) {
     notify(err?.message || '同步 MoviePilot 数据失败', 'error')
@@ -706,6 +711,7 @@ onBeforeUnmount(() => historyChart?.destroy())
                 <div><span>分享率</span><strong>{{ field(site.ratio, 3) }}</strong></div>
                 <div><span>魔力</span><strong>{{ bonusValue(site.bonus) }}</strong></div>
                 <div><span>预估时魔</span><strong>{{ estimatedBonusHourly(site.estimated_bonus_hourly) }}</strong></div>
+                <div><span>做种积分</span><strong>{{ site.seeding_points === null || site.seeding_points === undefined ? '暂无数据' : formatNumber(site.seeding_points, 2) }}</strong></div>
                 <div><span>做种数</span><strong>{{ formatNumber(site.seeding, 0) }}</strong></div>
                 <div><span>做种体积</span><strong>{{ formatBytes(site.seeding_size) }}</strong></div>
               </div>
@@ -911,8 +917,9 @@ onBeforeUnmount(() => historyChart?.destroy())
         <section class="section-block settings-layout">
           <div class="settings-card"><div class="section-heading"><div><span class="section-kicker">GENERAL</span><h2>基础设置</h2></div></div><VSwitch v-model="settingsDraft.enabled" color="primary" label="启用插件" hint="启用后跟随 MP 的站点刷新设置同步已保存数据，并开放插件定时任务" persistent-hint /><VSwitch v-model="settingsDraft.show_sidebar" color="primary" label="在发现栏显示入口" /><VTextField v-model.number="settingsDraft.retention_days" type="number" min="0" max="36500" label="历史保留天数" hint="0 表示永久保留；仅清理插件历史副本" persistent-hint variant="outlined" class="mt-3" /></div>
           <div class="settings-card"><div class="section-heading"><div><span class="section-kicker">NOTIFICATION</span><h2>每日通知</h2></div></div><VSwitch v-model="settingsDraft.notification_enabled" color="primary" label="启用汇总通知" /><VTextField v-model="settingsDraft.notification_cron" label="通知 Cron（五段式）" placeholder="0 9 * * *" hint="分 时 日 月 星期；按服务器时区执行，每个自然日最多通知一次" persistent-hint variant="outlined" /><VCheckbox v-model="settingsDraft.notification_modes" value="today" label="今日数据：仅上传和下载增量" hide-details /><VCheckbox v-model="settingsDraft.notification_modes" value="all" label="所有数据：仅累计上传和累计下载" hide-details /><div class="setting-hint mt-2">Cron 错过后不补发；无数据站点不会通知。</div></div>
+          <div class="settings-card settings-card--wide"><div class="section-heading"><div><span class="section-kicker">PTD WEBDAV</span><h2>PTD 数据补充</h2></div><span class="section-note">仅导入时魔和做种积分</span></div><VSwitch v-model="settingsDraft.ptd_webdav_enabled" color="primary" label="启用 PTD WebDAV 同步" hint="跟随 MoviePilot 站点刷新事件和顶部数据刷新；每次只保留最新一份导入结果" persistent-hint /><div v-if="settingsDraft.ptd_webdav_enabled" class="ptd-settings-grid"><VTextField v-model="settingsDraft.ptd_webdav_url" label="WebDAV 备份目录地址" placeholder="https://dav.example.com/ptd/" variant="outlined" /><VTextField v-model="settingsDraft.ptd_webdav_username" label="WebDAV 用户名" variant="outlined" /><VTextField v-model="settingsDraft.ptd_webdav_password" label="WebDAV 密码" type="password" autocomplete="new-password" variant="outlined" /><VSwitch v-model="settingsDraft.ptd_webdav_verify_ssl" color="primary" label="验证 HTTPS 证书" hide-details /><VTextarea v-model="settingsDraft.ptd_site_mappings" class="ptd-site-mappings" label="站点映射（可选）" placeholder="audiences=audiences.me\nmteam=kp.m-team.cc" hint="自动匹配失败时，每行填写 PTD站点ID=MP域名或站点名" persistent-hint variant="outlined" rows="3" /></div><div class="setting-hint mt-3">PTD 备份需勾选“用户信息”；建议同时勾选“元数据”以自动匹配站点。暂不支持加密备份，不会删除 WebDAV 上的 PTD 原始文件。</div></div>
           <div class="settings-card settings-card--wide"><div class="section-heading"><div><span class="section-kicker">DATA MANAGEMENT</span><h2>数据管理</h2></div><span class="section-note">导出时可选择站点、日期和隐藏字段</span></div><div class="data-actions"><VBtn variant="tonal" color="primary" prepend-icon="mdi-file-delimited-outline" @click="exportOpen = true">数据导出</VBtn><VBtn variant="tonal" color="primary" prepend-icon="mdi-image-outline" @click="careerOpen = true">PT 生涯</VBtn></div></div>
-          <div class="settings-card settings-card--wide settings-actions"><div><strong>数据来源</strong><p>插件只复制 MoviePilot 已保存的站点账户快照，不访问 PT 站点，也不读取下载器。</p></div><VBtn color="primary" size="large" variant="flat" prepend-icon="mdi-content-save-outline" :loading="saving" @click="saveSettings">保存设置</VBtn></div>
+          <div class="settings-card settings-card--wide settings-actions"><div><strong>数据来源</strong><p>上传、下载、分享率等仍仅来自 MoviePilot；PTD 只补充最新时魔和做种积分。</p></div><VBtn color="primary" size="large" variant="flat" prepend-icon="mdi-content-save-outline" :loading="saving" @click="saveSettings">保存设置</VBtn></div>
         </section>
       </VWindowItem>
     </VWindow>
@@ -1063,7 +1070,8 @@ onBeforeUnmount(() => historyChart?.destroy())
 .twelve-remaining strong{color:rgb(var(--v-theme-success));font-size:.8rem}
 @media(max-width:1280px){.metric-grid{grid-template-columns:repeat(3,minmax(0,1fr))}.retirement-target-grid{grid-template-columns:1fr}}
 @media(max-width:960px){.workbench-nav{align-items:stretch;flex-direction:column;gap:5px}.workbench-nav__actions{align-self:flex-end;padding-bottom:10px}.history-workspace{grid-template-columns:1fr;height:auto;overflow:visible}.history-site-sidebar{overflow:visible;border-right:0;border-bottom:1px solid var(--pt-border)}.history-site-sidebar__items{display:flex;max-height:none;overflow-x:auto;overflow-y:hidden;scrollbar-gutter:auto}.history-site-option{width:210px;flex:0 0 210px}.history-workspace__main{overflow:visible;scrollbar-gutter:auto}.history-record-shell{overflow-x:auto}.history-record-table{min-width:900px;table-layout:auto}.distribution-grid{grid-template-columns:1fr}.retirement-explorer{grid-template-columns:1fr;height:auto;min-height:0;overflow:visible}.retirement-site-list{overflow:visible;border-right:0;border-bottom:1px solid var(--pt-border)}.retirement-site-list__items{display:flex;max-height:none;overflow-x:auto;overflow-y:hidden;scrollbar-gutter:auto}.retirement-site-option{width:245px;flex:0 0 245px}.retirement-detail{overflow:visible;scrollbar-gutter:auto}}
-@media(max-width:720px){.workbench-nav__actions{align-self:stretch}.data-refresh-btn{flex:1}.section-block{padding:14px}.metric-grid,.settings-layout{grid-template-columns:1fr}.settings-card--wide{grid-column:auto}.settings-actions{align-items:stretch;flex-direction:column}.section-heading,.distribution-heading{align-items:flex-start;flex-direction:column}.pie-layout{grid-template-columns:1fr}.pie{width:180px}.history-detail-summary{align-items:flex-start;flex-direction:column}.history-detail-metrics{width:100%;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}.history-period-card{min-width:142px}.history-line-chart{height:220px}.history-site-panel .history-detail-shell{overflow-x:auto}.history-site-panel .history-detail-table{min-width:720px}}
+.ptd-settings-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin-top:14px}.ptd-site-mappings{grid-column:1/-1}
+@media(max-width:720px){.workbench-nav__actions{align-self:stretch}.data-refresh-btn{flex:1}.section-block{padding:14px}.metric-grid,.settings-layout,.ptd-settings-grid{grid-template-columns:1fr}.ptd-site-mappings{grid-column:auto}.settings-card--wide{grid-column:auto}.settings-actions{align-items:stretch;flex-direction:column}.section-heading,.distribution-heading{align-items:flex-start;flex-direction:column}.pie-layout{grid-template-columns:1fr}.pie{width:180px}.history-detail-summary{align-items:flex-start;flex-direction:column}.history-detail-metrics{width:100%;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}.history-period-card{min-width:142px}.history-line-chart{height:220px}.history-site-panel .history-detail-shell{overflow-x:auto}.history-site-panel .history-detail-table{min-width:720px}}
 @media(max-width:720px){.site-sort-select{width:100%;flex:0 0 auto}.site-data-card{padding:12px}.site-data-card__header,.site-account-meta{align-items:flex-start;flex-direction:column}.site-stat-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.retirement-detail{padding:14px}.retirement-detail__header{align-items:flex-start;flex-direction:column}.retirement-detail__metrics{width:100%;justify-content:space-between;gap:10px}.retirement-route-rail{margin-right:-14px;margin-left:-14px;padding-right:14px;padding-left:14px}.requirement-row{grid-template-columns:auto minmax(0,1fr) minmax(0,1fr)}.requirement-row :deep(.v-progress-linear){grid-column:2/-1}.retirement-levels__heading{align-items:flex-start;flex-direction:column}.retirement-level-row__detail{padding-left:15px}}
 @media(max-width:960px){.retirement-site-list{position:static;max-height:none}.twelve-panel{padding:18px}.twelve-panel__heading{align-items:flex-start;flex-direction:column}.twelve-summary{width:100%;justify-content:flex-end}}
 </style>
