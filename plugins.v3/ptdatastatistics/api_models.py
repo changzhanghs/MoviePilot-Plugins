@@ -106,6 +106,7 @@ class LevelRequirementData(BaseModel):
     min_ratio_strict: bool = False
     min_bonus: float | None = None
     min_seeding_points: float | None = None
+    min_seeding_points_strict: bool = False
     min_seeding: int = 0
     eligible_date: str = ""
     reached: bool = False

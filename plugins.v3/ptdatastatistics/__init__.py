@@ -67,7 +67,7 @@ class PTDataStatistics(_PluginBase):
     plugin_name = "PT数据统计"
     plugin_desc = "统计 PT 站点累计与每日上传下载，提供历史、通知和导出。"
     plugin_icon = "ptdatastatistics.svg"
-    plugin_version = "1.0.10"
+    plugin_version = "1.1.0"
     plugin_author = "cz"
     author_url = "https://github.com/changzhanghs"
     plugin_config_prefix = "ptdatastatistics_"
@@ -726,10 +726,12 @@ class PTDataStatistics(_PluginBase):
             }
             ptd_metric = ptd_by_domain.get(domain)
             if ptd_metric:
-                item["estimated_bonus_hourly"] = as_float(
-                    ptd_metric.get("estimated_bonus_hourly")
-                )
-                item["seeding_points"] = as_float(ptd_metric.get("seeding_points"))
+                if ptd_metric.get("estimated_bonus_hourly") is not None:
+                    item["estimated_bonus_hourly"] = as_float(
+                        ptd_metric.get("estimated_bonus_hourly")
+                    )
+                if ptd_metric.get("seeding_points") is not None:
+                    item["seeding_points"] = as_float(ptd_metric.get("seeding_points"))
             sites.append(item)
             if current and delta["baseline_valid"] and (
                 delta["daily_upload"] > 0 or delta["daily_download"] > 0
@@ -786,9 +788,10 @@ class PTDataStatistics(_PluginBase):
                 **item,
                 "estimated_bonus_hourly": as_float(
                     ptd_by_domain.get(item["domain"], {}).get("estimated_bonus_hourly")
-                ) if item["domain"] in ptd_by_domain else estimate_bonus_hourly(
-                    item, previous_bonus_rows.get(item["domain"])
-                ),
+                )
+                if ptd_by_domain.get(item["domain"], {}).get("estimated_bonus_hourly")
+                is not None
+                else estimate_bonus_hourly(item, previous_bonus_rows.get(item["domain"])),
                 "seeding_points": as_float(
                     ptd_by_domain.get(item["domain"], {}).get("seeding_points")
                 ),

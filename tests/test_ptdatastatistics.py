@@ -59,6 +59,22 @@ class PTDCookieCloudTests(unittest.TestCase):
         self.assertEqual(values[0]["estimated_bonus_hourly"], 3.5)
         self.assertNotIn("uploaded", values[0])
 
+    def test_uses_bonus_rate_instead_of_seeding_points_rate_for_hourly_magic(self):
+        values = ptd_cookiecloud._extract_metrics(
+            {
+                "hhanclub": {
+                    "site": "hhanclub",
+                    "siteName": "憨憨",
+                    "seedingBonus": 439_222,
+                    "bonusPerHour": 41.35,
+                    "seedingBonusPerHour": 12.45,
+                }
+            }
+        )
+
+        self.assertEqual(values[0]["seeding_points"], 439_222)
+        self.assertEqual(values[0]["estimated_bonus_hourly"], 41.35)
+
     def test_matches_known_alias_metadata_and_manual_mapping(self):
         configured = [
             {"id": 1, "name": "观众", "domain": "audiences.me"},
@@ -121,7 +137,7 @@ class PTDCookieCloudTests(unittest.TestCase):
 
         self.assertEqual(backup.name, "PTD_backup_current")
         self.assertEqual(backup.metrics[0]["seeding_points"], 1200)
-        self.assertEqual(backup.metrics[0]["estimated_bonus_hourly"], 3.5)
+        self.assertIsNone(backup.metrics[0]["estimated_bonus_hourly"])
 
 class DeltaTests(unittest.TestCase):
     def test_requires_exact_previous_server_day(self):
@@ -431,6 +447,18 @@ class TwelveAndExportTests(unittest.TestCase):
         self.assertIn("做种积分还差 1,429,740", missing)
         self.assertFalse(any("e+" in item.casefold() for item in missing))
 
+    def test_strict_seeding_points_at_threshold_does_not_report_zero_gap(self):
+        missing = core._requirement_missing(
+            {
+                "min_seeding_points": 80_000,
+                "min_seeding_points_strict": True,
+            },
+            {"seeding_points": 80_000},
+        )
+
+        self.assertIn("做种积分需大于 80,000", missing)
+        self.assertNotIn("做种积分还差 0", missing)
+
     def test_mteam_retirement_rules_match_published_level_route(self):
         progress = core.build_retirement_progress(
             [{
@@ -481,6 +509,181 @@ class TwelveAndExportTests(unittest.TestCase):
         self.assertEqual(site["current_level"], "府尹")
         self.assertTrue(next(level for level in site["route"] if level["name"] == "Extreme User")["is_current"])
 
+    def test_hhan_retirement_rules_keep_seeding_points_distinct_from_bonus(self):
+        progress = core.build_retirement_progress(
+            [{
+                "site_id": 1,
+                "site_name": "憨憨",
+                "user_level": "憨头憨脑 User",
+                "join_at": "2026-01-01",
+                "updated_day": "2026-09-11",
+                "upload": 100 * core.GIB,
+                "download": 60 * core.GIB,
+                "ratio": 1.1,
+                "bonus": 9_999_999,
+                "seeding_points": 79_999,
+            }],
+        )
+        site = progress["sites"][0]
+        levels = {level["name"]: level for level in site["route"]}
+
+        self.assertEqual(site["next_level"], "Power User")
+        self.assertEqual(site["retirement_level"], "Ultimate User")
+        self.assertEqual(levels["Power User"]["min_seeding_points"], 80_000)
+        self.assertTrue(levels["Power User"]["min_seeding_points_strict"])
+        self.assertIsNone(levels["Power User"]["min_bonus"])
+        self.assertIn("做种积分还差 1", levels["Power User"]["missing"])
+        self.assertFalse(any("魔力" in item for item in levels["Power User"]["missing"]))
+        self.assertEqual(levels["Power User"]["min_upload"], 63 * core.GIB)
+        self.assertEqual(
+            [levels[name]["min_seeding_points"] for name in (
+                "Power User", "Elite User", "Crazy User", "Insane User",
+                "Veteran User", "Extreme User", "Ultimate User", "Nexus Master",
+            )],
+            [80_000, 150_000, 300_000, 500_000, 900_000, 1_100_000, 1_300_000, 1_500_000],
+        )
+        self.assertTrue(all(
+            levels[name]["min_bonus"] is None
+            for name in (
+                "Power User", "Elite User", "Crazy User", "Insane User",
+                "Veteran User", "Extreme User", "Ultimate User", "Nexus Master",
+            )
+        ))
+        self.assertTrue(levels["Ultimate User"]["is_retirement"])
+
+    def test_home_retirement_rules_match_published_requirements(self):
+        progress = core.build_retirement_progress(
+            [{
+                "site_id": 1,
+                "site_name": "家园",
+                "user_level": "User",
+                "join_at": "2026-01-01",
+                "updated_day": "2026-09-11",
+                "upload": 0,
+                "download": 0,
+                "ratio": 0,
+                "bonus": 99_999_999,
+                "seeding_points": 0,
+            }],
+        )
+        site = progress["sites"][0]
+        levels = {level["name"]: level for level in site["route"]}
+        ordered = (
+            "Power User", "Elite User", "Crazy User", "Insane User",
+            "Veteran User", "Extreme User", "Ultimate User", "Nexus Master",
+        )
+
+        self.assertEqual(site["next_level"], "Power User")
+        self.assertEqual(site["retirement_level"], "Nexus Master")
+        self.assertEqual(
+            [levels[name]["min_join_days"] for name in ordered],
+            [35, 56, 84, 112, 140, 168, 210, 252],
+        )
+        self.assertEqual(
+            [levels[name]["min_download"] for name in ordered],
+            [256 * core.GIB, 386 * core.GIB, 512 * core.GIB, 768 * core.GIB,
+             1024 * core.GIB, 2048 * core.GIB, 8192 * core.GIB, 10240 * core.GIB],
+        )
+        self.assertEqual(
+            [levels[name]["min_seeding_points"] for name in ordered],
+            [40_000, 100_000, 180_000, 280_000,
+             400_000, 540_000, 700_000, 1_000_000],
+        )
+        self.assertTrue(all(levels[name]["min_bonus"] is None for name in ordered))
+        self.assertEqual(levels["Power User"]["min_upload"], 512 * core.GIB)
+        self.assertEqual(levels["Nexus Master"]["min_upload"], 102400 * core.GIB)
+        self.assertTrue(levels["Nexus Master"]["is_retirement"])
+
+    def test_hdfans_retirement_rules_use_seeding_points_not_bonus(self):
+        progress = core.build_retirement_progress(
+            [{
+                "site_id": 1,
+                "site_name": "红豆饭 HDFans",
+                "user_level": "User",
+                "join_at": "2026-01-01",
+                "updated_day": "2026-09-11",
+                "upload": 0,
+                "download": 0,
+                "ratio": 0,
+                "bonus": 9_999_999,
+                "seeding_points": 0,
+            }],
+        )
+        site = progress["sites"][0]
+        levels = {level["name"]: level for level in site["route"]}
+        ordered = (
+            "Power User", "Elite User", "Crazy User", "Insane User",
+            "Veteran User", "Extreme User", "Ultimate User", "Nexus Master",
+        )
+
+        self.assertEqual(site["next_level"], "Power User")
+        self.assertEqual(site["retirement_level"], "Extreme User")
+        self.assertEqual(
+            [levels[name]["min_join_days"] for name in ordered],
+            [28, 56, 105, 210, 280, 350, 420, 700],
+        )
+        self.assertEqual(
+            [levels[name]["min_download"] for name in ordered],
+            [50 * core.GIB, 120 * core.GIB, 256 * core.GIB, 512 * core.GIB,
+             1024 * core.GIB, 2048 * core.GIB, 4096 * core.GIB, 10240 * core.GIB],
+        )
+        self.assertEqual(
+            [levels[name]["min_seeding_points"] for name in ordered],
+            [50_000, 100_000, 250_000, 400_000,
+             600_000, 800_000, 1_000_000, 1_688_888],
+        )
+        self.assertTrue(all(levels[name]["min_bonus"] is None for name in ordered))
+        self.assertEqual(levels["Power User"]["min_upload"], 50 * core.GIB)
+        self.assertEqual(levels["Extreme User"]["min_upload"], 7168 * core.GIB)
+        self.assertTrue(levels["Extreme User"]["is_retirement"])
+
+    def test_kylin_retirement_rules_match_published_requirements(self):
+        progress = core.build_retirement_progress(
+            [{
+                "site_id": 1,
+                "site_name": "麒麟",
+                "user_level": "草塘结庐/User",
+                "join_at": "2026-01-01",
+                "updated_day": "2026-09-11",
+                "upload": 0,
+                "download": 0,
+                "ratio": 0,
+                "bonus": 9_999_999,
+                "seeding_points": 0,
+            }],
+        )
+        site = progress["sites"][0]
+        levels = {level["name"]: level for level in site["route"]}
+        ordered = (
+            "Power User", "Elite User", "Crazy User", "Insane User",
+            "Veteran User", "Extreme User", "Ultimate User", "Nexus Master",
+        )
+
+        self.assertEqual(site["next_level"], "Power User")
+        self.assertEqual(site["retirement_level"], "Veteran User")
+        self.assertEqual(
+            [levels[name]["min_join_days"] for name in ordered],
+            [28, 56, 105, 175, 280, 420, 560, 700],
+        )
+        self.assertEqual(
+            [levels[name]["min_download"] for name in ordered],
+            [50 * core.GIB, 120 * core.GIB, 300 * core.GIB, 500 * core.GIB,
+             750 * core.GIB, 1024 * core.GIB, 4096 * core.GIB, 10240 * core.GIB],
+        )
+        self.assertEqual(
+            [levels[name]["min_ratio"] for name in ordered],
+            [2, 3, 4, 5, 6, 7, 8, 10],
+        )
+        self.assertEqual(
+            [levels[name]["min_seeding_points"] for name in ordered],
+            [40_000, 80_000, 150_000, 250_000,
+             400_000, 600_000, 800_000, 1_000_000],
+        )
+        self.assertTrue(all(levels[name]["min_bonus"] is None for name in ordered))
+        self.assertEqual(levels["Power User"]["min_upload"], 100 * core.GIB)
+        self.assertEqual(levels["Veteran User"]["min_upload"], 4500 * core.GIB)
+        self.assertTrue(levels["Veteran User"]["is_retirement"])
+
     def test_audiences_rule_matches_decorated_site_and_level_names(self):
         progress = core.build_retirement_progress(
             [{
@@ -519,7 +722,8 @@ class PackagingTests(unittest.TestCase):
         manifest = json.loads((ROOT / "package.v3.json").read_text(encoding="utf-8"))
         meta = manifest["PTDataStatistics"]
         source = (PLUGIN / "__init__.py").read_text(encoding="utf-8")
-        self.assertEqual(meta["version"], "1.0.10")
+        self.assertEqual(meta["version"], "1.1.0")
+        self.assertEqual(meta["history"]["v1.1.0"], "更新了一些内容")
         self.assertEqual(meta["history"]["v1.0.10"], "更新了一些内容")
         self.assertEqual(meta["history"]["v1.0.9"], "更新了一些内容")
         self.assertEqual(meta["history"]["v1.0.8"], "更新了一些内容")
@@ -530,8 +734,8 @@ class PackagingTests(unittest.TestCase):
         self.assertEqual(meta["history"]["v1.0.2"], "更新了一些东西")
         self.assertEqual(meta["history"]["v1.0.1"], "更新了一些东西")
         self.assertEqual(meta["history"]["v1.0.0"], "更新了一些东西")
-        self.assertEqual(list(meta["history"]), ["v1.0.10", "v1.0.9", "v1.0.8", "v1.0.7", "v1.0.6", "v1.0.5", "v1.0.4", "v1.0.3", "v1.0.2", "v1.0.1", "v1.0.0"])
-        self.assertIn('plugin_version = "1.0.10"', source)
+        self.assertEqual(list(meta["history"]), ["v1.1.0", "v1.0.10", "v1.0.9", "v1.0.8", "v1.0.7", "v1.0.6", "v1.0.5", "v1.0.4", "v1.0.3", "v1.0.2", "v1.0.1", "v1.0.0"])
+        self.assertIn('plugin_version = "1.1.0"', source)
         self.assertEqual(meta["system_version"], ">=3.0.0")
         self.assertNotIn("release", meta)
 
