@@ -13,7 +13,7 @@ from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
 from cryptography.hazmat.primitives.padding import PKCS7
 
 
-_METRIC_KEYS = {"seedingBonus", "seedingBonusPerHour", "bonusPerHour"}
+_METRIC_KEYS = {"seedingBonus", "bonusPerHour"}
 _KNOWN_ALIASES = {
     "mteam": ("馒头", "mteam", "m-team"),
     "audiences": ("观众", "audiences", "audience"),
@@ -99,9 +99,11 @@ def _extract_metrics(user_info: Any) -> list[dict[str, Any]]:
             continue
         day_key, record = max(records, key=lambda item: _record_score(item[1], item[0]))
         seeding_points = _number(record.get("seedingBonus"))
-        bonus_hourly = _number(record.get("seedingBonusPerHour"))
-        if bonus_hourly is None:
-            bonus_hourly = _number(record.get("bonusPerHour"))
+        # PTD keeps two different rates: bonusPerHour is the site's hourly
+        # magic/bonus gain, while seedingBonusPerHour is the hourly gain of
+        # seeding points. They differ on sites such as HHanClub and cannot be
+        # used interchangeably.
+        bonus_hourly = _number(record.get("bonusPerHour"))
         if seeding_points is None and bonus_hourly is None:
             continue
         output.append(

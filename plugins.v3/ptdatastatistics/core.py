@@ -287,6 +287,375 @@ MTEAM_RETIREMENT_RULE: dict[str, Any] = {
     ],
 }
 
+HHAN_RETIREMENT_RULE: dict[str, Any] = {
+    "retirement_level": "Ultimate User",
+    "levels": [
+        {
+            "name": "Peasant",
+            "aliases": ("脸憨皮厚",),
+            "description": "降级用户有 7 天时间提升分享率，否则会被禁用账号；不能发表趣味盒内容、申请友情链接或上传字幕。",
+        },
+        {
+            "name": "User",
+            "aliases": ("憨头憨脑",),
+            "description": "新注册用户的默认等级。",
+        },
+        {
+            "name": "Power User",
+            "aliases": ("憨声憨气",),
+            "min_download": 60 * GIB,
+            "min_ratio": 1.05,
+            "min_ratio_strict": True,
+            "min_seeding_points": 80_000,
+            "min_seeding_points_strict": True,
+            "description": "可以访问音乐区和论坛邀请区。",
+        },
+        {
+            "name": "Elite User",
+            "aliases": ("憨态可掬",),
+            "min_join_days": 8 * 7,
+            "min_download": 120 * GIB,
+            "min_ratio": 1.55,
+            "min_ratio_strict": True,
+            "min_seeding_points": 150_000,
+            "min_seeding_points_strict": True,
+        },
+        {
+            "name": "Crazy User",
+            "aliases": ("明姿憨憨",),
+            "min_join_days": 15 * 7,
+            "min_download": 300 * GIB,
+            "min_ratio": 2.05,
+            "min_ratio_strict": True,
+            "min_seeding_points": 300_000,
+            "min_seeding_points_strict": True,
+            "description": "做种、下载和发布时可以选择匿名模式。",
+        },
+        {
+            "name": "Insane User",
+            "aliases": ("装憨打呆",),
+            "min_join_days": 25 * 7,
+            "min_download": 500 * GIB,
+            "min_ratio": 2.55,
+            "min_ratio_strict": True,
+            "min_seeding_points": 500_000,
+            "min_seeding_points_strict": True,
+        },
+        {
+            "name": "Veteran User",
+            "aliases": ("憨状可掬",),
+            "min_join_days": 40 * 7,
+            "min_download": 750 * GIB,
+            "min_ratio": 3.05,
+            "min_ratio_strict": True,
+            "min_seeding_points": 900_000,
+            "min_seeding_points_strict": True,
+            "description": "可以查看其他用户的评论和帖子历史；Veteran User 及以上用户封存账号后不会被删除。",
+        },
+        {
+            "name": "Extreme User",
+            "aliases": ("憨娇可人",),
+            "min_join_days": 60 * 7,
+            "min_download": 1024 * GIB,
+            "min_ratio": 3.55,
+            "min_ratio_strict": True,
+            "min_seeding_points": 1_100_000,
+            "min_seeding_points_strict": True,
+            "description": "可以更新过期的外部信息。",
+        },
+        {
+            "name": "Ultimate User",
+            "aliases": ("憨笑如花",),
+            "min_join_days": 80 * 7,
+            "min_download": 1536 * GIB,
+            "min_ratio": 4.05,
+            "min_ratio_strict": True,
+            "min_seeding_points": 1_300_000,
+            "min_seeding_points_strict": True,
+            "description": "获得一个邀请名额；Ultimate User 及以上用户永久保留账号。",
+        },
+        {
+            "name": "Nexus Master",
+            "aliases": ("满面娇憨",),
+            "min_join_days": 100 * 7,
+            "min_download": 3072 * GIB,
+            "min_ratio": 4.55,
+            "min_ratio_strict": True,
+            "min_seeding_points": 1_500_000,
+            "min_seeding_points_strict": True,
+            "description": "获得两个邀请名额。",
+        },
+    ],
+}
+
+HOME_RETIREMENT_RULE: dict[str, Any] = {
+    "retirement_level": "Nexus Master",
+    "levels": [
+        {
+            "name": "Peasant",
+            "description": "降级后进入 5 天倒数，倒数结束时分享率仍未达标会被封禁；不能发表趣味盒内容、申请友情链接或上传字幕。",
+        },
+        {
+            "name": "User",
+            "description": "新用户的默认级别。",
+        },
+        {
+            "name": "Power User",
+            "min_join_days": 5 * 7,
+            "min_download": 256 * GIB,
+            "min_ratio": 2,
+            "min_ratio_strict": True,
+            "min_seeding_points": 40_000,
+            "description": "新晋等级用户，权限同 User。",
+        },
+        {
+            "name": "Elite User",
+            "min_join_days": 8 * 7,
+            "min_download": 386 * GIB,
+            "min_ratio": 2.5,
+            "min_ratio_strict": True,
+            "min_seeding_points": 100_000,
+            "description": "权限同 Power User。",
+        },
+        {
+            "name": "Crazy User",
+            "min_join_days": 12 * 7,
+            "min_download": 512 * GIB,
+            "min_ratio": 3,
+            "min_ratio_strict": True,
+            "min_seeding_points": 180_000,
+            "description": "做种、下载和发布时可以选择匿名模式。",
+        },
+        {
+            "name": "Insane User",
+            "min_join_days": 16 * 7,
+            "min_download": 768 * GIB,
+            "min_ratio": 3.5,
+            "min_ratio_strict": True,
+            "min_seeding_points": 280_000,
+            "description": "权限同 Crazy User。",
+        },
+        {
+            "name": "Veteran User",
+            "min_join_days": 20 * 7,
+            "min_download": 1024 * GIB,
+            "min_ratio": 4,
+            "min_ratio_strict": True,
+            "min_seeding_points": 400_000,
+            "description": "可以查看其他用户的评论和帖子历史。",
+        },
+        {
+            "name": "Extreme User",
+            "min_join_days": 24 * 7,
+            "min_download": 2048 * GIB,
+            "min_ratio": 4.5,
+            "min_ratio_strict": True,
+            "min_seeding_points": 540_000,
+            "description": "获得 1 个邀请名额；可以更新过期的外部信息；可以查看 Extreme User 论坛。",
+        },
+        {
+            "name": "Ultimate User",
+            "min_join_days": 30 * 7,
+            "min_download": 8192 * GIB,
+            "min_ratio": 5,
+            "min_ratio_strict": True,
+            "min_seeding_points": 700_000,
+            "description": "获得 1 个邀请名额。",
+        },
+        {
+            "name": "Nexus Master",
+            "min_join_days": 36 * 7,
+            "min_download": 10240 * GIB,
+            "min_ratio": 10,
+            "min_ratio_strict": True,
+            "min_seeding_points": 1_000_000,
+            "description": "获得 1 个邀请名额；账号永久保留。",
+        },
+    ],
+}
+
+HDFANS_RETIREMENT_RULE: dict[str, Any] = {
+    "retirement_level": "Extreme User",
+    "levels": [
+        {
+            "name": "Peasant",
+            "description": "降级用户有 30 天时间提升分享率，否则会被踢；不能发表趣味盒内容、申请友情链接或上传字幕。",
+        },
+        {
+            "name": "User",
+            "description": "新用户的默认级别。",
+        },
+        {
+            "name": "Power User",
+            "min_join_days": 4 * 7,
+            "min_download": 50 * GIB,
+            "min_ratio": 1,
+            "min_ratio_strict": True,
+            "min_seeding_points": 50_000,
+            "description": "获得 1 个邀请名额；可以直接发布种子；可以删除自己上传的字幕。",
+        },
+        {
+            "name": "Elite User",
+            "min_join_days": 8 * 7,
+            "min_download": 120 * GIB,
+            "min_ratio": 1.5,
+            "min_ratio_strict": True,
+            "min_seeding_points": 100_000,
+            "description": "权限同 Power User。",
+        },
+        {
+            "name": "Crazy User",
+            "min_join_days": 15 * 7,
+            "min_download": 256 * GIB,
+            "min_ratio": 2,
+            "min_ratio_strict": True,
+            "min_seeding_points": 250_000,
+            "description": "获得 2 个邀请名额；做种、下载和发布时可以选择匿名模式。",
+        },
+        {
+            "name": "Insane User",
+            "min_join_days": 30 * 7,
+            "min_download": 512 * GIB,
+            "min_ratio": 2.5,
+            "min_ratio_strict": True,
+            "min_seeding_points": 400_000,
+            "description": "可以查看普通日志。",
+        },
+        {
+            "name": "Veteran User",
+            "min_join_days": 40 * 7,
+            "min_download": 1024 * GIB,
+            "min_ratio": 3,
+            "min_ratio_strict": True,
+            "min_seeding_points": 600_000,
+            "description": "获得 3 个邀请名额；可以查看其他用户的评论和帖子历史。",
+        },
+        {
+            "name": "Extreme User",
+            "min_join_days": 50 * 7,
+            "min_download": 2048 * GIB,
+            "min_ratio": 3.5,
+            "min_ratio_strict": True,
+            "min_seeding_points": 800_000,
+            "description": "可以更新过期的外部信息；可以查看 Extreme User 论坛；Extreme User 及以上用户永久保留账号。",
+        },
+        {
+            "name": "Ultimate User",
+            "min_join_days": 60 * 7,
+            "min_download": 4096 * GIB,
+            "min_ratio": 4,
+            "min_ratio_strict": True,
+            "min_seeding_points": 1_000_000,
+            "description": "获得 5 个邀请名额。",
+        },
+        {
+            "name": "Nexus Master",
+            "min_join_days": 100 * 7,
+            "min_download": 10240 * GIB,
+            "min_ratio": 5,
+            "min_ratio_strict": True,
+            "min_seeding_points": 1_688_888,
+            "description": "获得 10 个邀请名额。",
+        },
+    ],
+}
+
+KYLIN_RETIREMENT_RULE: dict[str, Any] = {
+    "retirement_level": "Veteran User",
+    "levels": [
+        {
+            "name": "Peasant",
+            "aliases": ("浪迹天涯",),
+            "description": "降级用户有 30 天时间提升分享率，否则会被踢；不能发表趣味盒内容、申请友情链接或上传字幕。",
+        },
+        {
+            "name": "User",
+            "aliases": ("草塘结庐",),
+            "description": "新用户的默认级别。",
+        },
+        {
+            "name": "Power User",
+            "aliases": ("池畔闲人",),
+            "min_join_days": 4 * 7,
+            "min_download": 50 * GIB,
+            "min_ratio": 2,
+            "min_ratio_strict": True,
+            "min_seeding_points": 40_000,
+            "description": "可以查看 NFO 文档和用户列表、请求续种、查看排行榜及其他用户的种子历史；可以删除自己上传的字幕。",
+        },
+        {
+            "name": "Elite User",
+            "aliases": ("五湖信步",),
+            "min_join_days": 8 * 7,
+            "min_download": 120 * GIB,
+            "min_ratio": 3,
+            "min_ratio_strict": True,
+            "min_seeding_points": 80_000,
+            "description": "Elite User 及以上用户封存账号后不会被删除。",
+        },
+        {
+            "name": "Crazy User",
+            "aliases": ("轻舟飘渺",),
+            "min_join_days": 15 * 7,
+            "min_download": 300 * GIB,
+            "min_ratio": 4,
+            "min_ratio_strict": True,
+            "min_seeding_points": 150_000,
+            "description": "获得 2 个邀请名额；做种、下载和发布时可以选择匿名模式。",
+        },
+        {
+            "name": "Insane User",
+            "aliases": ("长空啸傲",),
+            "min_join_days": 25 * 7,
+            "min_download": 500 * GIB,
+            "min_ratio": 5,
+            "min_ratio_strict": True,
+            "min_seeding_points": 250_000,
+            "description": "可以查看普通日志。",
+        },
+        {
+            "name": "Veteran User",
+            "aliases": ("江东帆影",),
+            "min_join_days": 40 * 7,
+            "min_download": 750 * GIB,
+            "min_ratio": 6,
+            "min_ratio_strict": True,
+            "min_seeding_points": 400_000,
+            "description": "获得 3 个邀请名额；可以查看其他用户的评论和帖子历史；Veteran User 及以上用户永久保留账号。",
+        },
+        {
+            "name": "Extreme User",
+            "aliases": ("碧海潮生",),
+            "min_join_days": 60 * 7,
+            "min_download": 1024 * GIB,
+            "min_ratio": 7,
+            "min_ratio_strict": True,
+            "min_seeding_points": 600_000,
+            "description": "可以更新过期的外部信息；可以查看 Extreme User 论坛。",
+        },
+        {
+            "name": "Ultimate User",
+            "aliases": ("九州雷动",),
+            "min_join_days": 80 * 7,
+            "min_download": 4096 * GIB,
+            "min_ratio": 8,
+            "min_ratio_strict": True,
+            "min_seeding_points": 800_000,
+            "description": "获得 5 个邀请名额。",
+        },
+        {
+            "name": "Nexus Master",
+            "aliases": ("一鳞半爪",),
+            "min_join_days": 100 * 7,
+            "min_download": 10240 * GIB,
+            "min_ratio": 10,
+            "min_ratio_strict": True,
+            "min_seeding_points": 1_000_000,
+            "description": "获得 10 个邀请名额。",
+        },
+    ],
+}
+
 DEFAULT_RETIREMENT_RULES: dict[str, Mapping[str, Any]] = {
     **{
         alias: AUDIENCES_RETIREMENT_RULE
@@ -295,6 +664,22 @@ DEFAULT_RETIREMENT_RULES: dict[str, Mapping[str, Any]] = {
     **{
         alias: MTEAM_RETIREMENT_RULE
         for alias in ("馒头", "MTeam", "M-Team")
+    },
+    **{
+        alias: HHAN_RETIREMENT_RULE
+        for alias in ("憨憨", "HHan", "HHanClub")
+    },
+    **{
+        alias: HOME_RETIREMENT_RULE
+        for alias in ("家园", "HDHome")
+    },
+    **{
+        alias: HDFANS_RETIREMENT_RULE
+        for alias in ("红豆饭", "HDFans")
+    },
+    **{
+        alias: KYLIN_RETIREMENT_RULE
+        for alias in ("麒麟", "Kylin", "KylinPT")
     },
 }
 
@@ -663,6 +1048,14 @@ def _requirement_missing(level: Mapping[str, Any], snapshot: Mapping[str, Any]) 
                 else:
                     missing.append(f"{label}还差 {format_bytes(difference)}")
             else:
+                if strict and difference <= 0:
+                    formatted_target = (
+                        f"{int(target):,}"
+                        if target.is_integer()
+                        else f"{target:,.2f}".rstrip("0").rstrip(".")
+                    )
+                    missing.append(f"{label}需大于 {formatted_target}")
+                    continue
                 formatted_difference = (
                     f"{int(difference):,}"
                     if difference.is_integer()
@@ -787,6 +1180,7 @@ def build_retirement_progress(
                     "min_ratio_strict": bool(level.get("min_ratio_strict")),
                     "min_bonus": as_float(level.get("min_bonus")),
                     "min_seeding_points": as_float(level.get("min_seeding_points")),
+                    "min_seeding_points_strict": bool(level.get("min_seeding_points_strict")),
                     "min_seeding": max(as_int(level.get("min_seeding")), 0),
                     "eligible_date": _eligible_date(
                         base["join_at"],

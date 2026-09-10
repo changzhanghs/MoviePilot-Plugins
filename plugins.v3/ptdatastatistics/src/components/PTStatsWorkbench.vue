@@ -557,13 +557,16 @@ function requirementRows(site, level) {
     const complete = reached || (available && (strict ? currentNumber > targetNumber : currentNumber >= targetNumber))
     const progress = complete ? 100 : available ? Math.max(0, Math.min(100, currentNumber * 100 / targetNumber)) : 0
     const difference = available ? Math.max(targetNumber - currentNumber, 0) : null
+    let detail = '数据未提供'
+    if (complete) detail = '已达成'
+    else if (difference !== null) detail = strict && difference === 0 ? `需大于 ${formatter(targetNumber)}` : `还差 ${formatter(difference)}`
     rows.push({
       key,
       label,
       icon,
       current: available ? formatter(currentNumber) : '数据未提供',
       target: `${strict ? '>' : '≥'} ${formatter(targetNumber)}`,
-      detail: unavailable ? '数据未提供' : complete ? '已达成' : difference === null ? '数据未提供' : `还差 ${formatter(difference)}`,
+      detail,
       complete,
       unavailable: !available,
       progress,
@@ -590,7 +593,7 @@ function requirementRows(site, level) {
   pushNumeric({ key: 'upload', label: '上传量', icon: 'mdi-upload-outline', current: site.upload, target: level.min_upload, formatter: formatBytes, strict: level.min_upload_strict })
   pushNumeric({ key: 'download', label: '下载量', icon: 'mdi-download-outline', current: site.download, target: level.min_download, formatter: formatBytes, strict: level.min_download_strict })
   pushNumeric({ key: 'ratio', label: '分享率', icon: 'mdi-chart-donut', current: site.ratio, target: level.min_ratio, formatter: value => formatNumber(value, 2), strict: level.min_ratio_strict })
-  pushNumeric({ key: 'seeding-points', label: '做种积分', icon: 'mdi-star-circle-outline', current: site.seeding_points, target: level.min_seeding_points, formatter: value => formatNumber(value, 0), unavailable: site.seeding_points === null || site.seeding_points === undefined })
+  pushNumeric({ key: 'seeding-points', label: '做种积分', icon: 'mdi-star-circle-outline', current: site.seeding_points, target: level.min_seeding_points, formatter: value => formatNumber(value, 0), strict: level.min_seeding_points_strict, unavailable: site.seeding_points === null || site.seeding_points === undefined })
   pushNumeric({ key: 'bonus', label: '魔力', icon: 'mdi-lightning-bolt-circle', current: site.bonus, target: level.min_bonus, formatter: value => formatNumber(value, 0), unavailable: site.bonus === null || site.bonus === undefined })
   pushNumeric({ key: 'seeding', label: '做种数', icon: 'mdi-seed-outline', current: site.seeding, target: level.min_seeding, formatter: value => formatNumber(value, 0) })
   return rows
@@ -606,7 +609,7 @@ function levelRatioRequirement(level) {
   return `分享率 ${level.min_ratio_strict ? '>' : '≥'} ${formatNumber(level.min_ratio, 2)}`
 }
 function levelPointsRequirement(level) {
-  if (level.min_seeding_points) return `做种积分 ${formatNumber(level.min_seeding_points, 0)}`
+  if (level.min_seeding_points) return `做种积分 ${level.min_seeding_points_strict ? '>' : '≥'} ${formatNumber(level.min_seeding_points, 0)}`
   if (level.min_bonus) return `魔力 ${formatNumber(level.min_bonus, 0)}`
   if (level.min_seeding) return `做种 ${formatNumber(level.min_seeding, 0)}`
   return '—'
