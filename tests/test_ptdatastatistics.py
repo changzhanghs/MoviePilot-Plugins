@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import base64
 import csv
 import importlib.util
 import io
@@ -8,6 +9,7 @@ import sys
 import types
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 ROOT = Path(__file__).resolve().parents[1]
 PLUGIN = ROOT / "plugins.v3" / "ptdatastatistics"
@@ -27,12 +29,12 @@ package.__path__ = [str(PLUGIN)]
 sys.modules.setdefault("ptdatastatistics", package)
 core = load_module("ptdatastatistics.core", PLUGIN / "core.py")
 exporters = load_module("ptdatastatistics.exporters", PLUGIN / "exporters.py")
-ptd_webdav = load_module("ptdatastatistics.ptd_webdav", PLUGIN / "ptd_webdav.py")
+ptd_cookiecloud = load_module("ptdatastatistics.ptd_cookiecloud", PLUGIN / "ptd_cookiecloud.py")
 
 
-class PTDWebDAVTests(unittest.TestCase):
+class PTDCookieCloudTests(unittest.TestCase):
     def test_extracts_only_latest_seeding_metrics_per_site(self):
-        values = ptd_webdav._extract_metrics(
+        values = ptd_cookiecloud._extract_metrics(
             {
                 "audiences": {
                     "2026-09-10": {
@@ -67,7 +69,7 @@ class PTDWebDAVTests(unittest.TestCase):
             {"ptd_site": "custom", "estimated_bonus_hourly": 4},
         ]
 
-        matched = ptd_webdav.match_metrics(
+        matched = ptd_cookiecloud.match_metrics(
             values,
             {},
             configured,
@@ -76,16 +78,61 @@ class PTDWebDAVTests(unittest.TestCase):
 
         self.assertEqual({item["domain"] for item in matched}, {"audiences.me", "tracker.example"})
 
-    def test_selects_newest_ptd_backup_filename(self):
-        listing = b'''<?xml version="1.0"?><d:multistatus xmlns:d="DAV:">
-          <d:response><d:href>/dav/PTD_backup_20260910T0800.zip</d:href></d:response>
-          <d:response><d:href>/dav/PTD_backup_20260911T0900.zip</d:href></d:response>
-        </d:multistatus>'''
+    def test_parses_headers_and_rejects_invalid_lines(self):
+        self.assertEqual(
+            ptd_cookiecloud._headers("Authorization: Bearer value\nX-Test: yes")["X-Test"],
+            "yes",
+        )
+        with self.assertRaises(ptd_cookiecloud.PTDCookieCloudError):
+            ptd_cookiecloud._headers("invalid")
 
-        name, url = ptd_webdav._latest_backup_url(listing, "https://dav.test/dav/")
+    def test_decrypts_cookiecloud_legacy_payload(self):
+        from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
+        from cryptography.hazmat.primitives.padding import PKCS7
 
-        self.assertEqual(name, "PTD_backup_20260911T0900.zip")
-        self.assertEqual(url, "https://dav.test/dav/PTD_backup_20260911T0900.zip")
+        uuid = "ptd-test"
+        password = "secret"
+        clear = json.dumps({"ptd_data": {"userInfo": {}}, "manifest": {}}).encode()
+        passphrase = __import__("hashlib").md5(f"{uuid}-{password}".encode()).hexdigest()[:16].encode()
+        salt = b"12345678"
+        key, iv = ptd_cookiecloud._evp_bytes_to_key(passphrase, salt)
+        padder = PKCS7(128).padder()
+        padded = padder.update(clear) + padder.finalize()
+        encryptor = Cipher(algorithms.AES(key), modes.CBC(iv)).encryptor()
+        encrypted = base64.b64encode(b"Salted__" + salt + encryptor.update(padded) + encryptor.finalize()).decode()
+
+        self.assertEqual(
+            ptd_cookiecloud._decrypt(encrypted, uuid=uuid, password=password)["ptd_data"],
+            {"userInfo": {}},
+        )
+
+    def test_reads_metrics_from_current_ptd_cookiecloud_payload(self):
+        payload = {
+            "ptd_data": {
+                "userInfo": {
+                    "audiences": {
+                        "site": "audiences",
+                        "seedingBonus": 1200,
+                        "seedingBonusPerHour": 3.5,
+                    }
+                },
+                "metadata": {"siteNameMap": {"audiences": "观众"}},
+            },
+            "manifest": {"fileName": "PTD_backup_current"},
+        }
+        with (
+            patch.object(ptd_cookiecloud, "_request_json", return_value={"encrypted": "ciphertext"}),
+            patch.object(ptd_cookiecloud, "_decrypt", return_value=payload),
+        ):
+            backup = ptd_cookiecloud.fetch_latest_backup(
+                address="https://cookiecloud.test",
+                uuid="ptd-only",
+                password="secret",
+            )
+
+        self.assertEqual(backup.name, "PTD_backup_current")
+        self.assertEqual(backup.metrics[0]["seeding_points"], 1200)
+        self.assertEqual(backup.metrics[0]["estimated_bonus_hourly"], 3.5)
 
 
 class DeltaTests(unittest.TestCase):
@@ -475,7 +522,8 @@ class PackagingTests(unittest.TestCase):
         manifest = json.loads((ROOT / "package.v3.json").read_text(encoding="utf-8"))
         meta = manifest["PTDataStatistics"]
         source = (PLUGIN / "__init__.py").read_text(encoding="utf-8")
-        self.assertEqual(meta["version"], "1.0.8")
+        self.assertEqual(meta["version"], "1.0.9")
+        self.assertEqual(meta["history"]["v1.0.9"], "更新了一些内容")
         self.assertEqual(meta["history"]["v1.0.8"], "更新了一些内容")
         self.assertEqual(meta["history"]["v1.0.6"], "更新了一些内容")
         self.assertEqual(meta["history"]["v1.0.5"], "更新了一些内容")
@@ -484,8 +532,8 @@ class PackagingTests(unittest.TestCase):
         self.assertEqual(meta["history"]["v1.0.2"], "更新了一些东西")
         self.assertEqual(meta["history"]["v1.0.1"], "更新了一些东西")
         self.assertEqual(meta["history"]["v1.0.0"], "更新了一些东西")
-        self.assertEqual(list(meta["history"]), ["v1.0.8", "v1.0.7", "v1.0.6", "v1.0.5", "v1.0.4", "v1.0.3", "v1.0.2", "v1.0.1", "v1.0.0"])
-        self.assertIn('plugin_version = "1.0.8"', source)
+        self.assertEqual(list(meta["history"]), ["v1.0.9", "v1.0.8", "v1.0.7", "v1.0.6", "v1.0.5", "v1.0.4", "v1.0.3", "v1.0.2", "v1.0.1", "v1.0.0"])
+        self.assertIn('plugin_version = "1.0.9"', source)
         self.assertEqual(meta["system_version"], ">=3.0.0")
         self.assertNotIn("release", meta)
 

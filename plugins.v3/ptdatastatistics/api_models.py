@@ -207,11 +207,12 @@ class SettingsData(BaseModel):
     notification_enabled: bool = False
     notification_cron: str = "0 9 * * *"
     notification_modes: list[str] = Field(default_factory=lambda: ["today"])
-    ptd_webdav_enabled: bool = False
-    ptd_webdav_url: str = ""
-    ptd_webdav_username: str = ""
-    ptd_webdav_password: str = ""
-    ptd_webdav_verify_ssl: bool = True
+    ptd_cookiecloud_enabled: bool = False
+    ptd_cookiecloud_address: str = ""
+    ptd_cookiecloud_uuid: str = ""
+    ptd_cookiecloud_password: str = ""
+    ptd_cookiecloud_headers: str = ""
+    ptd_cookiecloud_verify_ssl: bool = True
     ptd_site_mappings: str = ""
 
     @field_validator("retention_days")
@@ -246,7 +247,12 @@ class SettingsData(BaseModel):
         modes = [item for item in value if item in allowed]
         return list(dict.fromkeys(modes))
 
-    @field_validator("ptd_webdav_url", "ptd_webdav_username", "ptd_site_mappings")
+    @field_validator(
+        "ptd_cookiecloud_address",
+        "ptd_cookiecloud_uuid",
+        "ptd_cookiecloud_headers",
+        "ptd_site_mappings",
+    )
     @classmethod
     def strip_ptd_text(cls, value: str) -> str:
         return str(value or "").strip()

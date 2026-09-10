@@ -1,28 +1,22 @@
-"""Read the newest unencrypted PT-Depiler user-info backup from WebDAV."""
+"""Read the current PT-Depiler backup stored in CookieCloud."""
 
 from __future__ import annotations
 
 import base64
-import io
+import hashlib
 import json
-import re
 import ssl
 from dataclasses import dataclass
 from typing import Any
-from urllib.parse import unquote, urljoin, urlparse
+from urllib.parse import quote, urlparse
 from urllib.request import Request, urlopen
-from xml.etree import ElementTree
-from zipfile import BadZipFile, ZipFile
+
+from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
+from cryptography.hazmat.primitives.padding import PKCS7
 
 
-_BACKUP_RE = re.compile(r"^PTD_backup_(\d{8}T\d{4,6})\.zip$", re.IGNORECASE)
-_MAX_BACKUP_BYTES = 64 * 1024 * 1024
-_MAX_JSON_BYTES = 32 * 1024 * 1024
-_METRIC_KEYS = {
-    "seedingBonus",
-    "seedingBonusPerHour",
-    "bonusPerHour",
-}
+_MAX_RESPONSE_BYTES = 64 * 1024 * 1024
+_METRIC_KEYS = {"seedingBonus", "seedingBonusPerHour", "bonusPerHour"}
 _KNOWN_ALIASES = {
     "mteam": ("馒头", "mteam", "m-team"),
     "audiences": ("观众", "audiences", "audience"),
@@ -36,92 +30,102 @@ _KNOWN_ALIASES = {
 }
 
 
-class PTDWebDAVError(RuntimeError):
-    """A safe, user-facing PTD WebDAV import failure."""
+class PTDCookieCloudError(RuntimeError):
+    """A safe, user-facing PTD CookieCloud import failure."""
 
 
 @dataclass(frozen=True)
 class PTDBackup:
-    """The newest PTD backup and the parsed values needed by this plugin."""
+    """The current PTD backup and the values used by this plugin."""
 
     name: str
-    url: str
     metrics: list[dict[str, Any]]
     metadata: dict[str, Any]
 
 
-def _request(
-    url: str,
+def _headers(raw: str) -> dict[str, str]:
+    output = {"User-Agent": "MoviePilot-PTDataStatistics/1", "Accept": "application/json"}
+    for line in str(raw or "").splitlines():
+        if not line.strip():
+            continue
+        if ":" not in line:
+            raise PTDCookieCloudError("CookieCloud Headers 格式错误，应为每行 key: value")
+        key, value = line.split(":", 1)
+        key = key.strip()
+        if not key:
+            raise PTDCookieCloudError("CookieCloud Headers 中存在空名称")
+        output[key] = value.strip()
+    return output
+
+
+def _request_json(
     *,
-    method: str,
-    username: str,
-    password: str,
-    verify_ssl: bool,
-    body: bytes | None = None,
-) -> bytes:
-    parsed = urlparse(url)
+    address: str,
+    uuid: str,
+    headers: str = "",
+    verify_ssl: bool = True,
+) -> dict[str, Any]:
+    parsed = urlparse(address)
     if parsed.scheme not in {"http", "https"} or not parsed.netloc:
-        raise PTDWebDAVError("WebDAV 地址必须是完整的 HTTP 或 HTTPS 地址")
-    headers = {"User-Agent": "MoviePilot-PTDataStatistics/1"}
-    if username or password:
-        token = base64.b64encode(f"{username}:{password}".encode()).decode()
-        headers["Authorization"] = f"Basic {token}"
-    if method == "PROPFIND":
-        headers.update({"Depth": "1", "Content-Type": "application/xml; charset=utf-8"})
-    request = Request(url, data=body, headers=headers, method=method)
+        raise PTDCookieCloudError("CookieCloud 地址必须是完整的 HTTP 或 HTTPS 地址")
+    url = f"{address.rstrip('/')}/get/{quote(uuid, safe='')}"
+    request = Request(url, headers=_headers(headers), method="GET")
     context = None
     if parsed.scheme == "https" and not verify_ssl:
         context = ssl._create_unverified_context()  # noqa: SLF001 - explicit user setting
     try:
         with urlopen(request, timeout=30, context=context) as response:
             length = int(response.headers.get("Content-Length") or 0)
-            if length > _MAX_BACKUP_BYTES:
-                raise PTDWebDAVError("PTD 备份超过 64 MB，已拒绝读取")
-            data = response.read(_MAX_BACKUP_BYTES + 1)
-            if len(data) > _MAX_BACKUP_BYTES:
-                raise PTDWebDAVError("PTD 备份超过 64 MB，已拒绝读取")
-            return data
-    except PTDWebDAVError:
+            if length > _MAX_RESPONSE_BYTES:
+                raise PTDCookieCloudError("CookieCloud 响应超过 64 MB，已拒绝读取")
+            content = response.read(_MAX_RESPONSE_BYTES + 1)
+            if len(content) > _MAX_RESPONSE_BYTES:
+                raise PTDCookieCloudError("CookieCloud 响应超过 64 MB，已拒绝读取")
+    except PTDCookieCloudError:
         raise
     except Exception as error:  # noqa: BLE001
-        raise PTDWebDAVError(f"连接 PTD WebDAV 失败：{error}") from error
-
-
-def _latest_backup_url(xml_data: bytes, base_url: str) -> tuple[str, str]:
+        raise PTDCookieCloudError(f"连接 PTD CookieCloud 失败：{error}") from error
     try:
-        root = ElementTree.fromstring(xml_data)
-    except ElementTree.ParseError as error:
-        raise PTDWebDAVError("WebDAV 返回的目录列表无法解析") from error
-    candidates: list[tuple[str, str]] = []
-    for element in root.iter():
-        if element.tag.rsplit("}", 1)[-1].lower() != "href" or not element.text:
-            continue
-        href = unquote(element.text.strip())
-        name = href.rstrip("/").rsplit("/", 1)[-1]
-        match = _BACKUP_RE.match(name)
-        if match:
-            candidates.append((match.group(1), urljoin(base_url, href)))
-    if not candidates:
-        raise PTDWebDAVError("WebDAV 目录中没有找到 PTD_backup_*.zip")
-    _, url = max(candidates, key=lambda item: item[0])
-    return unquote(urlparse(url).path).rsplit("/", 1)[-1], url
-
-
-def _json_member(archive: ZipFile, filename: str, *, required: bool) -> Any:
-    member = next((name for name in archive.namelist() if name.rsplit("/", 1)[-1] == filename), None)
-    if not member:
-        if required:
-            raise PTDWebDAVError(
-                f"PTD 备份中缺少 {filename}；请在 PTD 备份字段中勾选用户信息并关闭备份加密"
-            )
-        return {}
-    info = archive.getinfo(member)
-    if info.file_size > _MAX_JSON_BYTES:
-        raise PTDWebDAVError(f"{filename} 超过 32 MB，已拒绝读取")
-    try:
-        return json.loads(archive.read(member).decode("utf-8-sig"))
+        value = json.loads(content.decode("utf-8-sig"))
     except (UnicodeDecodeError, json.JSONDecodeError) as error:
-        raise PTDWebDAVError(f"{filename} 不是有效 JSON；加密备份暂不支持") from error
+        raise PTDCookieCloudError("CookieCloud 返回的内容不是有效 JSON") from error
+    if not isinstance(value, dict):
+        raise PTDCookieCloudError("CookieCloud 返回的数据结构不受支持")
+    return value
+
+
+def _evp_bytes_to_key(password: bytes, salt: bytes) -> tuple[bytes, bytes]:
+    """Match the OpenSSL/CryptoJS passphrase derivation used by PTD."""
+
+    derived = b""
+    previous = b""
+    while len(derived) < 48:
+        previous = hashlib.md5(previous + password + salt).digest()  # noqa: S324 - protocol compatibility
+        derived += previous
+    return derived[:32], derived[32:48]
+
+
+def _decrypt(encrypted: str, *, uuid: str, password: str, crypto_type: str = "") -> dict[str, Any]:
+    try:
+        ciphertext = base64.b64decode(encrypted, validate=True)
+        passphrase = hashlib.md5(f"{uuid}-{password}".encode()).hexdigest()[:16].encode()  # noqa: S324
+        if crypto_type == "aes-128-cbc-fixed":
+            key, iv, payload = passphrase, bytes(16), ciphertext
+        else:
+            if not ciphertext.startswith(b"Salted__") or len(ciphertext) < 32:
+                raise ValueError("missing CryptoJS salt")
+            key, iv = _evp_bytes_to_key(passphrase, ciphertext[8:16])
+            payload = ciphertext[16:]
+        decryptor = Cipher(algorithms.AES(key), modes.CBC(iv)).decryptor()
+        padded = decryptor.update(payload) + decryptor.finalize()
+        unpadder = PKCS7(128).unpadder()
+        clear = unpadder.update(padded) + unpadder.finalize()
+        value = json.loads(clear.decode("utf-8"))
+    except Exception as error:  # noqa: BLE001
+        raise PTDCookieCloudError("CookieCloud 数据解密失败，请检查 UUID 和密码") from error
+    if not isinstance(value, dict):
+        raise PTDCookieCloudError("CookieCloud 解密后的数据结构不受支持")
+    return value
 
 
 def _record_score(record: dict[str, Any], day_key: str = "") -> tuple[float, str]:
@@ -136,7 +140,7 @@ def _extract_metrics(user_info: Any) -> list[dict[str, Any]]:
     if isinstance(user_info, dict) and isinstance(user_info.get("userInfo"), dict):
         user_info = user_info["userInfo"]
     if not isinstance(user_info, dict):
-        raise PTDWebDAVError("userInfo.json 的数据结构不受支持")
+        raise PTDCookieCloudError("PTD 用户信息的数据结构不受支持")
 
     output: list[dict[str, Any]] = []
     for site_key, history in user_info.items():
@@ -144,11 +148,7 @@ def _extract_metrics(user_info: Any) -> list[dict[str, Any]]:
         if isinstance(history, dict) and (_METRIC_KEYS & set(history)):
             records.append(("", history))
         elif isinstance(history, dict):
-            records.extend(
-                (str(day), value)
-                for day, value in history.items()
-                if isinstance(value, dict)
-            )
+            records.extend((str(day), value) for day, value in history.items() if isinstance(value, dict))
         if not records:
             continue
         day_key, record = max(records, key=lambda item: _record_score(item[1], item[0]))
@@ -168,7 +168,7 @@ def _extract_metrics(user_info: Any) -> list[dict[str, Any]]:
             }
         )
     if not output:
-        raise PTDWebDAVError("最新 PTD 备份中没有时魔或做种积分数据")
+        raise PTDCookieCloudError("当前 PTD 备份中没有时魔或做种积分数据")
     return output
 
 
@@ -284,42 +284,46 @@ def match_metrics(
     return list(matched.values())
 
 
+def _backup_item(data: dict[str, Any], name: str) -> Any:
+    for key, value in data.items():
+        if str(key).casefold() == name.casefold():
+            return value
+    return None
+
+
 def fetch_latest_backup(
     *,
-    url: str,
-    username: str = "",
-    password: str = "",
+    address: str,
+    uuid: str,
+    password: str,
+    headers: str = "",
     verify_ssl: bool = True,
 ) -> PTDBackup:
-    """List WebDAV, download its newest PTD ZIP and parse only two metrics."""
+    """Download and decrypt the single current PTD CookieCloud backup."""
 
-    base_url = url.rstrip("/") + "/"
-    propfind = b'''<?xml version="1.0" encoding="utf-8"?><d:propfind xmlns:d="DAV:"><d:prop><d:getlastmodified/><d:getcontentlength/></d:prop></d:propfind>'''
-    listing = _request(
-        base_url,
-        method="PROPFIND",
-        username=username,
+    if not uuid.strip() or not password:
+        raise PTDCookieCloudError("请填写 PTD CookieCloud UUID 和密码")
+    response = _request_json(address=address, uuid=uuid.strip(), headers=headers, verify_ssl=verify_ssl)
+    encrypted = response.get("encrypted")
+    if not isinstance(encrypted, str) or not encrypted:
+        raise PTDCookieCloudError("CookieCloud 中没有找到 PTD 备份数据")
+    payload = _decrypt(
+        encrypted,
+        uuid=uuid.strip(),
         password=password,
-        verify_ssl=verify_ssl,
-        body=propfind,
+        crypto_type=str(response.get("crypto_type") or ""),
     )
-    name, backup_url = _latest_backup_url(listing, base_url)
-    content = _request(
-        backup_url,
-        method="GET",
-        username=username,
-        password=password,
-        verify_ssl=verify_ssl,
-    )
-    try:
-        with ZipFile(io.BytesIO(content)) as archive:
-            user_info = _json_member(archive, "userInfo.json", required=True)
-            metadata = _json_member(archive, "metadata.json", required=False)
-    except BadZipFile as error:
-        raise PTDWebDAVError("最新 PTD 备份不是有效 ZIP 文件") from error
+    ptd_data = payload.get("ptd_data")
+    if not isinstance(ptd_data, dict):
+        raise PTDCookieCloudError("CookieCloud 当前内容不是 PTD 备份，请为 PTD 使用独立 UUID")
+    user_info = _backup_item(ptd_data, "userInfo")
+    if user_info is None:
+        raise PTDCookieCloudError("PTD 备份中缺少用户信息，请在备份项目中勾选“用户信息”")
+    metadata = _backup_item(ptd_data, "metadata")
+    manifest = payload.get("manifest") if isinstance(payload.get("manifest"), dict) else {}
+    backup_name = str(manifest.get("fileName") or "CookieCloud 当前备份")
     return PTDBackup(
-        name=name,
-        url=backup_url,
+        name=backup_name,
         metrics=_extract_metrics(user_info),
         metadata=metadata if isinstance(metadata, dict) else {},
     )
