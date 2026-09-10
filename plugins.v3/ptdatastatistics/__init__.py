@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hmac
 import threading
 from datetime import date, datetime, timedelta
 from typing import Any, ClassVar
@@ -17,10 +18,13 @@ from app.sdk.config import settings
 from app.sdk.events import Event, eventmanager
 from app.sdk.logging import logger
 from apscheduler.triggers.cron import CronTrigger
-from fastapi import HTTPException, Query
-from fastapi.responses import Response
+from fastapi import HTTPException, Query, Request
+from fastapi.responses import PlainTextResponse, Response
 
 from .api_models import (
+    CookieCloudActionResponse,
+    CookieCloudEncryptedData,
+    CookieCloudUpdateData,
     ExportFieldData,
     HourlyTrafficResponse,
     HistoryResponse,
@@ -53,7 +57,7 @@ from .core import (
 )
 from .exporters import build_csv
 from .models import PTSiteHourlySnapshot, PTSiteSnapshot
-from .ptd_cookiecloud import PTDCookieCloudError, fetch_latest_backup, match_metrics
+from .ptd_cookiecloud import PTDCookieCloudError, match_metrics, parse_backup_response
 from .repository import SnapshotRepository
 
 
@@ -63,7 +67,7 @@ class PTDataStatistics(_PluginBase):
     plugin_name = "PT数据统计"
     plugin_desc = "统计 PT 站点累计与每日上传下载，提供历史、通知和导出。"
     plugin_icon = "ptdatastatistics.svg"
-    plugin_version = "1.0.9"
+    plugin_version = "1.0.10"
     plugin_author = "cz"
     author_url = "https://github.com/changzhanghs"
     plugin_config_prefix = "ptdatastatistics_"
@@ -77,11 +81,9 @@ class PTDataStatistics(_PluginBase):
     _notification_cron = "0 9 * * *"
     _notification_modes: ClassVar[list[str]] = ["today"]
     _ptd_cookiecloud_enabled = False
-    _ptd_cookiecloud_address = ""
     _ptd_cookiecloud_uuid = ""
     _ptd_cookiecloud_password = ""
     _ptd_cookiecloud_headers = ""
-    _ptd_cookiecloud_verify_ssl = True
     _ptd_site_mappings = ""
 
     def init_plugin(self, config: dict | None = None) -> None:
@@ -113,11 +115,9 @@ class PTDataStatistics(_PluginBase):
         self._notification_cron = value.notification_cron
         self._notification_modes = list(value.notification_modes)
         self._ptd_cookiecloud_enabled = value.ptd_cookiecloud_enabled
-        self._ptd_cookiecloud_address = value.ptd_cookiecloud_address
         self._ptd_cookiecloud_uuid = value.ptd_cookiecloud_uuid
         self._ptd_cookiecloud_password = value.ptd_cookiecloud_password
         self._ptd_cookiecloud_headers = value.ptd_cookiecloud_headers
-        self._ptd_cookiecloud_verify_ssl = value.ptd_cookiecloud_verify_ssl
         self._ptd_site_mappings = value.ptd_site_mappings
 
     def _settings(self) -> SettingsData:
@@ -131,11 +131,9 @@ class PTDataStatistics(_PluginBase):
             notification_cron=self._notification_cron,
             notification_modes=self._notification_modes,
             ptd_cookiecloud_enabled=self._ptd_cookiecloud_enabled,
-            ptd_cookiecloud_address=self._ptd_cookiecloud_address,
             ptd_cookiecloud_uuid=self._ptd_cookiecloud_uuid,
             ptd_cookiecloud_password=self._ptd_cookiecloud_password,
             ptd_cookiecloud_headers=self._ptd_cookiecloud_headers,
-            ptd_cookiecloud_verify_ssl=self._ptd_cookiecloud_verify_ssl,
             ptd_site_mappings=self._ptd_site_mappings,
         )
 
@@ -246,6 +244,40 @@ class PTDataStatistics(_PluginBase):
 
         binary_schema = {200: {"content": {"application/octet-stream": {"schema": {"type": "string", "format": "binary"}}}}}
         return [
+            {
+                "path": "/cookiecloud",
+                "endpoint": self.api_cookiecloud_ping,
+                "methods": ["GET"],
+                "allow_anonymous": True,
+                "summary": "检测 PTD CookieCloud 兼容接收端",
+                "response_model": None,
+                "response_class": PlainTextResponse,
+            },
+            {
+                "path": "/cookiecloud/",
+                "endpoint": self.api_cookiecloud_ping,
+                "methods": ["GET"],
+                "allow_anonymous": True,
+                "summary": "检测 PTD CookieCloud 兼容接收端（尾斜杠）",
+                "response_model": None,
+                "response_class": PlainTextResponse,
+            },
+            {
+                "path": "/cookiecloud/update",
+                "endpoint": self.api_cookiecloud_update,
+                "methods": ["POST"],
+                "allow_anonymous": True,
+                "summary": "接收 PTD 加密备份",
+                "response_model": CookieCloudActionResponse,
+            },
+            {
+                "path": "/cookiecloud/get/{uuid}",
+                "endpoint": self.api_cookiecloud_get,
+                "methods": ["GET"],
+                "allow_anonymous": True,
+                "summary": "读取最新 PTD 加密备份",
+                "response_model": CookieCloudEncryptedData,
+            },
             {
                 "path": "/overview",
                 "endpoint": self.api_overview,
@@ -371,19 +403,53 @@ class PTDataStatistics(_PluginBase):
 
         return [self._site_dict(site) for site in (SiteOper().list() or [])]
 
-    def sync_from_ptd(self) -> tuple[int, str]:
-        """Import only PTD hourly magic and seeding points, replacing the last import."""
+    @staticmethod
+    def _masked_uuid(value: str) -> str:
+        """Return a log-safe UUID fragment."""
 
-        if not self._ptd_cookiecloud_enabled:
-            return 0, ""
-        if not self._ptd_cookiecloud_address:
-            raise PTDCookieCloudError("请先填写 PTD CookieCloud 地址")
-        backup = fetch_latest_backup(
-            address=self._ptd_cookiecloud_address,
+        normalized = as_text(value)
+        if len(normalized) <= 8:
+            return "***"
+        return f"{normalized[:4]}…{normalized[-4:]}"
+
+    def _require_ptd_receiver(self, request: Request | None = None, uuid: str | None = None) -> None:
+        """Validate receiver state, UUID capability and optional configured headers."""
+
+        if not self.get_state() or not self._ptd_cookiecloud_enabled:
+            logger.warning("PTD CookieCloud 接收请求被拒绝：兼容接收端未启用")
+            raise HTTPException(status_code=404, detail="PTD CookieCloud 接收端未启用")
+        configured_uuid = self._ptd_cookiecloud_uuid.strip()
+        if not configured_uuid or not self._ptd_cookiecloud_password:
+            logger.warning("PTD CookieCloud 接收请求被拒绝：UUID 或密码尚未配置")
+            raise HTTPException(status_code=503, detail="请先在插件设置中填写 PTD 专用 UUID 和密码")
+        if uuid is not None and not hmac.compare_digest(as_text(uuid), configured_uuid):
+            logger.warning(
+                f"PTD CookieCloud 接收请求被拒绝：UUID 不匹配（收到 {self._masked_uuid(uuid)}）"
+            )
+            raise HTTPException(status_code=404, detail="Item not found")
+        if request is None or not self._ptd_cookiecloud_headers:
+            return
+        for line in self._ptd_cookiecloud_headers.splitlines():
+            if not line.strip():
+                continue
+            name, separator, expected = line.partition(":")
+            name = name.strip()
+            expected = expected.strip()
+            if not separator or not name or not expected:
+                logger.warning("PTD CookieCloud 接收请求被拒绝：鉴权 Headers 配置格式错误")
+                raise HTTPException(status_code=503, detail="接收鉴权 Headers 配置格式错误")
+            actual = request.headers.get(name, "").strip()
+            if not hmac.compare_digest(actual, expected):
+                logger.warning(f"PTD CookieCloud 接收请求被拒绝：缺少或不匹配的 Header {name}")
+                raise HTTPException(status_code=403, detail="CookieCloud 认证失败")
+
+    def _parse_and_match_ptd(self, encrypted: str) -> tuple[Any, list[dict[str, Any]]]:
+        """Decrypt the received payload and map its metrics to configured MP sites."""
+
+        backup = parse_backup_response(
+            response={"encrypted": encrypted},
             uuid=self._ptd_cookiecloud_uuid,
             password=self._ptd_cookiecloud_password,
-            headers=self._ptd_cookiecloud_headers,
-            verify_ssl=self._ptd_cookiecloud_verify_ssl,
         )
         matched = match_metrics(
             backup.metrics,
@@ -395,16 +461,85 @@ class PTDataStatistics(_PluginBase):
             raise PTDCookieCloudError(
                 "PTD 备份中有数据，但未能匹配任何 MoviePilot 站点；请补充站点映射"
             )
-        # A single stable key is deliberately overwritten. The plugin therefore
-        # keeps no PTD history. CookieCloud itself also exposes only its current value.
+        return backup, matched
+
+    def _save_ptd_import(self, *, encrypted: str, backup: Any, matched: list[dict[str, Any]]) -> None:
+        """Replace the receiver payload and derived metrics under stable storage keys."""
+
+        imported_at = self._now().isoformat(timespec="seconds")
+        self.save_data(
+            "ptd_cookiecloud_payload_v1",
+            {"encrypted": encrypted, "received_at": imported_at},
+        )
         self.save_data(
             "ptd_latest_metrics_v1",
             {
                 "backup": backup.name,
-                "source_url": self._ptd_cookiecloud_address,
-                "imported_at": self._now().isoformat(timespec="seconds"),
+                "source_url": "plugin-receiver",
+                "imported_at": imported_at,
                 "metrics": matched,
             },
+        )
+
+    def api_cookiecloud_ping(self, request: Request) -> PlainTextResponse:
+        """Return the exact health text required by PTD's CookieCloud client."""
+
+        self._require_ptd_receiver(request=request)
+        logger.info("PTD CookieCloud 兼容接收端连接检测成功")
+        return PlainTextResponse("Hello World!API ROOT = /api/v1/plugin/PTDataStatistics/cookiecloud")
+
+    def api_cookiecloud_update(
+        self,
+        payload: CookieCloudUpdateData,
+        request: Request,
+    ) -> CookieCloudActionResponse:
+        """Accept, validate and immediately import the newest encrypted PTD backup."""
+
+        self._require_ptd_receiver(request=request, uuid=payload.uuid)
+        logger.info(
+            "收到 PTD CookieCloud 加密备份："
+            f"UUID {self._masked_uuid(payload.uuid)}，密文 {len(payload.encrypted)} 字符"
+        )
+        try:
+            backup, matched = self._parse_and_match_ptd(payload.encrypted)
+            self._save_ptd_import(encrypted=payload.encrypted, backup=backup, matched=matched)
+        except PTDCookieCloudError as error:
+            logger.warning(f"PTD CookieCloud 备份解析失败：{error}")
+            return CookieCloudActionResponse(action="error")
+        logger.info(
+            f"PTD CookieCloud 备份导入成功：{backup.name}，"
+            f"读取 {len(backup.metrics)} 个站点，匹配 {len(matched)} 个站点；旧数据已覆盖"
+        )
+        return CookieCloudActionResponse(action="done")
+
+    def api_cookiecloud_get(self, uuid: str, request: Request) -> CookieCloudEncryptedData:
+        """Return only the single latest encrypted PTD backup."""
+
+        self._require_ptd_receiver(request=request, uuid=uuid)
+        saved = self.get_data("ptd_cookiecloud_payload_v1") or {}
+        encrypted = saved.get("encrypted") if isinstance(saved, dict) else None
+        if not isinstance(encrypted, str) or not encrypted:
+            logger.info("PTD CookieCloud 读取请求：尚未收到备份")
+            raise HTTPException(status_code=404, detail="Item not found")
+        logger.info(
+            f"PTD CookieCloud 已返回最新加密备份：UUID {self._masked_uuid(uuid)}，"
+            f"密文 {len(encrypted)} 字符"
+        )
+        return CookieCloudEncryptedData(encrypted=encrypted)
+
+    def sync_from_ptd(self) -> tuple[int, str]:
+        """Re-import the single latest payload received directly from PTD."""
+
+        if not self._ptd_cookiecloud_enabled:
+            return 0, ""
+        saved = self.get_data("ptd_cookiecloud_payload_v1") or {}
+        encrypted = saved.get("encrypted") if isinstance(saved, dict) else None
+        if not isinstance(encrypted, str) or not encrypted:
+            raise PTDCookieCloudError("尚未收到 PTD 备份，请先在 PTD 中执行一次备份")
+        backup, matched = self._parse_and_match_ptd(encrypted)
+        self._save_ptd_import(encrypted=encrypted, backup=backup, matched=matched)
+        logger.info(
+            f"PTD 最新备份同步成功：{backup.name}，匹配 {len(matched)} 个站点；旧数据已覆盖"
         )
         return len(matched), backup.name
 
@@ -853,6 +988,14 @@ class PTDataStatistics(_PluginBase):
         old_retention = self._retention_days
         self._apply_settings(payload)
         self.update_config(payload.model_dump())
+        if self._ptd_cookiecloud_enabled:
+            logger.info(
+                "PTD CookieCloud 兼容接收端设置已保存："
+                f"UUID {self._masked_uuid(self._ptd_cookiecloud_uuid)}，"
+                f"接收鉴权 {'已启用' if self._ptd_cookiecloud_headers else '未启用'}"
+            )
+        else:
+            logger.info("PTD CookieCloud 兼容接收端已关闭")
         try:
             Scheduler().update_plugin_job(self.__class__.__name__)
         except Exception as error:  # noqa: BLE001 - 保存设置本身仍然有效

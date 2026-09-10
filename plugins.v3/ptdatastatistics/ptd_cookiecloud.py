@@ -1,21 +1,18 @@
-"""Read the current PT-Depiler backup stored in CookieCloud."""
+"""Decrypt PT-Depiler backups received by the plugin's compatibility endpoint."""
 
 from __future__ import annotations
 
 import base64
 import hashlib
 import json
-import ssl
 from dataclasses import dataclass
 from typing import Any
-from urllib.parse import quote, urlparse
-from urllib.request import Request, urlopen
+from urllib.parse import urlparse
 
 from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
 from cryptography.hazmat.primitives.padding import PKCS7
 
 
-_MAX_RESPONSE_BYTES = 64 * 1024 * 1024
 _METRIC_KEYS = {"seedingBonus", "seedingBonusPerHour", "bonusPerHour"}
 _KNOWN_ALIASES = {
     "mteam": ("馒头", "mteam", "m-team"),
@@ -41,57 +38,6 @@ class PTDBackup:
     name: str
     metrics: list[dict[str, Any]]
     metadata: dict[str, Any]
-
-
-def _headers(raw: str) -> dict[str, str]:
-    output = {"User-Agent": "MoviePilot-PTDataStatistics/1", "Accept": "application/json"}
-    for line in str(raw or "").splitlines():
-        if not line.strip():
-            continue
-        if ":" not in line:
-            raise PTDCookieCloudError("CookieCloud Headers 格式错误，应为每行 key: value")
-        key, value = line.split(":", 1)
-        key = key.strip()
-        if not key:
-            raise PTDCookieCloudError("CookieCloud Headers 中存在空名称")
-        output[key] = value.strip()
-    return output
-
-
-def _request_json(
-    *,
-    address: str,
-    uuid: str,
-    headers: str = "",
-    verify_ssl: bool = True,
-) -> dict[str, Any]:
-    parsed = urlparse(address)
-    if parsed.scheme not in {"http", "https"} or not parsed.netloc:
-        raise PTDCookieCloudError("CookieCloud 地址必须是完整的 HTTP 或 HTTPS 地址")
-    url = f"{address.rstrip('/')}/get/{quote(uuid, safe='')}"
-    request = Request(url, headers=_headers(headers), method="GET")
-    context = None
-    if parsed.scheme == "https" and not verify_ssl:
-        context = ssl._create_unverified_context()  # noqa: SLF001 - explicit user setting
-    try:
-        with urlopen(request, timeout=30, context=context) as response:
-            length = int(response.headers.get("Content-Length") or 0)
-            if length > _MAX_RESPONSE_BYTES:
-                raise PTDCookieCloudError("CookieCloud 响应超过 64 MB，已拒绝读取")
-            content = response.read(_MAX_RESPONSE_BYTES + 1)
-            if len(content) > _MAX_RESPONSE_BYTES:
-                raise PTDCookieCloudError("CookieCloud 响应超过 64 MB，已拒绝读取")
-    except PTDCookieCloudError:
-        raise
-    except Exception as error:  # noqa: BLE001
-        raise PTDCookieCloudError(f"连接 PTD CookieCloud 失败：{error}") from error
-    try:
-        value = json.loads(content.decode("utf-8-sig"))
-    except (UnicodeDecodeError, json.JSONDecodeError) as error:
-        raise PTDCookieCloudError("CookieCloud 返回的内容不是有效 JSON") from error
-    if not isinstance(value, dict):
-        raise PTDCookieCloudError("CookieCloud 返回的数据结构不受支持")
-    return value
 
 
 def _evp_bytes_to_key(password: bytes, salt: bytes) -> tuple[bytes, bytes]:
@@ -291,19 +237,11 @@ def _backup_item(data: dict[str, Any], name: str) -> Any:
     return None
 
 
-def fetch_latest_backup(
-    *,
-    address: str,
-    uuid: str,
-    password: str,
-    headers: str = "",
-    verify_ssl: bool = True,
-) -> PTDBackup:
-    """Download and decrypt the single current PTD CookieCloud backup."""
+def parse_backup_response(*, response: dict[str, Any], uuid: str, password: str) -> PTDBackup:
+    """Decrypt one CookieCloud response and extract the PTD metrics we support."""
 
     if not uuid.strip() or not password:
         raise PTDCookieCloudError("请填写 PTD CookieCloud UUID 和密码")
-    response = _request_json(address=address, uuid=uuid.strip(), headers=headers, verify_ssl=verify_ssl)
     encrypted = response.get("encrypted")
     if not isinstance(encrypted, str) or not encrypted:
         raise PTDCookieCloudError("CookieCloud 中没有找到 PTD 备份数据")

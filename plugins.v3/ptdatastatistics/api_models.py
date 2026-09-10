@@ -208,11 +208,9 @@ class SettingsData(BaseModel):
     notification_cron: str = "0 9 * * *"
     notification_modes: list[str] = Field(default_factory=lambda: ["today"])
     ptd_cookiecloud_enabled: bool = False
-    ptd_cookiecloud_address: str = ""
     ptd_cookiecloud_uuid: str = ""
     ptd_cookiecloud_password: str = ""
     ptd_cookiecloud_headers: str = ""
-    ptd_cookiecloud_verify_ssl: bool = True
     ptd_site_mappings: str = ""
 
     @field_validator("retention_days")
@@ -248,7 +246,6 @@ class SettingsData(BaseModel):
         return list(dict.fromkeys(modes))
 
     @field_validator(
-        "ptd_cookiecloud_address",
         "ptd_cookiecloud_uuid",
         "ptd_cookiecloud_headers",
         "ptd_site_mappings",
@@ -282,3 +279,22 @@ class MessageResponse(BaseModel):
     success: bool
     message: str = ""
     data: dict[str, Any] | None = None
+
+
+class CookieCloudUpdateData(BaseModel):
+    """PTD CookieCloud 兼容上传请求。"""
+
+    uuid: str = Field(min_length=5, max_length=256)
+    encrypted: str = Field(min_length=1, max_length=64 * 1024 * 1024)
+
+
+class CookieCloudEncryptedData(BaseModel):
+    """PTD CookieCloud 兼容下载响应。"""
+
+    encrypted: str
+
+
+class CookieCloudActionResponse(BaseModel):
+    """PTD CookieCloud 兼容写入结果。"""
+
+    action: str

@@ -8,8 +8,11 @@ from contextlib import contextmanager
 from datetime import datetime
 from pathlib import Path
 from typing import ClassVar
+from types import SimpleNamespace
+from unittest.mock import patch
 from zoneinfo import ZoneInfo
 
+from fastapi import HTTPException, Request
 from sqlalchemy import create_engine
 from sqlalchemy.orm import DeclarativeBase, sessionmaker
 
@@ -73,8 +76,10 @@ module("app.sdk.logging", logger=DummyLogger())
 module("app.sdk.database", plugin_declarative_base=lambda: PluginModelBase)
 
 PTDataStatistics = importlib.import_module("ptdatastatistics").PTDataStatistics
+plugin_module = importlib.import_module("ptdatastatistics")
 SettingsData = importlib.import_module("ptdatastatistics.api_models").SettingsData
 SiteSnapshotData = importlib.import_module("ptdatastatistics.api_models").SiteSnapshotData
+CookieCloudUpdateData = importlib.import_module("ptdatastatistics.api_models").CookieCloudUpdateData
 models = importlib.import_module("ptdatastatistics.models")
 PluginBase = models.PluginBase
 PTSiteSnapshot = models.PTSiteSnapshot
@@ -109,6 +114,10 @@ class HostContractTests(unittest.TestCase):
         self.assertIn(("/overview", ("GET",)), paths)
         self.assertIn(("/distribution", ("GET",)), paths)
         self.assertIn(("/settings", ("POST",)), paths)
+        self.assertIn(("/cookiecloud", ("GET",)), paths)
+        self.assertIn(("/cookiecloud/update", ("POST",)), paths)
+        receiver_routes = [item for item in plugin.get_api() if item["path"].startswith("/cookiecloud")]
+        self.assertTrue(all(item.get("allow_anonymous") is True for item in receiver_routes))
         self.assertNotIn(("/export/xlsx", ("GET",)), paths)
 
     def test_settings_are_clamped_and_modes_filtered(self):
@@ -121,9 +130,81 @@ class HostContractTests(unittest.TestCase):
         self.assertNotIn("sync_interval_minutes", value.model_dump())
         legacy_prefix = "ptd_" + "web" + "dav"
         self.assertFalse(any(key.startswith(legacy_prefix) for key in value.model_dump()))
-        self.assertIn("ptd_cookiecloud_address", value.model_dump())
+        self.assertNotIn("ptd_cookiecloud_address", value.model_dump())
+        self.assertNotIn("ptd_cookiecloud_verify_ssl", value.model_dump())
         self.assertEqual(value.notification_cron, "30 8 * * *")
         self.assertEqual(value.notification_modes, ["today", "all"])
+
+    @staticmethod
+    def _request(headers: list[tuple[bytes, bytes]] | None = None) -> Request:
+        return Request({"type": "http", "method": "GET", "path": "/", "headers": headers or []})
+
+    def test_ptd_receiver_replaces_the_single_latest_payload(self):
+        plugin = PTDataStatistics.__new__(PTDataStatistics)
+        plugin.init_plugin(
+            {
+                "enabled": True,
+                "ptd_cookiecloud_enabled": True,
+                "ptd_cookiecloud_uuid": "receiver123",
+                "ptd_cookiecloud_password": "secret",
+            }
+        )
+        stored = {}
+        plugin.save_data = lambda key, value: stored.__setitem__(key, value)
+        plugin.get_data = lambda key: stored.get(key)
+        plugin._configured_sites = lambda: [{"id": 1, "name": "观众", "domain": "audiences.me"}]
+        backup = SimpleNamespace(
+            name="PTD_backup_latest",
+            metrics=[{"ptd_site": "audiences", "seeding_points": 12}],
+            metadata={},
+        )
+        matched = [{"domain": "audiences.me", "site_name": "观众", "seeding_points": 12}]
+
+        with (
+            patch.object(plugin_module, "parse_backup_response", return_value=backup),
+            patch.object(plugin_module, "match_metrics", return_value=matched),
+        ):
+            first = plugin.api_cookiecloud_update(
+                CookieCloudUpdateData(uuid="receiver123", encrypted="first"),
+                self._request(),
+            )
+            second = plugin.api_cookiecloud_update(
+                CookieCloudUpdateData(uuid="receiver123", encrypted="second"),
+                self._request(),
+            )
+
+        self.assertEqual(first.action, "done")
+        self.assertEqual(second.action, "done")
+        self.assertEqual(stored["ptd_cookiecloud_payload_v1"]["encrypted"], "second")
+        self.assertEqual(stored["ptd_latest_metrics_v1"]["metrics"], matched)
+        self.assertEqual(plugin.api_cookiecloud_get("receiver123", self._request()).encrypted, "second")
+
+    def test_ptd_receiver_checks_uuid_and_optional_headers(self):
+        plugin = PTDataStatistics.__new__(PTDataStatistics)
+        plugin.init_plugin(
+            {
+                "enabled": True,
+                "ptd_cookiecloud_enabled": True,
+                "ptd_cookiecloud_uuid": "receiver123",
+                "ptd_cookiecloud_password": "secret",
+                "ptd_cookiecloud_headers": "X-PTD-Token: expected",
+            }
+        )
+        with self.assertRaises(HTTPException) as missing_header:
+            plugin.api_cookiecloud_ping(self._request())
+        self.assertEqual(missing_header.exception.status_code, 403)
+
+        response = plugin.api_cookiecloud_ping(
+            self._request([(b"x-ptd-token", b"expected")])
+        )
+        self.assertIn("Hello World!API ROOT =", response.body.decode())
+
+        with self.assertRaises(HTTPException) as wrong_uuid:
+            plugin._require_ptd_receiver(
+                request=self._request([(b"x-ptd-token", b"expected")]),
+                uuid="different123",
+            )
+        self.assertEqual(wrong_uuid.exception.status_code, 404)
 
     def test_public_snapshot_contract_never_exposes_domain(self):
         value = SiteSnapshotData.model_validate(

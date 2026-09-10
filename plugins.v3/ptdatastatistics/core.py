@@ -663,7 +663,12 @@ def _requirement_missing(level: Mapping[str, Any], snapshot: Mapping[str, Any]) 
                 else:
                     missing.append(f"{label}还差 {format_bytes(difference)}")
             else:
-                missing.append(f"{label}还差 {difference:g}")
+                formatted_difference = (
+                    f"{int(difference):,}"
+                    if difference.is_integer()
+                    else f"{difference:,.2f}".rstrip("0").rstrip(".")
+                )
+                missing.append(f"{label}还差 {formatted_difference}")
     target_ratio = as_float(level.get("min_ratio"))
     current_ratio = as_float(snapshot.get("ratio"))
     ratio_strict = bool(level.get("min_ratio_strict"))

@@ -78,14 +78,6 @@ class PTDCookieCloudTests(unittest.TestCase):
 
         self.assertEqual({item["domain"] for item in matched}, {"audiences.me", "tracker.example"})
 
-    def test_parses_headers_and_rejects_invalid_lines(self):
-        self.assertEqual(
-            ptd_cookiecloud._headers("Authorization: Bearer value\nX-Test: yes")["X-Test"],
-            "yes",
-        )
-        with self.assertRaises(ptd_cookiecloud.PTDCookieCloudError):
-            ptd_cookiecloud._headers("invalid")
-
     def test_decrypts_cookiecloud_legacy_payload(self):
         from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
         from cryptography.hazmat.primitives.padding import PKCS7
@@ -106,7 +98,7 @@ class PTDCookieCloudTests(unittest.TestCase):
             {"userInfo": {}},
         )
 
-    def test_reads_metrics_from_current_ptd_cookiecloud_payload(self):
+    def test_parses_current_ptd_cookiecloud_payload(self):
         payload = {
             "ptd_data": {
                 "userInfo": {
@@ -120,12 +112,9 @@ class PTDCookieCloudTests(unittest.TestCase):
             },
             "manifest": {"fileName": "PTD_backup_current"},
         }
-        with (
-            patch.object(ptd_cookiecloud, "_request_json", return_value={"encrypted": "ciphertext"}),
-            patch.object(ptd_cookiecloud, "_decrypt", return_value=payload),
-        ):
-            backup = ptd_cookiecloud.fetch_latest_backup(
-                address="https://cookiecloud.test",
+        with patch.object(ptd_cookiecloud, "_decrypt", return_value=payload):
+            backup = ptd_cookiecloud.parse_backup_response(
+                response={"encrypted": "ciphertext"},
                 uuid="ptd-only",
                 password="secret",
             )
@@ -133,7 +122,6 @@ class PTDCookieCloudTests(unittest.TestCase):
         self.assertEqual(backup.name, "PTD_backup_current")
         self.assertEqual(backup.metrics[0]["seeding_points"], 1200)
         self.assertEqual(backup.metrics[0]["estimated_bonus_hourly"], 3.5)
-
 
 class DeltaTests(unittest.TestCase):
     def test_requires_exact_previous_server_day(self):
@@ -434,6 +422,15 @@ class TwelveAndExportTests(unittest.TestCase):
         )
         self.assertIn("分享率需大于 2", power["missing"])
 
+    def test_audiences_seeding_points_gap_uses_readable_integer_format(self):
+        missing = core._requirement_missing(
+            {"min_seeding_points": 1_500_000},
+            {"seeding_points": 70_260},
+        )
+
+        self.assertIn("做种积分还差 1,429,740", missing)
+        self.assertFalse(any("e+" in item.casefold() for item in missing))
+
     def test_mteam_retirement_rules_match_published_level_route(self):
         progress = core.build_retirement_progress(
             [{
@@ -522,7 +519,8 @@ class PackagingTests(unittest.TestCase):
         manifest = json.loads((ROOT / "package.v3.json").read_text(encoding="utf-8"))
         meta = manifest["PTDataStatistics"]
         source = (PLUGIN / "__init__.py").read_text(encoding="utf-8")
-        self.assertEqual(meta["version"], "1.0.9")
+        self.assertEqual(meta["version"], "1.0.10")
+        self.assertEqual(meta["history"]["v1.0.10"], "更新了一些内容")
         self.assertEqual(meta["history"]["v1.0.9"], "更新了一些内容")
         self.assertEqual(meta["history"]["v1.0.8"], "更新了一些内容")
         self.assertEqual(meta["history"]["v1.0.6"], "更新了一些内容")
@@ -532,8 +530,8 @@ class PackagingTests(unittest.TestCase):
         self.assertEqual(meta["history"]["v1.0.2"], "更新了一些东西")
         self.assertEqual(meta["history"]["v1.0.1"], "更新了一些东西")
         self.assertEqual(meta["history"]["v1.0.0"], "更新了一些东西")
-        self.assertEqual(list(meta["history"]), ["v1.0.9", "v1.0.8", "v1.0.7", "v1.0.6", "v1.0.5", "v1.0.4", "v1.0.3", "v1.0.2", "v1.0.1", "v1.0.0"])
-        self.assertIn('plugin_version = "1.0.9"', source)
+        self.assertEqual(list(meta["history"]), ["v1.0.10", "v1.0.9", "v1.0.8", "v1.0.7", "v1.0.6", "v1.0.5", "v1.0.4", "v1.0.3", "v1.0.2", "v1.0.1", "v1.0.0"])
+        self.assertIn('plugin_version = "1.0.10"', source)
         self.assertEqual(meta["system_version"], ">=3.0.0")
         self.assertNotIn("release", meta)
 
