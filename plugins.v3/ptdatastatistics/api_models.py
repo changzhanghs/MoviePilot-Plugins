@@ -27,6 +27,7 @@ class SiteSnapshotData(BaseModel):
     ratio: float | None = None
     bonus: float | None = None
     estimated_bonus_hourly: float | None = None
+    seeding_points: float | None = None
     seeding: int = 0
     seeding_size: int = 0
     updated_day: str = ""
@@ -206,6 +207,12 @@ class SettingsData(BaseModel):
     notification_enabled: bool = False
     notification_cron: str = "0 9 * * *"
     notification_modes: list[str] = Field(default_factory=lambda: ["today"])
+    ptd_webdav_enabled: bool = False
+    ptd_webdav_url: str = ""
+    ptd_webdav_username: str = ""
+    ptd_webdav_password: str = ""
+    ptd_webdav_verify_ssl: bool = True
+    ptd_site_mappings: str = ""
 
     @field_validator("retention_days")
     @classmethod
@@ -239,6 +246,11 @@ class SettingsData(BaseModel):
         modes = [item for item in value if item in allowed]
         return list(dict.fromkeys(modes))
 
+    @field_validator("ptd_webdav_url", "ptd_webdav_username", "ptd_site_mappings")
+    @classmethod
+    def strip_ptd_text(cls, value: str) -> str:
+        return str(value or "").strip()
+
 
 class SettingsResponse(BaseModel):
     """设置读取或保存响应。"""
@@ -253,6 +265,9 @@ class SyncResponse(BaseModel):
     imported: int = 0
     deleted: int = 0
     completed_at: str = ""
+    ptd_imported: int = 0
+    ptd_backup: str = ""
+    ptd_error: str = ""
 
 
 class MessageResponse(BaseModel):
