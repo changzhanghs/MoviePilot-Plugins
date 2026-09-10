@@ -119,6 +119,9 @@ class HostContractTests(unittest.TestCase):
         )
         self.assertEqual(value.retention_days, 36500)
         self.assertNotIn("sync_interval_minutes", value.model_dump())
+        legacy_prefix = "ptd_" + "web" + "dav"
+        self.assertFalse(any(key.startswith(legacy_prefix) for key in value.model_dump()))
+        self.assertIn("ptd_cookiecloud_address", value.model_dump())
         self.assertEqual(value.notification_cron, "30 8 * * *")
         self.assertEqual(value.notification_modes, ["today", "all"])
 

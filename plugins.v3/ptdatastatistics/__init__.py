@@ -53,7 +53,7 @@ from .core import (
 )
 from .exporters import build_csv
 from .models import PTSiteHourlySnapshot, PTSiteSnapshot
-from .ptd_webdav import PTDWebDAVError, fetch_latest_backup, match_metrics
+from .ptd_cookiecloud import PTDCookieCloudError, fetch_latest_backup, match_metrics
 from .repository import SnapshotRepository
 
 
@@ -63,7 +63,7 @@ class PTDataStatistics(_PluginBase):
     plugin_name = "PT数据统计"
     plugin_desc = "统计 PT 站点累计与每日上传下载，提供历史、通知和导出。"
     plugin_icon = "ptdatastatistics.svg"
-    plugin_version = "1.0.8"
+    plugin_version = "1.0.9"
     plugin_author = "cz"
     author_url = "https://github.com/changzhanghs"
     plugin_config_prefix = "ptdatastatistics_"
@@ -76,11 +76,12 @@ class PTDataStatistics(_PluginBase):
     _notification_enabled = False
     _notification_cron = "0 9 * * *"
     _notification_modes: ClassVar[list[str]] = ["today"]
-    _ptd_webdav_enabled = False
-    _ptd_webdav_url = ""
-    _ptd_webdav_username = ""
-    _ptd_webdav_password = ""
-    _ptd_webdav_verify_ssl = True
+    _ptd_cookiecloud_enabled = False
+    _ptd_cookiecloud_address = ""
+    _ptd_cookiecloud_uuid = ""
+    _ptd_cookiecloud_password = ""
+    _ptd_cookiecloud_headers = ""
+    _ptd_cookiecloud_verify_ssl = True
     _ptd_site_mappings = ""
 
     def init_plugin(self, config: dict | None = None) -> None:
@@ -111,11 +112,12 @@ class PTDataStatistics(_PluginBase):
         self._notification_enabled = value.notification_enabled
         self._notification_cron = value.notification_cron
         self._notification_modes = list(value.notification_modes)
-        self._ptd_webdav_enabled = value.ptd_webdav_enabled
-        self._ptd_webdav_url = value.ptd_webdav_url
-        self._ptd_webdav_username = value.ptd_webdav_username
-        self._ptd_webdav_password = value.ptd_webdav_password
-        self._ptd_webdav_verify_ssl = value.ptd_webdav_verify_ssl
+        self._ptd_cookiecloud_enabled = value.ptd_cookiecloud_enabled
+        self._ptd_cookiecloud_address = value.ptd_cookiecloud_address
+        self._ptd_cookiecloud_uuid = value.ptd_cookiecloud_uuid
+        self._ptd_cookiecloud_password = value.ptd_cookiecloud_password
+        self._ptd_cookiecloud_headers = value.ptd_cookiecloud_headers
+        self._ptd_cookiecloud_verify_ssl = value.ptd_cookiecloud_verify_ssl
         self._ptd_site_mappings = value.ptd_site_mappings
 
     def _settings(self) -> SettingsData:
@@ -128,11 +130,12 @@ class PTDataStatistics(_PluginBase):
             notification_enabled=self._notification_enabled,
             notification_cron=self._notification_cron,
             notification_modes=self._notification_modes,
-            ptd_webdav_enabled=self._ptd_webdav_enabled,
-            ptd_webdav_url=self._ptd_webdav_url,
-            ptd_webdav_username=self._ptd_webdav_username,
-            ptd_webdav_password=self._ptd_webdav_password,
-            ptd_webdav_verify_ssl=self._ptd_webdav_verify_ssl,
+            ptd_cookiecloud_enabled=self._ptd_cookiecloud_enabled,
+            ptd_cookiecloud_address=self._ptd_cookiecloud_address,
+            ptd_cookiecloud_uuid=self._ptd_cookiecloud_uuid,
+            ptd_cookiecloud_password=self._ptd_cookiecloud_password,
+            ptd_cookiecloud_headers=self._ptd_cookiecloud_headers,
+            ptd_cookiecloud_verify_ssl=self._ptd_cookiecloud_verify_ssl,
             ptd_site_mappings=self._ptd_site_mappings,
         )
 
@@ -371,15 +374,16 @@ class PTDataStatistics(_PluginBase):
     def sync_from_ptd(self) -> tuple[int, str]:
         """Import only PTD hourly magic and seeding points, replacing the last import."""
 
-        if not self._ptd_webdav_enabled:
+        if not self._ptd_cookiecloud_enabled:
             return 0, ""
-        if not self._ptd_webdav_url:
-            raise PTDWebDAVError("请先填写 PTD WebDAV 地址")
+        if not self._ptd_cookiecloud_address:
+            raise PTDCookieCloudError("请先填写 PTD CookieCloud 地址")
         backup = fetch_latest_backup(
-            url=self._ptd_webdav_url,
-            username=self._ptd_webdav_username,
-            password=self._ptd_webdav_password,
-            verify_ssl=self._ptd_webdav_verify_ssl,
+            address=self._ptd_cookiecloud_address,
+            uuid=self._ptd_cookiecloud_uuid,
+            password=self._ptd_cookiecloud_password,
+            headers=self._ptd_cookiecloud_headers,
+            verify_ssl=self._ptd_cookiecloud_verify_ssl,
         )
         matched = match_metrics(
             backup.metrics,
@@ -388,16 +392,16 @@ class PTDataStatistics(_PluginBase):
             self._ptd_site_mappings,
         )
         if not matched:
-            raise PTDWebDAVError(
+            raise PTDCookieCloudError(
                 "PTD 备份中有数据，但未能匹配任何 MoviePilot 站点；请补充站点映射"
             )
         # A single stable key is deliberately overwritten. The plugin therefore
-        # keeps no PTD history and never deletes the user's remote WebDAV files.
+        # keeps no PTD history. CookieCloud itself also exposes only its current value.
         self.save_data(
             "ptd_latest_metrics_v1",
             {
                 "backup": backup.name,
-                "source_url": self._ptd_webdav_url,
+                "source_url": self._ptd_cookiecloud_address,
                 "imported_at": self._now().isoformat(timespec="seconds"),
                 "metrics": matched,
             },
@@ -405,9 +409,9 @@ class PTDataStatistics(_PluginBase):
         return len(matched), backup.name
 
     def _ptd_metrics_by_domain(self) -> dict[str, dict[str, Any]]:
-        """Return the latest PTD values only while the WebDAV source is enabled."""
+        """Return the latest PTD values only while CookieCloud is enabled."""
 
-        if not self._ptd_webdav_enabled:
+        if not self._ptd_cookiecloud_enabled:
             return {}
         saved = self.get_data("ptd_latest_metrics_v1") or {}
         values = saved.get("metrics") if isinstance(saved, dict) else []
@@ -506,12 +510,12 @@ class PTDataStatistics(_PluginBase):
             self.sync_from_mp(full=False, site_id=site_id)
         except Exception as error:  # noqa: BLE001 - 事件失败不得影响宿主刷新链
             logger.error(f"PT数据统计同步 MoviePilot 站点数据失败：{error}")
-        if self._ptd_webdav_enabled and raw_site_id in (None, "", "*"):
+        if self._ptd_cookiecloud_enabled and raw_site_id in (None, "", "*"):
             try:
-                # MP 通常会为单站刷新发出多次事件，只在整轮完成后读一次 WebDAV。
+                # MP 通常会为单站刷新发出多次事件，只在整轮完成后读一次 CookieCloud。
                 self.sync_from_ptd()
-            except PTDWebDAVError as error:
-                logger.warning(f"同步 PTD WebDAV 数据失败：{error}")
+            except PTDCookieCloudError as error:
+                logger.warning(f"同步 PTD CookieCloud 数据失败：{error}")
 
     def _build_overview(self) -> OverviewResponse:
         """构建可由侧栏和仪表盘共同复用的指标模型。"""
@@ -826,13 +830,13 @@ class PTDataStatistics(_PluginBase):
         """Refresh MP snapshots and, when configured, the newest PTD backup."""
 
         result = self.sync_from_mp(full=False)
-        if not self._ptd_webdav_enabled:
+        if not self._ptd_cookiecloud_enabled:
             return result
         try:
             imported, backup = self.sync_from_ptd()
             return result.model_copy(update={"ptd_imported": imported, "ptd_backup": backup})
-        except PTDWebDAVError as error:
-            logger.warning(f"同步 PTD WebDAV 数据失败：{error}")
+        except PTDCookieCloudError as error:
+            logger.warning(f"同步 PTD CookieCloud 数据失败：{error}")
             return result.model_copy(update={"ptd_error": str(error)})
 
     def api_settings(self) -> SettingsResponse:
