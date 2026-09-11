@@ -5,6 +5,7 @@
 
 from __future__ import annotations
 
+import math
 import re
 from collections.abc import Iterable, Mapping
 from datetime import date, datetime, timedelta
@@ -1138,6 +1139,9 @@ def build_retirement_progress(
             "estimated_bonus_hourly": as_float(
                 snapshot.get("estimated_bonus_hourly")
             ),
+            "seeding_points_hourly": as_float(
+                snapshot.get("seeding_points_hourly")
+            ),
             "seeding": as_int(snapshot.get("seeding")),
             "updated_day": as_text(snapshot.get("updated_day")),
             "levels_remaining": None,
@@ -1166,6 +1170,24 @@ def build_retirement_progress(
         for index, raw_level in enumerate(raw_levels):
             level = _with_derived_upload(raw_level)
             level_name = as_text(level.get("name"))
+            points_target = as_float(level.get("min_seeding_points"))
+            points_current = base["seeding_points"]
+            points_rate = base["seeding_points_hourly"]
+            points_eta_days = None
+            points_eta_date = ""
+            if points_target and points_current is not None and points_rate and points_rate > 0:
+                required_points = points_target + (
+                    1 if bool(level.get("min_seeding_points_strict")) else 0
+                )
+                remaining_points = max(required_points - points_current, 0)
+                points_eta_days = int(math.ceil(remaining_points / points_rate / 24))
+                try:
+                    points_eta_date = (
+                        date.fromisoformat(base["updated_day"][:10])
+                        + timedelta(days=points_eta_days)
+                    ).isoformat()
+                except (TypeError, ValueError):
+                    points_eta_date = ""
             route.append(
                 {
                     "name": level_name,
@@ -1181,6 +1203,8 @@ def build_retirement_progress(
                     "min_bonus": as_float(level.get("min_bonus")),
                     "min_seeding_points": as_float(level.get("min_seeding_points")),
                     "min_seeding_points_strict": bool(level.get("min_seeding_points_strict")),
+                    "seeding_points_eta_days": points_eta_days,
+                    "seeding_points_eta_date": points_eta_date,
                     "min_seeding": max(as_int(level.get("min_seeding")), 0),
                     "eligible_date": _eligible_date(
                         base["join_at"],
