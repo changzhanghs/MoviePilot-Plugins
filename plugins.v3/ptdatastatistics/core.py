@@ -1025,7 +1025,7 @@ def _requirement_missing(level: Mapping[str, Any], snapshot: Mapping[str, Any]) 
         strict_days = bool(level.get("min_join_days_strict"))
         if actual_days <= minimum_days if strict_days else actual_days < minimum_days:
             required_days = minimum_days + (1 if strict_days else 0)
-            missing.append(f"账号时间还差 {required_days - actual_days} 天")
+            missing.append(f"账号时间剩余 {required_days - actual_days} 天")
     numeric_fields = (
         ("min_upload", "upload", "上传"),
         ("min_download", "download", "下载"),
@@ -1047,7 +1047,7 @@ def _requirement_missing(level: Mapping[str, Any], snapshot: Mapping[str, Any]) 
                 if strict and difference <= 0:
                     missing.append(f"{label}需大于 {format_bytes(target)}")
                 else:
-                    missing.append(f"{label}还差 {format_bytes(difference)}")
+                    missing.append(f"{label}剩余 {format_bytes(difference)}")
             else:
                 if strict and difference <= 0:
                     formatted_target = (
@@ -1062,7 +1062,7 @@ def _requirement_missing(level: Mapping[str, Any], snapshot: Mapping[str, Any]) 
                     if difference.is_integer()
                     else f"{difference:,.2f}".rstrip("0").rstrip(".")
                 )
-                missing.append(f"{label}还差 {formatted_difference}")
+                missing.append(f"{label}剩余 {formatted_difference}")
     target_ratio = as_float(level.get("min_ratio"))
     current_ratio = as_float(snapshot.get("ratio"))
     ratio_strict = bool(level.get("min_ratio_strict"))

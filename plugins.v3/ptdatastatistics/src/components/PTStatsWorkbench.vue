@@ -528,6 +528,14 @@ function retirementProgressPercent(site) {
   })
   return Math.max(0, Math.min(100, reachedIndex * 100 / (route.length - 1)))
 }
+function routeNodeMeta(level) {
+  if (level.is_current) return '当前等级'
+  if (level.reached) return '已达成'
+  if (level.seeding_points_eta_date) return `预计 ${level.seeding_points_eta_date.slice(5)}`
+  if (level.min_seeding_points) return '待同步积分时速'
+  if (level.eligible_date) return `最早 ${level.eligible_date.slice(5)}`
+  return '待达成'
+}
 function durationLabel(days) {
   const value = Number(days || 0)
   if (!value) return '无限制'
@@ -556,7 +564,7 @@ function requirementRows(site, level) {
     const difference = available ? Math.max(targetNumber - currentNumber, 0) : null
     let detail = '数据未提供'
     if (complete) detail = '已达成'
-    else if (difference !== null) detail = strict && difference === 0 ? `需大于 ${formatter(targetNumber)}` : `还差 ${formatter(difference)}`
+    else if (difference !== null) detail = strict && difference === 0 ? `需大于 ${formatter(targetNumber)}` : `剩余 ${formatter(difference)}`
     rows.push({
       key,
       label,
@@ -581,7 +589,7 @@ function requirementRows(site, level) {
       icon: 'mdi-calendar-check-outline',
       current: complete ? '注册时间已达成' : currentDays === null ? '加入时间未提供' : `已注册 ${durationLabel(currentDays)}`,
       target: `${strict ? '>' : '≥'} ${durationLabel(level.min_join_days)}`,
-      detail: complete ? '已达成' : currentDays === null ? '加入时间未提供' : `还差 ${durationLabel(requiredDays - currentDays)}`,
+      detail: complete ? '已达成' : currentDays === null ? '加入时间未提供' : `剩余 ${durationLabel(requiredDays - currentDays)}`,
       complete,
       unavailable: currentDays === null,
       progress: complete ? 100 : currentDays === null ? 0 : Math.max(0, Math.min(100, currentDays * 100 / level.min_join_days)),
@@ -622,7 +630,7 @@ function levelPointsEta(level) {
     : `预计约 ${days} 天达成`
 }
 function routeMissingLabel(level) {
-  return (level?.missing || []).join('；').replaceAll('还差', '剩余')
+  return (level?.missing || []).join('；')
 }
 function levelStateLabel(level) {
   if (level.is_current) return '当前'
@@ -833,7 +841,7 @@ onBeforeUnmount(() => historyChart?.destroy())
                 <strong v-if="item.state === 'joined'" class="twelve-node__name">{{ item.name }}</strong>
               </div>
             </div>
-            <div class="twelve-remaining">还差 <strong>{{ twelveRemainingCount }}</strong> 个站点</div>
+            <div class="twelve-remaining">剩余 <strong>{{ twelveRemainingCount }}</strong> 个站点</div>
           </div>
         </section>
         <section class="section-block">
@@ -896,8 +904,10 @@ onBeforeUnmount(() => historyChart?.destroy())
                   </div>
                   <div class="retirement-route-rail__nodes">
                     <div v-for="level in retirementRoute(selectedRetirementSite)" :key="level.name" :class="{ 'is-reached': level.reached, 'is-current': level.is_current, 'is-retirement': level.is_retirement }">
+                      <em v-if="level.is_current || level.is_retirement" class="retirement-route-node__badge">{{ level.is_current ? '当前' : '保号' }}</em>
                       <i class="retirement-route-node__marker" aria-hidden="true" />
-                      <span>{{ level.name }}</span>
+                      <strong>{{ level.name }}</strong>
+                      <small>{{ routeNodeMeta(level) }}</small>
                     </div>
                   </div>
                 </div>
@@ -1035,18 +1045,23 @@ onBeforeUnmount(() => historyChart?.destroy())
 .retirement-detail__metrics{display:flex;flex:0 0 auto;align-items:center;gap:22px}
 .retirement-detail__metrics span{display:flex;flex-direction:column;gap:3px;color:rgba(var(--v-theme-on-surface),.52);font-size:.68rem}
 .retirement-detail__metrics strong{color:rgba(var(--v-theme-on-surface),.9);font-size:.86rem}
-.retirement-route-rail{overflow-x:auto;padding:28px 12px 12px}
-.retirement-route-rail__track{position:relative;min-width:620px}
-.retirement-route-rail__line{position:absolute;z-index:0;top:5.5px;left:var(--route-inset);width:var(--route-span)}
+.retirement-route-rail{overflow-x:auto;padding:24px 12px 10px}
+.retirement-route-rail__track{position:relative;min-width:820px}
+.retirement-route-rail__line{position:absolute;z-index:0;top:31px;left:var(--route-inset);width:var(--route-span)}
 .retirement-route-rail__nodes{position:relative;z-index:1;display:grid;grid-template-columns:repeat(var(--route-count),minmax(80px,1fr));align-items:start}
-.retirement-route-rail__nodes>div{display:flex;min-width:0;flex-direction:column;align-items:center;gap:5px;text-align:center}
+.retirement-route-rail__nodes>div{display:grid;min-width:0;grid-template-rows:21px 20px auto auto;place-items:center;gap:4px;padding:0 5px;text-align:center}
+.retirement-route-node__badge{align-self:start;padding:2px 7px;border-radius:999px;background:rgba(var(--v-theme-on-surface),.08);color:rgba(var(--v-theme-on-surface),.58);font-size:.58rem;font-style:normal;font-weight:800;line-height:17px}
+.retirement-route-rail__nodes>div:not(.is-current):not(.is-retirement) .retirement-route-node__badge{visibility:hidden}
 .retirement-route-node__marker{display:block;width:16px;height:16px;border:3px solid rgba(var(--v-theme-on-surface),.28);border-radius:50%;background:rgb(var(--v-theme-surface));box-shadow:0 0 0 4px rgb(var(--v-theme-surface))}
 .retirement-route-rail__nodes .is-reached .retirement-route-node__marker{border-color:rgb(var(--v-theme-primary));background:rgb(var(--v-theme-primary))}
 .retirement-route-rail__nodes .is-current .retirement-route-node__marker{box-shadow:0 0 0 4px rgb(var(--v-theme-surface)),0 0 0 7px rgba(var(--v-theme-primary),.18)}
 .retirement-route-rail__nodes .is-retirement .retirement-route-node__marker{border-color:rgb(var(--v-theme-success));background:rgb(var(--v-theme-success))}
-.retirement-route-rail__nodes span{max-width:100%;overflow:hidden;color:rgba(var(--v-theme-on-surface),.55);font-size:.66rem;text-overflow:ellipsis;white-space:nowrap}
-.retirement-route-rail__nodes .is-current span{color:rgb(var(--v-theme-primary));font-weight:800}
-.retirement-route-rail__nodes .is-retirement span{color:rgb(var(--v-theme-success));font-weight:800}
+.retirement-route-rail__nodes strong{max-width:100%;color:rgba(var(--v-theme-on-surface),.64);font-size:.67rem;line-height:1.2}
+.retirement-route-rail__nodes small{color:rgba(var(--v-theme-on-surface),.42);font-size:.58rem;line-height:1.15;white-space:nowrap}
+.retirement-route-rail__nodes .is-current strong,.retirement-route-rail__nodes .is-current .retirement-route-node__badge{color:rgb(var(--v-theme-primary))}
+.retirement-route-rail__nodes .is-retirement strong,.retirement-route-rail__nodes .is-retirement .retirement-route-node__badge{color:rgb(var(--v-theme-success))}
+.retirement-route-rail__nodes .is-current .retirement-route-node__badge{background:rgba(var(--v-theme-primary),.12)}
+.retirement-route-rail__nodes .is-retirement .retirement-route-node__badge{background:rgba(var(--v-theme-success),.12)}
 .retirement-target-grid{display:grid;grid-template-columns:minmax(0,1fr);gap:14px;margin-top:16px}
 .requirement-panel,.retirement-levels{min-width:0;border:1px solid var(--pt-border);border-radius:14px;background:rgba(var(--v-theme-surface-variant),.1)}
 .requirement-panel{padding:15px}
