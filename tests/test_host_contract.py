@@ -160,6 +160,12 @@ class HostContractTests(unittest.TestCase):
         self.assertEqual(progress["sites"][0]["retirement_level"], "Keeper")
         self.assertEqual([item["name"] for item in progress["sites"][0]["route"]], ["User", "Keeper"])
 
+        decorated = importlib.import_module("ptdatastatistics.core").build_retirement_progress(
+            [{"site_name": "红豆饭 HDFans", "user_level": "User", "updated_day": "2026-09-12"}],
+            rules,
+        )
+        self.assertEqual(decorated["sites"][0]["retirement_level"], "Keeper")
+
     def test_uploaded_level_rule_requires_retirement_level_in_route(self):
         with self.assertRaisesRegex(ValueError, "保号等级不在等级路线中"):
             SettingsData(custom_retirement_rules=[{

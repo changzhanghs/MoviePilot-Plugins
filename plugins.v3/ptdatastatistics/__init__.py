@@ -68,7 +68,7 @@ class PTDataStatistics(_PluginBase):
     plugin_name = "PT数据统计"
     plugin_desc = "统计 PT 站点累计与每日上传下载，提供历史、通知和导出。"
     plugin_icon = "ptdatastatistics.svg"
-    plugin_version = "1.1.9"
+    plugin_version = "1.2.0"
     plugin_author = "cz"
     author_url = "https://github.com/changzhanghs"
     plugin_config_prefix = "ptdatastatistics_"
@@ -151,6 +151,7 @@ class PTDataStatistics(_PluginBase):
             rule = {
                 "retirement_level": uploaded["retirement_level"],
                 "levels": uploaded["levels"],
+                "_custom_rule": True,
             }
             for identity in (uploaded["site"], *(uploaded.get("aliases") or [])):
                 rules[identity] = rule
