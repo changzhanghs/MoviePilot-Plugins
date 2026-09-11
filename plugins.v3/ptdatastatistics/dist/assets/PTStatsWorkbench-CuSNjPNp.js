@@ -16103,14 +16103,6 @@ async function saveSettings() {
     saving.value = false;
   }
 }
-async function copyPtdReceiverUrl() {
-  try {
-    await navigator.clipboard.writeText(ptdReceiverUrl.value);
-    notify('PTD 接收地址已复制');
-  } catch (_err) {
-    notify('无法自动复制，请手动选择接收地址', 'warning');
-  }
-}
 function randomPtdValue(length) {
   const alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789';
   const bytes = new Uint8Array(length);
@@ -16176,10 +16168,13 @@ function routeNodeStatus(site, level) {
   if (level.is_retirement) return level.reached ? '已保号' : '保号目标'
   return level.reached ? '已达成' : '待达成'
 }
-function nextLevelEta(site, level) {
+function nextLevelEta(site, requirements) {
   const serverDate = String(overview.value.server_date || site?.updated_day || '').slice(0, 10);
-  if (!level || !serverDate) return { label: '预计时间待补充', days: null }
-  const candidates = [level.eligible_date, level.seeding_points_eta_date].filter(Boolean).sort();
+  if (!serverDate) return { label: '预计时间待补充', days: null }
+  const candidates = (requirements || [])
+    .map(row => row.eta)
+    .filter(value => value && value !== '—')
+    .sort();
   if (!candidates.length) return { label: '预计时间待补充', days: null }
   const targetDate = candidates[candidates.length - 1];
   const start = Date.parse(`${serverDate}T00:00:00Z`);
@@ -16205,7 +16200,7 @@ function requirementRows(site, level) {
   if (!site || !level) return []
   const rows = [];
   const reached = Boolean(level.reached);
-  const pushNumeric = ({ key, label, icon, current, target, formatter, strict = false, unavailable = false }) => {
+  const pushNumeric = ({ key, label, icon, current, target, formatter, strict = false, unavailable = false, etaDate = '' }) => {
     if (!(Number(target) > 0)) return
     const currentNumber = Number(current);
     const targetNumber = Number(target);
@@ -16223,6 +16218,7 @@ function requirementRows(site, level) {
       current: available ? formatter(currentNumber) : '数据未提供',
       target: `${strict ? '>' : '≥'} ${formatter(targetNumber)}`,
       detail,
+      eta: complete ? '—' : etaDate || '—',
       complete,
       unavailable: !available,
       progress,
@@ -16241,6 +16237,7 @@ function requirementRows(site, level) {
       current: complete ? '注册时间已达成' : currentDays === null ? '加入时间未提供' : `已注册 ${durationLabel(currentDays)}`,
       target: `${strict ? '>' : '≥'} ${durationLabel(level.min_join_days)}`,
       detail: complete ? '已达成' : currentDays === null ? '加入时间未提供' : `剩余 ${durationLabel(requiredDays - currentDays)}`,
+      eta: complete ? '—' : level.eligible_date || '—',
       complete,
       unavailable: currentDays === null,
       progress: complete ? 100 : currentDays === null ? 0 : Math.max(0, Math.min(100, currentDays * 100 / level.min_join_days)),
@@ -16249,7 +16246,7 @@ function requirementRows(site, level) {
   pushNumeric({ key: 'upload', label: '上传量', icon: 'mdi-upload-outline', current: site.upload, target: level.min_upload, formatter: formatBytes, strict: level.min_upload_strict });
   pushNumeric({ key: 'download', label: '下载量', icon: 'mdi-download-outline', current: site.download, target: level.min_download, formatter: formatBytes, strict: level.min_download_strict });
   pushNumeric({ key: 'ratio', label: '分享率', icon: 'mdi-chart-donut', current: site.ratio, target: level.min_ratio, formatter: value => formatNumber$1(value, 2), strict: level.min_ratio_strict });
-  pushNumeric({ key: 'seeding-points', label: '做种积分', icon: 'mdi-star-circle-outline', current: site.seeding_points, target: level.min_seeding_points, formatter: value => formatNumber$1(value, 0), strict: level.min_seeding_points_strict, unavailable: site.seeding_points === null || site.seeding_points === undefined });
+  pushNumeric({ key: 'seeding-points', label: '做种积分', icon: 'mdi-star-circle-outline', current: site.seeding_points, target: level.min_seeding_points, formatter: value => formatNumber$1(value, 0), strict: level.min_seeding_points_strict, unavailable: site.seeding_points === null || site.seeding_points === undefined, etaDate: level.seeding_points_eta_date });
   pushNumeric({ key: 'bonus', label: '魔力', icon: 'mdi-lightning-bolt-circle', current: site.bonus, target: level.min_bonus, formatter: value => formatNumber$1(value, 0), unavailable: site.bonus === null || site.bonus === undefined });
   pushNumeric({ key: 'seeding', label: '做种数', icon: 'mdi-seed-outline', current: site.seeding, target: level.min_seeding, formatter: value => formatNumber$1(value, 0) });
   return rows
@@ -16303,7 +16300,7 @@ const selectedRetirementView = computed(() => {
     overallProgress,
     completedCount,
     pendingCount: requirements.length - completedCount,
-    eta: nextLevelEta(site, nextLevel),
+    eta: nextLevelEta(site, requirements),
   }
 });
 watch(
@@ -17300,9 +17297,10 @@ return (_ctx, _cache) => {
                                     _createElementVNode("div", _hoisted_101, [
                                       _cache[73] || (_cache[73] = _createElementVNode("div", { class: "requirement-table__head" }, [
                                         _createElementVNode("span", null, "项目"),
-                                        _createElementVNode("span", null, "当前进度"),
                                         _createElementVNode("span", null, "目标要求"),
+                                        _createElementVNode("span", null, "当前进度"),
                                         _createElementVNode("span", null, "剩余"),
+                                        _createElementVNode("span", null, "时间"),
                                         _createElementVNode("span", null, "完成进度")
                                       ], -1)),
                                       (_openBlock(true), _createElementBlock(_Fragment, null, _renderList(selectedRetirementView.value.requirements, (row) => {
@@ -17318,13 +17316,14 @@ return (_ctx, _cache) => {
                                             }, null, 8, ["icon"]),
                                             _createElementVNode("strong", null, _toDisplayString(row.label), 1)
                                           ]),
+                                          _createElementVNode("span", null, _toDisplayString(row.target), 1),
                                           _createElementVNode("strong", {
                                             class: _normalizeClass({ 'text-success': row.complete })
                                           }, _toDisplayString(row.current), 3),
-                                          _createElementVNode("span", null, _toDisplayString(row.target), 1),
                                           _createElementVNode("span", {
                                             class: _normalizeClass({ 'text-success': row.complete, 'text-warning': row.unavailable })
                                           }, _toDisplayString(row.complete ? '—' : row.detail.replace(/^剩余\s*/, '')), 3),
+                                          _createElementVNode("span", null, _toDisplayString(row.eta), 1),
                                           _createElementVNode("span", _hoisted_103, [
                                             _createVNode(_component_VProgressLinear, {
                                               "model-value": row.progress,
@@ -17517,18 +17516,7 @@ return (_ctx, _cache) => {
                         "persistent-hint": "",
                         readonly: "",
                         variant: "outlined"
-                      }, {
-                        "append-inner": _withCtx(() => [
-                          _createVNode(_component_VBtn, {
-                            icon: "mdi-content-copy",
-                            size: "small",
-                            variant: "text",
-                            title: "复制地址",
-                            onClick: copyPtdReceiverUrl
-                          })
-                        ]),
-                        _: 1
-                      }, 8, ["model-value"]),
+                      }, null, 8, ["model-value"]),
                       _createVNode(_component_VTextField, {
                         modelValue: settingsDraft.value.ptd_cookiecloud_uuid,
                         "onUpdate:modelValue": _cache[16] || (_cache[16] = $event => ((settingsDraft.value.ptd_cookiecloud_uuid) = $event)),
@@ -17539,7 +17527,7 @@ return (_ctx, _cache) => {
                       }, {
                         "append-inner": _withCtx(() => [
                           _createVNode(_component_VBtn, {
-                            icon: "mdi-dice-multiple-outline",
+                            icon: "mdi-shuffle-variant",
                             size: "small",
                             variant: "text",
                             title: "随机生成 UUID",
@@ -17560,7 +17548,7 @@ return (_ctx, _cache) => {
                       }, {
                         "append-inner": _withCtx(() => [
                           _createVNode(_component_VBtn, {
-                            icon: "mdi-dice-multiple-outline",
+                            icon: "mdi-shuffle-variant",
                             size: "small",
                             variant: "text",
                             title: "随机生成密码",
@@ -17592,7 +17580,7 @@ return (_ctx, _cache) => {
                       }, null, 8, ["modelValue"])
                     ]))
                   : _createCommentVNode("", true),
-                _cache[81] || (_cache[81] = _createElementVNode("div", { class: "setting-hint mt-3" }, "先保存本页，再在 PTD 中新增 CookieCloud 备份服务器：地址使用上方接收地址，UUID、密码和可选 Headers 与这里保持一致；备份项目勾选“用户信息”，建议同时勾选“站点与服务器配置”。收到新备份后会立即解析并覆盖上一份数据，过程可在 MoviePilot 插件日志中查看。", -1))
+                _cache[81] || (_cache[81] = _createElementVNode("div", { class: "setting-hint mt-3" }, "先保存本页，再在 PTD 中新增 CookieCloud 备份服务器：地址使用上方接收地址，UUID、密码和可选 Headers 与这里保持一致；备份项目勾选“用户信息”。收到新备份后会立即解析并覆盖上一份数据，过程可在 MoviePilot 插件日志中查看。", -1))
               ]),
               _createElementVNode("div", _hoisted_119, [
                 _cache[84] || (_cache[84] = _createElementVNode("div", { class: "section-heading" }, [
@@ -17674,6 +17662,6 @@ return (_ctx, _cache) => {
 }
 
 };
-const PTStatsWorkbench = /*#__PURE__*/_export_sfc(_sfc_main, [['__scopeId',"data-v-90ec171e"]]);
+const PTStatsWorkbench = /*#__PURE__*/_export_sfc(_sfc_main, [['__scopeId',"data-v-dc0b6f71"]]);
 
 export { PTStatsWorkbench as P };
