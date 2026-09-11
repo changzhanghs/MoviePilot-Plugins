@@ -15958,10 +15958,11 @@ const _hoisted_118 = {
 const _hoisted_119 = { class: "settings-card settings-card--wide" };
 const _hoisted_120 = { class: "rules-upload" };
 const _hoisted_121 = { key: 0 };
-const _hoisted_122 = { class: "rules-upload__actions" };
-const _hoisted_123 = { class: "settings-card settings-card--wide" };
-const _hoisted_124 = { class: "data-actions" };
-const _hoisted_125 = { class: "settings-card settings-card--wide settings-actions" };
+const _hoisted_122 = { key: 0 };
+const _hoisted_123 = { class: "rules-upload__actions" };
+const _hoisted_124 = { class: "settings-card settings-card--wide" };
+const _hoisted_125 = { class: "data-actions" };
+const _hoisted_126 = { class: "settings-card settings-card--wide settings-actions" };
 
 const {computed,inject,nextTick,onBeforeUnmount,onMounted,ref,watch} = await importShared('vue');
 
@@ -16562,7 +16563,9 @@ function nextLevelRule(site) {
 function retirementRoute(site) {
   const route = site.route || [];
   const retirementIndex = route.findIndex(level => level.is_retirement);
-  return retirementIndex >= 0 ? route.slice(0, retirementIndex + 1) : route
+  const boundedRoute = retirementIndex >= 0 ? route.slice(0, retirementIndex + 1) : route;
+  const userIndex = boundedRoute.findIndex(level => String(level.name || '').replace(/[^a-z0-9]/gi, '').toLocaleLowerCase() === 'user');
+  return userIndex >= 0 ? boundedRoute.slice(userIndex) : boundedRoute
 }
 function nextLevelOverallProgress(site) {
   const nextLevel = nextLevelRule(site);
@@ -18019,8 +18022,7 @@ return (_ctx, _cache) => {
                   _createElementVNode("div", null, [
                     _createElementVNode("span", { class: "section-kicker" }, "LEVEL RULES"),
                     _createElementVNode("h2", null, "等级规则")
-                  ]),
-                  _createElementVNode("span", { class: "section-note" }, "自定义规则优先于同名内置规则")
+                  ])
                 ], -1)),
                 _createElementVNode("input", {
                   ref_key: "rulesFileInput",
@@ -18031,14 +18033,16 @@ return (_ctx, _cache) => {
                   onChange: uploadRuleFile
                 }, null, 544),
                 _createElementVNode("div", _hoisted_120, [
-                  _createElementVNode("div", null, [
-                    _createElementVNode("strong", null, _toDisplayString(customRuleSites.value.length ? `已载入 ${customRuleSites.value.length} 个站点` : '使用内置等级规则'), 1),
-                    _createElementVNode("p", null, _toDisplayString(customRuleSites.value.length ? customRuleSites.value.join('、') : '上传 JSON 后保存设置，即可补充新站点或覆盖同名站点规则。'), 1),
-                    (rulesUploadName.value)
-                      ? (_openBlock(), _createElementBlock("small", _hoisted_121, "文件：" + _toDisplayString(rulesUploadName.value), 1))
-                      : _createCommentVNode("", true)
-                  ]),
-                  _createElementVNode("div", _hoisted_122, [
+                  (customRuleSites.value.length)
+                    ? (_openBlock(), _createElementBlock("div", _hoisted_121, [
+                        _createElementVNode("strong", null, "已载入 " + _toDisplayString(customRuleSites.value.length) + " 个站点", 1),
+                        _createElementVNode("p", null, _toDisplayString(customRuleSites.value.join('、')), 1),
+                        (rulesUploadName.value)
+                          ? (_openBlock(), _createElementBlock("small", _hoisted_122, "文件：" + _toDisplayString(rulesUploadName.value), 1))
+                          : _createCommentVNode("", true)
+                      ]))
+                    : _createCommentVNode("", true),
+                  _createElementVNode("div", _hoisted_123, [
                     _createVNode(_component_VBtn, {
                       variant: "tonal",
                       color: "primary",
@@ -18078,7 +18082,7 @@ return (_ctx, _cache) => {
                 ]),
                 _cache[89] || (_cache[89] = _createElementVNode("div", { class: "setting-hint mt-3" }, "支持单个或多个站点；流量门槛使用字节，等级按 levels 中的顺序展示。文件只写入插件设置，不会上传到外部服务。", -1))
               ]),
-              _createElementVNode("div", _hoisted_123, [
+              _createElementVNode("div", _hoisted_124, [
                 _cache[93] || (_cache[93] = _createElementVNode("div", { class: "section-heading" }, [
                   _createElementVNode("div", null, [
                     _createElementVNode("span", { class: "section-kicker" }, "DATA EXPORT"),
@@ -18086,7 +18090,7 @@ return (_ctx, _cache) => {
                   ]),
                   _createElementVNode("span", { class: "section-note" }, "导出历史数据或生成高清进度图片")
                 ], -1)),
-                _createElementVNode("div", _hoisted_124, [
+                _createElementVNode("div", _hoisted_125, [
                   _createVNode(_component_VBtn, {
                     variant: "tonal",
                     color: "primary",
@@ -18122,7 +18126,7 @@ return (_ctx, _cache) => {
                   })
                 ])
               ]),
-              _createElementVNode("div", _hoisted_125, [
+              _createElementVNode("div", _hoisted_126, [
                 _cache[95] || (_cache[95] = _createElementVNode("div", null, [
                   _createElementVNode("strong", null, "数据来源"),
                   _createElementVNode("p", null, "上传、下载、分享率等仍仅来自 MoviePilot；PTD 只补充最新时魔和做种积分。")
@@ -18175,6 +18179,6 @@ return (_ctx, _cache) => {
 }
 
 };
-const PTStatsWorkbench = /*#__PURE__*/_export_sfc(_sfc_main, [['__scopeId',"data-v-39721865"]]);
+const PTStatsWorkbench = /*#__PURE__*/_export_sfc(_sfc_main, [['__scopeId',"data-v-bc0dcc41"]]);
 
 export { PTStatsWorkbench as P };

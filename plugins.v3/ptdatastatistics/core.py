@@ -899,11 +899,11 @@ def _match_named_rule(
     if exact:
         return exact
     candidates = [
-        (len(alias), rule)
+        (bool(rule.get("_custom_rule")), len(alias), rule)
         for alias, rule in rules.items()
         if alias and (alias in identity or identity in alias)
     ]
-    return max(candidates, key=lambda item: item[0])[1] if candidates else None
+    return max(candidates, key=lambda item: (item[0], item[1]))[2] if candidates else None
 
 
 def _match_level_index(current_level: Any, levels: Iterable[Mapping[str, Any]]) -> int:
