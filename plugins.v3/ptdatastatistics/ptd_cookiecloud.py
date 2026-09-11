@@ -82,6 +82,22 @@ def _record_score(record: dict[str, Any], day_key: str = "") -> tuple[float, str
     return updated, day_key
 
 
+def _latest_number(
+    records: list[tuple[str, dict[str, Any]]], key: str
+) -> float | None:
+    """Return the newest available value when PTD omits a metric on some days."""
+
+    for _day_key, candidate in sorted(
+        records,
+        key=lambda item: _record_score(item[1], item[0]),
+        reverse=True,
+    ):
+        value = _number(candidate.get(key))
+        if value is not None:
+            return value
+    return None
+
+
 def _extract_metrics(user_info: Any) -> list[dict[str, Any]]:
     if isinstance(user_info, dict) and isinstance(user_info.get("userInfo"), dict):
         user_info = user_info["userInfo"]
@@ -104,6 +120,8 @@ def _extract_metrics(user_info: Any) -> list[dict[str, Any]]:
         # for the other.
         bonus_hourly = _number(record.get("bonusPerHour"))
         seeding_points_hourly = _number(record.get("seedingBonusPerHour"))
+        if seeding_points_hourly is None:
+            seeding_points_hourly = _latest_number(records, "seedingBonusPerHour")
         if seeding_points is None and bonus_hourly is None and seeding_points_hourly is None:
             continue
         output.append(

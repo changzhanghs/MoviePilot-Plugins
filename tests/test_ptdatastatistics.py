@@ -57,6 +57,7 @@ class PTDCookieCloudTests(unittest.TestCase):
 
         self.assertEqual(values[0]["seeding_points"], 1200)
         self.assertEqual(values[0]["estimated_bonus_hourly"], 3.5)
+        self.assertEqual(values[0]["seeding_points_hourly"], 2.5)
         self.assertNotIn("uploaded", values[0])
 
     def test_uses_bonus_rate_instead_of_seeding_points_rate_for_hourly_magic(self):
@@ -752,7 +753,8 @@ class PackagingTests(unittest.TestCase):
         manifest = json.loads((ROOT / "package.v3.json").read_text(encoding="utf-8"))
         meta = manifest["PTDataStatistics"]
         source = (PLUGIN / "__init__.py").read_text(encoding="utf-8")
-        self.assertEqual(meta["version"], "1.1.4")
+        self.assertEqual(meta["version"], "1.1.5")
+        self.assertEqual(meta["history"]["v1.1.5"], "更新了一些东西")
         self.assertEqual(meta["history"]["v1.1.4"], "更新了一些东西")
         self.assertEqual(meta["history"]["v1.1.3"], "更新了一些东西")
         self.assertEqual(meta["history"]["v1.1.1"], "更新了一些内容")
@@ -767,8 +769,8 @@ class PackagingTests(unittest.TestCase):
         self.assertEqual(meta["history"]["v1.0.2"], "更新了一些东西")
         self.assertEqual(meta["history"]["v1.0.1"], "更新了一些东西")
         self.assertEqual(meta["history"]["v1.0.0"], "更新了一些东西")
-        self.assertEqual(list(meta["history"]), ["v1.1.4", "v1.1.3", "v1.1.2", "v1.1.1", "v1.1.0", "v1.0.10", "v1.0.9", "v1.0.8", "v1.0.7", "v1.0.6", "v1.0.5", "v1.0.4", "v1.0.3", "v1.0.2", "v1.0.1", "v1.0.0"])
-        self.assertIn('plugin_version = "1.1.4"', source)
+        self.assertEqual(list(meta["history"]), ["v1.1.5", "v1.1.4", "v1.1.3", "v1.1.2", "v1.1.1", "v1.1.0", "v1.0.10", "v1.0.9", "v1.0.8", "v1.0.7", "v1.0.6", "v1.0.5", "v1.0.4", "v1.0.3", "v1.0.2", "v1.0.1", "v1.0.0"])
+        self.assertIn('plugin_version = "1.1.5"', source)
         self.assertEqual(meta["system_version"], ">=3.0.0")
         self.assertNotIn("release", meta)
 
@@ -879,7 +881,9 @@ class PackagingTests(unittest.TestCase):
         self.assertNotIn("<th>站点</th><th>数据日期</th>", source)
         self.assertIn("site.join_at?.slice(0, 10)", source)
         self.assertIn('@click="openNativePicker"', source)
-        self.assertIn("注册时间已达成", source)
+        self.assertIn("current: complete ? '达成'", source)
+        self.assertIn("currentDays} 天", source)
+        self.assertNotIn("注册时间已达成", source)
         self.assertIn('class="retirement-explorer"', source)
         self.assertIn('class="retirement-site-list"', source)
         self.assertIn('@click="selectRetirementSite(site)"', source)
@@ -899,6 +903,7 @@ class PackagingTests(unittest.TestCase):
         self.assertIn('class="requirement-table__head"', source)
         self.assertIn('<span>目标要求</span><span>当前进度</span><span>剩余</span><span>时间</span><span>完成进度</span>', source)
         self.assertIn("etaDate: level.seeding_points_eta_date", source)
+        self.assertLess(source.index("pushNumeric({ key: 'seeding-points'"), source.index("if (joinRow) rows.push(joinRow)"))
         self.assertIn("eta: complete ? '—' : level.eligible_date || '—'", source)
         self.assertIn("function nextLevelEta(site, requirements)", source)
         self.assertIn(".map(row => row.eta)", source)
@@ -909,6 +914,9 @@ class PackagingTests(unittest.TestCase):
         self.assertIn(':model-value="selectedRetirementView.routeProgress"', source)
         self.assertNotIn("待同步积分时速", source)
         self.assertIn("retirementProgressPercent(site)", source)
+        self.assertIn("const segmentProgress = averageRequirementProgress(requirementRows(site, nextLevel))", source)
+        self.assertIn("const completedSegments = Math.max(0, reachedIndex) + segmentProgress / 100", source)
+        self.assertIn("const overallProgress = averageRequirementProgress(requirements)", source)
         self.assertNotIn("retirement-preview-grid", source)
         self.assertNotIn("retirement-mini-progress", source)
         self.assertLess(source.index('class="retirement-site-list"'), source.index('class="retirement-detail"'))

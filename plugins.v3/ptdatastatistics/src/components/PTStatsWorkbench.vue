@@ -516,7 +516,11 @@ function retirementProgressPercent(site) {
   route.forEach((level, index) => {
     if (level.reached) reachedIndex = index
   })
-  return Math.max(0, Math.min(100, reachedIndex * 100 / (route.length - 1)))
+  if (reachedIndex >= route.length - 1) return 100
+  const nextLevel = nextLevelRule(site) || route[Math.max(0, reachedIndex + 1)]
+  const segmentProgress = averageRequirementProgress(requirementRows(site, nextLevel))
+  const completedSegments = Math.max(0, reachedIndex) + segmentProgress / 100
+  return Math.max(0, Math.min(100, completedSegments * 100 / (route.length - 1)))
 }
 function routeNodeMeta(level) {
   if (level.seeding_points_eta_date) return `预计 ${level.seeding_points_eta_date}`
@@ -586,31 +590,38 @@ function requirementRows(site, level) {
     })
   }
 
+  let joinRow = null
   if (level.min_join_days) {
     const currentDays = elapsedAccountDays(site)
     const strict = Boolean(level.min_join_days_strict)
     const complete = reached || (currentDays !== null && (strict ? currentDays > level.min_join_days : currentDays >= level.min_join_days))
     const requiredDays = Number(level.min_join_days) + (strict ? 1 : 0)
-    rows.push({
+    joinRow = {
       key: 'join-time',
       label: '注册时间',
       icon: 'mdi-calendar-check-outline',
-      current: complete ? '注册时间已达成' : currentDays === null ? '加入时间未提供' : `已注册 ${durationLabel(currentDays)}`,
+      current: complete ? '达成' : currentDays === null ? '加入时间未提供' : `${currentDays} 天`,
       target: `${strict ? '>' : '≥'} ${durationLabel(level.min_join_days)}`,
       detail: complete ? '已达成' : currentDays === null ? '加入时间未提供' : `剩余 ${durationLabel(requiredDays - currentDays)}`,
       eta: complete ? '—' : level.eligible_date || '—',
       complete,
       unavailable: currentDays === null,
       progress: complete ? 100 : currentDays === null ? 0 : Math.max(0, Math.min(100, currentDays * 100 / level.min_join_days)),
-    })
+    }
   }
   pushNumeric({ key: 'upload', label: '上传量', icon: 'mdi-upload-outline', current: site.upload, target: level.min_upload, formatter: formatBytes, strict: level.min_upload_strict })
   pushNumeric({ key: 'download', label: '下载量', icon: 'mdi-download-outline', current: site.download, target: level.min_download, formatter: formatBytes, strict: level.min_download_strict })
   pushNumeric({ key: 'ratio', label: '分享率', icon: 'mdi-chart-donut', current: site.ratio, target: level.min_ratio, formatter: value => formatNumber(value, 2), strict: level.min_ratio_strict })
   pushNumeric({ key: 'seeding-points', label: '做种积分', icon: 'mdi-star-circle-outline', current: site.seeding_points, target: level.min_seeding_points, formatter: value => formatNumber(value, 0), strict: level.min_seeding_points_strict, unavailable: site.seeding_points === null || site.seeding_points === undefined, etaDate: level.seeding_points_eta_date })
+  if (joinRow) rows.push(joinRow)
   pushNumeric({ key: 'bonus', label: '魔力', icon: 'mdi-lightning-bolt-circle', current: site.bonus, target: level.min_bonus, formatter: value => formatNumber(value, 0), unavailable: site.bonus === null || site.bonus === undefined })
   pushNumeric({ key: 'seeding', label: '做种数', icon: 'mdi-seed-outline', current: site.seeding, target: level.min_seeding, formatter: value => formatNumber(value, 0) })
   return rows
+}
+function averageRequirementProgress(requirements) {
+  return requirements.length
+    ? Math.round(requirements.reduce((sum, row) => sum + Number(row.progress || 0), 0) / requirements.length)
+    : 100
 }
 function levelTrafficRequirement(level) {
   const requirements = []
@@ -643,9 +654,7 @@ const selectedRetirementView = computed(() => {
   const route = displayRetirementRoute(site)
   const nextLevel = nextLevelRule(site)
   const requirements = requirementRows(site, nextLevel)
-  const overallProgress = requirements.length
-    ? Math.round(requirements.reduce((sum, row) => sum + Number(row.progress || 0), 0) / requirements.length)
-    : 100
+  const overallProgress = averageRequirementProgress(requirements)
   const completedCount = requirements.filter(row => row.complete).length
   const routeCount = route.length
 
