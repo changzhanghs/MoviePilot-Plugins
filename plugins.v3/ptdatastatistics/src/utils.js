@@ -69,21 +69,6 @@ export function withQuery(path, query = {}) {
   return suffix ? `${path}?${suffix}` : path
 }
 
-/** 将后端原生文件响应保存到浏览器下载目录。 */
-export async function downloadApiFile(api, path, filename, mimeType) {
-  const response = await api.get(path, { responseType: 'blob', feedback: 'silent' })
-  const payload = unwrapResponse(response)
-  const blob = payload instanceof Blob ? payload : new Blob([payload], { type: mimeType })
-  const url = URL.createObjectURL(blob)
-  const anchor = document.createElement('a')
-  anchor.href = url
-  anchor.download = filename
-  document.body.appendChild(anchor)
-  anchor.click()
-  anchor.remove()
-  URL.revokeObjectURL(url)
-}
-
 const iconCache = new Map()
 
 /** 通过宿主站点图标 API 获取图标并跨组件缓存。 */

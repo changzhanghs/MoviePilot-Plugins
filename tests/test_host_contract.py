@@ -119,6 +119,8 @@ class HostContractTests(unittest.TestCase):
         self.assertIn(("/cookiecloud/update", ("POST",)), paths)
         receiver_routes = [item for item in plugin.get_api() if item["path"].startswith("/cookiecloud")]
         self.assertTrue(all(item.get("allow_anonymous") is True for item in receiver_routes))
+        self.assertNotIn(("/sync", ("POST",)), paths)
+        self.assertNotIn(("/export/csv", ("GET",)), paths)
         self.assertNotIn(("/export/xlsx", ("GET",)), paths)
 
         template = plugin.api_rule_template()
@@ -130,6 +132,16 @@ class HostContractTests(unittest.TestCase):
 
         plugin._configured_sites = lambda: [{"id": 7, "name": "馒头", "domain": "kp.m-team.cc"}]
         self.assertEqual(plugin.api_settings().rule_sites, ["馒头"])
+
+    def test_site_refresh_event_updates_plugin_snapshot(self):
+        plugin = PTDataStatistics.__new__(PTDataStatistics)
+        plugin.init_plugin({"enabled": True})
+        calls = []
+        plugin.sync_from_mp = lambda *, full=False, site_id=None: calls.append((full, site_id))
+
+        plugin.on_site_refreshed(SimpleNamespace(event_data={"site_id": "7"}))
+
+        self.assertEqual(calls, [(False, 7)])
 
     def test_settings_are_clamped_and_modes_filtered(self):
         value = SettingsData(

@@ -197,13 +197,6 @@ class HourlyTrafficResponse(BaseModel):
     points: list[HourlyTrafficPoint] = Field(default_factory=list)
 
 
-class ExportFieldData(BaseModel):
-    """可导出字段定义。"""
-
-    key: str
-    label: str
-
-
 class UploadedLevelRuleData(BaseModel):
     """用户上传规则中的单个等级。"""
 
@@ -358,7 +351,6 @@ class SettingsResponse(BaseModel):
     """设置读取或保存响应。"""
 
     settings: SettingsData
-    export_fields: list[ExportFieldData] = Field(default_factory=list)
     rule_sites: list[str] = Field(default_factory=list)
 
 
@@ -368,9 +360,6 @@ class SyncResponse(BaseModel):
     imported: int = 0
     deleted: int = 0
     completed_at: str = ""
-    ptd_imported: int = 0
-    ptd_backup: str = ""
-    ptd_error: str = ""
 
 
 class MessageResponse(BaseModel):

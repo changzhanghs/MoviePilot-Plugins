@@ -6,7 +6,6 @@ import hmac
 import threading
 from datetime import date, datetime, timedelta
 from typing import Any, ClassVar
-from urllib.parse import quote
 from zoneinfo import ZoneInfo
 
 from app.db.oper.site import SiteOper
@@ -19,13 +18,12 @@ from app.sdk.events import Event, eventmanager
 from app.sdk.logging import logger
 from apscheduler.triggers.cron import CronTrigger
 from fastapi import HTTPException, Query, Request
-from fastapi.responses import PlainTextResponse, Response
+from fastapi.responses import PlainTextResponse
 
 from .api_models import (
     CookieCloudActionResponse,
     CookieCloudEncryptedData,
     CookieCloudUpdateData,
-    ExportFieldData,
     HourlyTrafficResponse,
     HistoryResponse,
     OverviewResponse,
@@ -41,7 +39,6 @@ from .api_models import (
 )
 from .core import (
     DEFAULT_RETIREMENT_RULES,
-    EXPORT_FIELDS,
     MTEAM_RETIREMENT_RULE,
     as_float,
     as_int,
@@ -55,9 +52,7 @@ from .core import (
     estimate_bonus_hourly,
     format_bytes,
     overall_ratio,
-    selected_export_fields,
 )
-from .exporters import build_csv
 from .models import PTSiteHourlySnapshot, PTSiteSnapshot
 from .ptd_cookiecloud import PTDCookieCloudError, match_metrics, parse_backup_response
 from .repository import SnapshotRepository
@@ -67,9 +62,9 @@ class PTDataStatistics(_PluginBase):
     """统计并展示 MoviePilot 已采集的 PT 站点账号数据。"""
 
     plugin_name = "PT数据统计"
-    plugin_desc = "统计 PT 站点累计与每日上传下载，提供历史、通知和导出。"
+    plugin_desc = "统计 PT 站点累计与每日上传下载，提供历史、养老进度和通知。"
     plugin_icon = "ptdatastatistics.svg"
-    plugin_version = "1.2.1"
+    plugin_version = "1.2.2"
     plugin_author = "cz"
     author_url = "https://github.com/changzhanghs"
     plugin_config_prefix = "ptdatastatistics_"
@@ -270,9 +265,8 @@ class PTDataStatistics(_PluginBase):
         return services
 
     def get_api(self) -> list[dict[str, Any]]:
-        """注册侧栏、仪表盘、设置和导出 API。"""
+        """注册数据查询、设置和 PTD 接收 API。"""
 
-        binary_schema = {200: {"content": {"application/octet-stream": {"schema": {"type": "string", "format": "binary"}}}}}
         return [
             {
                 "path": "/cookiecloud",
@@ -341,14 +335,6 @@ class PTDataStatistics(_PluginBase):
                 "response_model": TrafficDistributionResponse,
             },
             {
-                "path": "/sync",
-                "endpoint": self.api_sync,
-                "methods": ["POST"],
-                "auth": "bear",
-                "summary": "从 MoviePilot 同步站点数据",
-                "response_model": SyncResponse,
-            },
-            {
                 "path": "/settings",
                 "endpoint": self.api_settings,
                 "methods": ["GET"],
@@ -371,16 +357,6 @@ class PTDataStatistics(_PluginBase):
                 "auth": "bear",
                 "summary": "保存插件设置",
                 "response_model": SettingsResponse,
-            },
-            {
-                "path": "/export/csv",
-                "endpoint": self.api_export_csv,
-                "methods": ["GET"],
-                "auth": "bear",
-                "summary": "导出 CSV",
-                "response_model": None,
-                "response_class": Response,
-                "responses": binary_schema,
             },
         ]
 
@@ -1032,25 +1008,11 @@ class PTDataStatistics(_PluginBase):
             daily=aggregate(daily_rows),
         )
 
-    def api_sync(self) -> SyncResponse:
-        """Refresh MP snapshots and, when configured, the newest PTD backup."""
-
-        result = self.sync_from_mp(full=False)
-        if not self._ptd_cookiecloud_enabled:
-            return result
-        try:
-            imported, backup = self.sync_from_ptd()
-            return result.model_copy(update={"ptd_imported": imported, "ptd_backup": backup})
-        except PTDCookieCloudError as error:
-            logger.warning(f"同步 PTD CookieCloud 数据失败：{error}")
-            return result.model_copy(update={"ptd_error": str(error)})
-
     def api_settings(self) -> SettingsResponse:
-        """返回当前设置与导出字段。"""
+        """返回当前设置与可用于自定义规则锚定的 MP 站点名。"""
 
         return SettingsResponse(
             settings=self._settings(),
-            export_fields=[ExportFieldData(key=key, label=label) for key, label in EXPORT_FIELDS],
             rule_sites=[site["name"] for site in self._configured_sites() if site.get("name")],
         )
 
@@ -1113,49 +1075,6 @@ class PTDataStatistics(_PluginBase):
         else:
             self.cleanup_history()
         return self.api_settings()
-
-    def _export_records(
-        self,
-        start_day: str | None,
-        end_day: str | None,
-        site_ids: str | None,
-        fields: str | None,
-    ) -> tuple[list[dict[str, Any]], list[str], str, str]:
-        """复用历史口径生成导出数据。"""
-
-        self._ensure_history()
-        start, end = self._date_range(start_day, end_day)
-        site_id_values = self._parse_site_ids(site_ids)
-        records = self._repository().history(
-            start_day=start,
-            end_day=end,
-            site_ids=site_id_values,
-            include_archived=True,
-            limit=None,
-        )
-        return (
-            records,
-            selected_export_fields(fields),
-            start,
-            end,
-        )
-
-    def api_export_csv(
-        self,
-        start_day: str | None = Query(default=None),
-        end_day: str | None = Query(default=None),
-        site_ids: str | None = Query(default=None),
-        fields: str | None = Query(default=None),
-    ) -> Response:
-        """导出筛选后的 CSV。"""
-
-        records, selected, start, end = self._export_records(start_day, end_day, site_ids, fields)
-        filename = f"pt-data-{start}-{end}.csv"
-        return Response(
-            content=build_csv(records, selected),
-            media_type="text/csv; charset=utf-8",
-            headers={"Content-Disposition": f"attachment; filename={filename}; filename*=UTF-8''{quote(filename)}"},
-        )
 
     def cleanup_history(self) -> int:
         """按配置清理插件历史副本，不修改 MoviePilot 原始数据。"""
