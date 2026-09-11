@@ -506,17 +506,15 @@ function donutStyle(items) {
 function nextLevelRule(site) {
   return (site.route || []).find(level => level.name === site.next_level) || null
 }
-function estimatedLevelDate(level) {
-  if (!level) return '注册时间暂无法预估'
-  const eligibleDate = level.eligible_date || ''
-  const serverDate = overview.value.server_date || ''
-  if (level.reached || (eligibleDate && serverDate && eligibleDate <= serverDate)) return '注册时间已达成'
-  return eligibleDate ? `预计达成日期 ${eligibleDate}` : '注册时间暂无法预估'
-}
 function retirementRoute(site) {
   const route = site.route || []
   const retirementIndex = route.findIndex(level => level.is_retirement)
   return retirementIndex >= 0 ? route.slice(0, retirementIndex + 1) : route
+}
+function displayRetirementRoute(site) {
+  const route = retirementRoute(site)
+  const currentIndex = route.findIndex(level => level.is_current)
+  return currentIndex >= 0 ? route.slice(currentIndex) : route
 }
 function retirementProgressPercent(site) {
   const route = retirementRoute(site)
@@ -529,12 +527,26 @@ function retirementProgressPercent(site) {
   return Math.max(0, Math.min(100, reachedIndex * 100 / (route.length - 1)))
 }
 function routeNodeMeta(level) {
-  if (level.is_current) return '当前等级'
-  if (level.reached) return '已达成'
-  if (level.seeding_points_eta_date) return `预计 ${level.seeding_points_eta_date.slice(5)}`
-  if (level.min_seeding_points) return '待同步积分时速'
-  if (level.eligible_date) return `最早 ${level.eligible_date.slice(5)}`
-  return '待达成'
+  if (level.seeding_points_eta_date) return `预计 ${level.seeding_points_eta_date}`
+  if (level.eligible_date && !level.reached) return `最早 ${level.eligible_date}`
+  return level.reached ? '已达成' : '预计时间待补充'
+}
+function routeNodeStatus(site, level) {
+  if (level.is_current) return '当前'
+  if (level.name === site?.next_level) return '下一等级'
+  if (level.is_retirement) return level.reached ? '已保号' : '保号目标'
+  return level.reached ? '已达成' : '待达成'
+}
+function nextLevelEta(site, level) {
+  const serverDate = String(overview.value.server_date || site?.updated_day || '').slice(0, 10)
+  if (!level || !serverDate) return { label: '预计时间待补充', days: null }
+  const candidates = [level.eligible_date, level.seeding_points_eta_date].filter(Boolean).sort()
+  if (!candidates.length) return { label: '预计时间待补充', days: null }
+  const targetDate = candidates[candidates.length - 1]
+  const start = Date.parse(`${serverDate}T00:00:00Z`)
+  const end = Date.parse(`${targetDate}T00:00:00Z`)
+  const days = Number.isFinite(start) && Number.isFinite(end) ? Math.max(0, Math.ceil((end - start) / 86400000)) : null
+  return { label: `预计达成 ${targetDate}`, days }
 }
 function durationLabel(days) {
   const value = Number(days || 0)
@@ -619,16 +631,6 @@ function levelPointsRequirement(level) {
   if (level.min_seeding) return `做种 ${formatNumber(level.min_seeding, 0)}`
   return '—'
 }
-function levelPointsEta(level) {
-  if (!level?.min_seeding_points) return '无需积分预估'
-  if (level.reached) return '积分已达成'
-  if (!Number.isFinite(Number(level.seeding_points_eta_days))) return '积分速度未提供'
-  const days = Number(level.seeding_points_eta_days)
-  if (!days) return '预计当前可达成'
-  return level.seeding_points_eta_date
-    ? `预计 ${level.seeding_points_eta_date} 达成`
-    : `预计约 ${days} 天达成`
-}
 function routeMissingLabel(level) {
   return (level?.missing || []).join('；')
 }
@@ -637,6 +639,34 @@ function levelStateLabel(level) {
   if (level.is_retirement) return level.reached ? '已保号' : '保号目标'
   return level.reached ? '已达成' : '待达成'
 }
+const selectedRetirementView = computed(() => {
+  const site = selectedRetirementSite.value
+  if (!site) return null
+
+  const route = displayRetirementRoute(site)
+  const nextLevel = nextLevelRule(site)
+  const requirements = requirementRows(site, nextLevel)
+  const overallProgress = requirements.length
+    ? Math.round(requirements.reduce((sum, row) => sum + Number(row.progress || 0), 0) / requirements.length)
+    : 100
+  const completedCount = requirements.filter(row => row.complete).length
+  const routeCount = route.length
+
+  return {
+    route,
+    routeStyle: routeCount ? {
+      '--route-count': routeCount,
+      '--route-inset': `${50 / routeCount}%`,
+      '--route-span': `${100 - 100 / routeCount}%`,
+    } : {},
+    routeProgress: routeCount <= 1 ? 100 : overallProgress / (routeCount - 1),
+    requirements,
+    overallProgress,
+    completedCount,
+    pendingCount: requirements.length - completedCount,
+    eta: nextLevelEta(site, nextLevel),
+  }
+})
 watch(
   () => (retirement.value.sites || []).map(retirementSiteKey).join('|'),
   () => {
@@ -890,38 +920,47 @@ onBeforeUnmount(() => historyChart?.destroy())
                 </div>
               </header>
 
-              <div v-if="retirementRoute(selectedRetirementSite).length" class="retirement-route-rail" aria-label="养老等级进度">
+              <div v-if="selectedRetirementView.route.length" class="retirement-route-rail" aria-label="养老等级进度">
                 <div
                   class="retirement-route-rail__track"
-                  :style="{
-                    '--route-count': retirementRoute(selectedRetirementSite).length,
-                    '--route-inset': `${50 / retirementRoute(selectedRetirementSite).length}%`,
-                    '--route-span': `${100 - 100 / retirementRoute(selectedRetirementSite).length}%`,
-                  }"
+                  :style="selectedRetirementView.routeStyle"
                 >
                   <div class="retirement-route-rail__line">
-                    <VProgressLinear :model-value="retirementProgressPercent(selectedRetirementSite)" color="primary" bg-color="secondary" :bg-opacity="0.3" height="5" rounded />
+                    <VProgressLinear :model-value="selectedRetirementView.routeProgress" color="primary" bg-color="secondary" :bg-opacity="0.3" height="5" rounded />
                   </div>
                   <div class="retirement-route-rail__nodes">
-                    <div v-for="level in retirementRoute(selectedRetirementSite)" :key="level.name" :class="{ 'is-reached': level.reached, 'is-current': level.is_current, 'is-retirement': level.is_retirement }">
-                      <em v-if="level.is_current || level.is_retirement" class="retirement-route-node__badge">{{ level.is_current ? '当前' : '保号' }}</em>
-                      <i class="retirement-route-node__marker" aria-hidden="true" />
+                    <div v-for="(level, index) in selectedRetirementView.route" :key="level.name" :class="{ 'is-reached': level.reached, 'is-current': level.is_current, 'is-next': level.name === selectedRetirementSite.next_level, 'is-retirement': level.is_retirement }">
+                      <i class="retirement-route-node__marker" aria-hidden="true">{{ index + 1 }}</i>
                       <strong>{{ level.name }}</strong>
+                      <em class="retirement-route-node__badge">{{ routeNodeStatus(selectedRetirementSite, level) }}</em>
                       <small>{{ routeNodeMeta(level) }}</small>
                     </div>
                   </div>
                 </div>
               </div>
 
-              <div v-if="selectedRetirementSite.route?.length" class="retirement-target-grid">
+              <div v-if="selectedRetirementView.route.length" class="retirement-target-grid">
                 <section class="requirement-panel">
-                  <div class="requirement-panel__heading"><div><VIcon icon="mdi-target" color="primary" /><span>下一等级</span><strong>{{ selectedRetirementSite.next_level || '已是最高等级' }}</strong></div><VChip :color="retirementMeta(selectedRetirementSite.status).color" size="small" variant="tonal">{{ retirementMeta(selectedRetirementSite.status).label }}</VChip></div>
-                  <div v-if="requirementRows(selectedRetirementSite, nextLevelRule(selectedRetirementSite)).length" class="requirement-list">
-                    <div v-for="row in requirementRows(selectedRetirementSite, nextLevelRule(selectedRetirementSite))" :key="row.key" class="requirement-row">
-                      <VIcon :icon="row.icon" color="secondary" size="22" />
-                      <div class="requirement-row__label"><strong>{{ row.label }}</strong><span>目标 {{ row.target }}</span></div>
-                      <div class="requirement-row__value"><strong>{{ row.current }}</strong><span :class="{ 'text-success': row.complete, 'text-warning': row.unavailable }">{{ row.detail }}</span></div>
-                      <VProgressLinear :model-value="row.progress" :color="row.complete ? 'success' : row.unavailable ? 'warning' : 'primary'" bg-color="surface-variant" height="6" rounded />
+                  <div class="requirement-panel__heading">
+                    <div><VIcon icon="mdi-target" color="primary" size="34" /><span>下一等级</span><strong>{{ selectedRetirementSite.next_level || '已是最高等级' }}</strong></div>
+                    <div class="requirement-panel__subtitle">完成以下要求即可升级，继续享受更多权益。</div>
+                    <VChip color="warning" size="small" variant="tonal" prepend-icon="mdi-clock-outline">{{ selectedRetirementView.eta.label }}<template v-if="selectedRetirementView.eta.days !== null"> · 约 {{ selectedRetirementView.eta.days }} 天</template></VChip>
+                  </div>
+                  <div v-if="selectedRetirementView.requirements.length" class="requirement-overview">
+                    <div class="requirement-overview__score">
+                      <VProgressCircular :model-value="selectedRetirementView.overallProgress" :size="124" :width="12" color="primary"><strong>{{ selectedRetirementView.overallProgress }}%</strong></VProgressCircular>
+                      <span>总体进度</span><b>{{ selectedRetirementView.overallProgress }}%</b>
+                      <small>已完成 {{ selectedRetirementView.completedCount }} 项 · 待完成 {{ selectedRetirementView.pendingCount }} 项</small>
+                    </div>
+                    <div class="requirement-table">
+                      <div class="requirement-table__head"><span>项目</span><span>当前进度</span><span>目标要求</span><span>剩余</span><span>完成进度</span></div>
+                      <div v-for="row in selectedRetirementView.requirements" :key="row.key" class="requirement-row">
+                        <span class="requirement-row__item"><VIcon :icon="row.icon" color="secondary" size="22" /><strong>{{ row.label }}</strong></span>
+                        <strong :class="{ 'text-success': row.complete }">{{ row.current }}</strong>
+                        <span>{{ row.target }}</span>
+                        <span :class="{ 'text-success': row.complete, 'text-warning': row.unavailable }">{{ row.complete ? '—' : row.detail.replace(/^剩余\s*/, '') }}</span>
+                        <span class="requirement-row__progress"><VProgressLinear :model-value="row.progress" :color="row.complete ? 'success' : row.unavailable ? 'warning' : 'primary'" bg-color="surface-variant" height="7" rounded /><b>{{ Math.round(row.progress) }}%</b></span>
+                      </div>
                     </div>
                   </div>
                   <div v-else class="compact-empty-state">没有后续等级要求</div>
@@ -929,22 +968,22 @@ onBeforeUnmount(() => historyChart?.destroy())
 
               </div>
 
-              <section v-if="selectedRetirementSite.route?.length" class="retirement-levels">
-                <div class="retirement-levels__heading"><strong>等级路线与要求</strong><span>逐级查看门槛、状态和积分预计时间</span></div>
+              <section v-if="selectedRetirementView.route.length" class="retirement-levels">
+                <div class="retirement-levels__heading"><div><VIcon icon="mdi-chart-bar" color="primary" /><strong>等级路线与要求</strong></div></div>
                 <div class="retirement-levels__table">
-                  <details v-for="level in selectedRetirementSite.route" :key="level.name" class="retirement-level-row" :class="{ 'is-current': level.is_current, 'is-retirement': level.is_retirement }" :open="level.is_current">
+                  <div class="retirement-levels__columns"><span>等级</span><span>注册</span><span>流量</span><span>分享率</span><span>做种积分</span><span>积分预计</span><span>状态</span><i /></div>
+                  <details v-for="level in selectedRetirementView.route" :key="level.name" class="retirement-level-row" :class="{ 'is-current': level.is_current, 'is-next': level.name === selectedRetirementSite.next_level, 'is-retirement': level.is_retirement }" :open="level.is_current || level.name === selectedRetirementSite.next_level">
                     <summary>
-                      <span class="retirement-level-row__identity"><i aria-hidden="true" /><strong>{{ level.name }}</strong><em :class="{ 'text-success': level.reached, 'text-primary': level.is_current }">{{ levelStateLabel(level) }}</em></span>
-                      <span class="retirement-level-row__eta">{{ levelPointsEta(level) }}</span>
+                      <strong>{{ level.name }}</strong>
+                      <span>{{ level.min_join_days ? `${level.min_join_days_strict ? '>' : '≥'} ${durationLabel(level.min_join_days)}` : '无限制' }}</span>
+                      <span>{{ levelTrafficRequirement(level) }}</span>
+                      <span>{{ levelRatioRequirement(level) }}</span>
+                      <span>{{ levelPointsRequirement(level).replace(/^做种积分\s*/, '') }}</span>
+                      <span>{{ level.seeding_points_eta_date || '—' }}</span>
+                      <em :class="{ 'text-success': level.reached, 'text-warning': !level.reached, 'text-primary': level.is_current }">{{ levelStateLabel(level) }}</em>
                       <VIcon icon="mdi-chevron-down" size="18" />
                     </summary>
-                    <div class="retirement-level-row__requirements">
-                      <span><small>注册时间</small><strong>{{ level.min_join_days ? `${level.min_join_days_strict ? '>' : '≥'} ${durationLabel(level.min_join_days)}` : '无限制' }}</strong></span>
-                      <span><small>上传 / 下载</small><strong>{{ levelTrafficRequirement(level) }}</strong></span>
-                      <span><small>分享率</small><strong>{{ levelRatioRequirement(level) }}</strong></span>
-                      <span><small>积分条件</small><strong>{{ levelPointsRequirement(level) }}</strong></span>
-                    </div>
-                    <div class="retirement-level-row__detail"><span v-if="level.description"><small>权限说明</small>{{ level.description }}</span><strong v-if="level.missing?.length"><small>未达成条件</small>{{ routeMissingLabel(level) }}</strong><strong v-else><small>注册时间</small>{{ estimatedLevelDate(level) }}</strong></div>
+                    <div class="retirement-level-row__detail"><span v-if="level.description">{{ level.description }}</span><strong v-if="level.missing?.length">未达成：{{ routeMissingLabel(level) }}</strong></div>
                   </details>
                 </div>
               </section>
@@ -1045,57 +1084,60 @@ onBeforeUnmount(() => historyChart?.destroy())
 .retirement-detail__metrics{display:flex;flex:0 0 auto;align-items:center;gap:22px}
 .retirement-detail__metrics span{display:flex;flex-direction:column;gap:3px;color:rgba(var(--v-theme-on-surface),.52);font-size:.68rem}
 .retirement-detail__metrics strong{color:rgba(var(--v-theme-on-surface),.9);font-size:.86rem}
-.retirement-route-rail{overflow-x:auto;padding:24px 12px 10px}
-.retirement-route-rail__track{position:relative;min-width:820px}
-.retirement-route-rail__line{position:absolute;z-index:0;top:31px;left:var(--route-inset);width:var(--route-span)}
+.retirement-route-rail{overflow-x:auto;padding:22px 12px 8px}
+.retirement-route-rail__track{position:relative;min-width:860px}
+.retirement-route-rail__line{position:absolute;z-index:0;top:19px;left:var(--route-inset);width:var(--route-span)}
 .retirement-route-rail__nodes{position:relative;z-index:1;display:grid;grid-template-columns:repeat(var(--route-count),minmax(80px,1fr));align-items:start}
-.retirement-route-rail__nodes>div{display:grid;min-width:0;grid-template-rows:21px 20px auto auto;place-items:center;gap:4px;padding:0 5px;text-align:center}
-.retirement-route-node__badge{align-self:start;padding:2px 7px;border-radius:999px;background:rgba(var(--v-theme-on-surface),.08);color:rgba(var(--v-theme-on-surface),.58);font-size:.58rem;font-style:normal;font-weight:800;line-height:17px}
-.retirement-route-rail__nodes>div:not(.is-current):not(.is-retirement) .retirement-route-node__badge{visibility:hidden}
-.retirement-route-node__marker{display:block;width:16px;height:16px;border:3px solid rgba(var(--v-theme-on-surface),.28);border-radius:50%;background:rgb(var(--v-theme-surface));box-shadow:0 0 0 4px rgb(var(--v-theme-surface))}
+.retirement-route-rail__nodes>div{display:grid;min-width:0;grid-template-rows:40px auto 22px auto;place-items:center;gap:3px;padding:0 5px;text-align:center}
+.retirement-route-node__marker{position:relative;z-index:1;display:grid;width:38px;height:38px;place-items:center;border:4px solid rgba(var(--v-theme-on-surface),.32);border-radius:50%;background:rgb(var(--v-theme-surface));box-shadow:0 0 0 4px rgb(var(--v-theme-surface));color:rgba(var(--v-theme-on-surface),.82);font-size:.9rem;font-style:normal;font-weight:900}
 .retirement-route-rail__nodes .is-reached .retirement-route-node__marker{border-color:rgb(var(--v-theme-primary));background:rgb(var(--v-theme-primary))}
-.retirement-route-rail__nodes .is-current .retirement-route-node__marker{box-shadow:0 0 0 4px rgb(var(--v-theme-surface)),0 0 0 7px rgba(var(--v-theme-primary),.18)}
+.retirement-route-rail__nodes .is-next .retirement-route-node__marker{border-color:rgb(var(--v-theme-primary));background:rgba(var(--v-theme-primary),.34)}
+.retirement-route-rail__nodes .is-current .retirement-route-node__marker,.retirement-route-rail__nodes .is-next .retirement-route-node__marker{box-shadow:0 0 0 4px rgb(var(--v-theme-surface)),0 0 0 7px rgba(var(--v-theme-primary),.18)}
 .retirement-route-rail__nodes .is-retirement .retirement-route-node__marker{border-color:rgb(var(--v-theme-success));background:rgb(var(--v-theme-success))}
-.retirement-route-rail__nodes strong{max-width:100%;color:rgba(var(--v-theme-on-surface),.64);font-size:.67rem;line-height:1.2}
-.retirement-route-rail__nodes small{color:rgba(var(--v-theme-on-surface),.42);font-size:.58rem;line-height:1.15;white-space:nowrap}
+.retirement-route-rail__nodes strong{max-width:100%;color:rgba(var(--v-theme-on-surface),.78);font-size:.7rem;line-height:1.2}
+.retirement-route-node__badge{padding:2px 9px;border-radius:999px;background:rgba(var(--v-theme-on-surface),.1);color:rgba(var(--v-theme-on-surface),.68);font-size:.6rem;font-style:normal;font-weight:800;line-height:16px;white-space:nowrap}
+.retirement-route-rail__nodes small{color:rgba(var(--v-theme-on-surface),.58);font-size:.58rem;line-height:1.15;white-space:nowrap}
 .retirement-route-rail__nodes .is-current strong,.retirement-route-rail__nodes .is-current .retirement-route-node__badge{color:rgb(var(--v-theme-primary))}
+.retirement-route-rail__nodes .is-next strong,.retirement-route-rail__nodes .is-next .retirement-route-node__badge{color:rgb(var(--v-theme-primary))}
 .retirement-route-rail__nodes .is-retirement strong,.retirement-route-rail__nodes .is-retirement .retirement-route-node__badge{color:rgb(var(--v-theme-success))}
-.retirement-route-rail__nodes .is-current .retirement-route-node__badge{background:rgba(var(--v-theme-primary),.12)}
+.retirement-route-rail__nodes .is-current .retirement-route-node__badge,.retirement-route-rail__nodes .is-next .retirement-route-node__badge{background:rgba(var(--v-theme-primary),.16)}
 .retirement-route-rail__nodes .is-retirement .retirement-route-node__badge{background:rgba(var(--v-theme-success),.12)}
 .retirement-target-grid{display:grid;grid-template-columns:minmax(0,1fr);gap:14px;margin-top:16px}
 .requirement-panel,.retirement-levels{min-width:0;border:1px solid var(--pt-border);border-radius:14px;background:rgba(var(--v-theme-surface-variant),.1)}
 .requirement-panel{padding:15px}
-.requirement-panel__heading{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:10px}
-.requirement-panel__heading>div{display:flex;align-items:center;gap:7px}
+.requirement-panel__heading{display:grid;grid-template-columns:auto minmax(0,1fr) auto;align-items:center;gap:12px;padding-bottom:14px;border-bottom:1px solid var(--pt-border)}
+.requirement-panel__heading>div:first-child{display:flex;align-items:center;gap:9px}
 .requirement-panel__heading span{color:rgba(var(--v-theme-on-surface),.56);font-size:.72rem}
-.requirement-panel__heading strong{margin-left:3px}
-.requirement-list{display:grid}
-.requirement-row{display:grid;grid-template-columns:auto minmax(100px,.8fr) minmax(130px,1fr) minmax(105px,.85fr);align-items:center;gap:10px;padding:10px 0;border-top:1px solid var(--pt-border)}
-.requirement-row__label,.requirement-row__value{display:flex;min-width:0;flex-direction:column;gap:2px}
-.requirement-row__label span,.requirement-row__value span{color:rgba(var(--v-theme-on-surface),.54);font-size:.66rem}
-.requirement-row__label strong,.requirement-row__value strong{font-size:.76rem}
+.requirement-panel__heading strong{margin-left:3px;font-size:1.22rem}
+.requirement-panel__subtitle{color:rgba(var(--v-theme-on-surface),.56);font-size:.7rem}
+.requirement-overview{display:grid;grid-template-columns:190px minmax(0,1fr);gap:20px;padding-top:14px}
+.requirement-overview__score{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:5px;border-right:1px solid var(--pt-border)}
+.requirement-overview__score :deep(.v-progress-circular__content)>strong{font-size:1.35rem}
+.requirement-overview__score>span{margin-top:2px;color:rgba(var(--v-theme-on-surface),.56);font-size:.68rem}
+.requirement-overview__score>b{font-size:1.25rem}
+.requirement-overview__score>small{color:rgba(var(--v-theme-on-surface),.54);font-size:.64rem}
+.requirement-table{min-width:0}
+.requirement-table__head,.requirement-row{display:grid;grid-template-columns:minmax(110px,.85fr) minmax(105px,.7fr) minmax(100px,.7fr) minmax(95px,.65fr) minmax(190px,1.25fr);align-items:center;gap:12px}
+.requirement-table__head{padding:7px 10px;color:rgba(var(--v-theme-on-surface),.58);font-size:.65rem}
+.requirement-row{min-height:42px;padding:8px 10px;border-top:1px solid var(--pt-border);font-size:.7rem}
+.requirement-row__item{display:flex;align-items:center;gap:10px}
+.requirement-row__progress{display:grid;grid-template-columns:minmax(90px,1fr) 38px;align-items:center;gap:9px}
+.requirement-row__progress b{text-align:right}
 .compact-empty-state{display:grid;min-height:88px;place-items:center;color:rgba(var(--v-theme-on-surface),.5);font-size:.76rem}
 .retirement-levels{margin-top:14px;overflow:hidden}
 .retirement-levels__heading{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:13px 15px}
-.retirement-levels__heading span{color:rgba(var(--v-theme-on-surface),.5);font-size:.68rem}
-.retirement-levels__table{display:grid;gap:8px;padding:0 10px 10px}
-.retirement-level-row{overflow:hidden;border:1px solid var(--pt-border);border-radius:11px;background:rgba(var(--v-theme-surface),.34)}
-.retirement-level-row summary{position:relative;display:grid;grid-template-columns:minmax(0,1fr) auto auto;align-items:center;gap:12px;padding:12px 13px;cursor:pointer;list-style:none}
+.retirement-levels__heading>div{display:flex;align-items:center;gap:8px}
+.retirement-levels__table{min-width:920px}
+.retirement-levels__columns,.retirement-level-row summary{display:grid;grid-template-columns:minmax(125px,1fr) minmax(90px,.8fr) minmax(190px,1.25fr) minmax(95px,.72fr) minmax(105px,.78fr) minmax(105px,.8fr) minmax(80px,.6fr) 24px;align-items:center;gap:12px;padding:9px 15px}
+.retirement-levels__columns{background:rgba(var(--v-theme-primary),.09);color:rgba(var(--v-theme-on-surface),.64);font-size:.64rem}
+.retirement-level-row{overflow:hidden;border-top:1px solid var(--pt-border);background:transparent}
+.retirement-level-row summary{position:relative;cursor:pointer;list-style:none;font-size:.68rem}
 .retirement-level-row summary::-webkit-details-marker{display:none}
-.retirement-level-row__identity{display:flex;min-width:0;align-items:center;gap:9px}
-.retirement-level-row__identity>i{width:9px;height:9px;border:2px solid rgba(var(--v-theme-on-surface),.3);border-radius:50%;background:rgb(var(--v-theme-surface))}
-.retirement-level-row__identity strong{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.retirement-level-row__identity em{padding:2px 7px;border-radius:999px;background:rgba(var(--v-theme-on-surface),.07);font-size:.66rem;font-style:normal;font-weight:800;white-space:nowrap}
-.retirement-level-row__eta{color:rgba(var(--v-theme-on-surface),.58);font-size:.7rem;white-space:nowrap}
-.retirement-level-row.is-current{border-color:rgba(var(--v-theme-primary),.42);background:rgba(var(--v-theme-primary),.07)}
-.retirement-level-row.is-current .retirement-level-row__identity>i{border-color:rgb(var(--v-theme-primary));background:rgb(var(--v-theme-primary))}
+.retirement-level-row summary>span{color:rgba(var(--v-theme-on-surface),.68)}
+.retirement-level-row summary>em{font-size:.68rem;font-style:normal;font-weight:800}
+.retirement-level-row.is-current,.retirement-level-row.is-next{background:rgba(var(--v-theme-primary),.08);box-shadow:inset 3px 0 rgb(var(--v-theme-primary))}
 .retirement-level-row.is-retirement{box-shadow:inset 3px 0 rgb(var(--v-theme-success))}
-.retirement-level-row__requirements{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;padding:0 13px 11px}
-.retirement-level-row__requirements>span{display:grid;min-width:0;gap:3px;padding:9px 10px;border-radius:9px;background:rgba(var(--v-theme-surface-variant),.18)}
-.retirement-level-row__requirements small,.retirement-level-row__detail small{color:rgba(var(--v-theme-on-surface),.46);font-size:.62rem;font-weight:500}
-.retirement-level-row__requirements strong{overflow:hidden;font-size:.7rem;text-overflow:ellipsis;white-space:nowrap}
-.retirement-level-row__detail{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.3fr);gap:12px;padding:0 13px 12px;color:rgba(var(--v-theme-on-surface),.66);font-size:.7rem}
-.retirement-level-row__detail>span,.retirement-level-row__detail>strong{display:grid;gap:3px}
+.retirement-level-row__detail{display:flex;flex-wrap:wrap;justify-content:space-between;gap:10px;padding:0 15px 10px 15px;color:rgba(var(--v-theme-on-surface),.6);font-size:.64rem}
 .retirement-level-row__detail strong{color:rgb(var(--v-theme-warning))}
 .pt-workbench{--pt-border:rgba(var(--v-border-color),var(--v-border-opacity));min-width:0;padding:4px}.data-actions,.retirement-summary{display:flex;flex-wrap:wrap;gap:9px}.section-block{margin-top:16px;padding:20px;border:1px solid var(--pt-border);border-radius:20px;background:rgba(var(--v-theme-surface),.7)}.section-heading{display:flex;align-items:center;justify-content:space-between;gap:16px;margin-bottom:18px}.section-heading h2{margin:2px 0 0;font-size:1.18rem}.section-kicker{color:rgb(var(--v-theme-primary));font-size:.72rem;font-weight:800;letter-spacing:.12em}.section-note,.setting-hint,.row-label{color:rgba(var(--v-theme-on-surface),.56);font-size:.76rem}.metric-grid{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:12px}.distribution-panel,.twelve-panel{background:linear-gradient(135deg,rgba(var(--v-theme-primary),.07),rgba(var(--v-theme-surface),.72))}.distribution-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}.distribution-card{min-width:0;padding:18px;border:1px solid var(--pt-border);border-radius:17px;background:rgba(var(--v-theme-surface),.55)}.distribution-card__header{display:flex;align-items:center;justify-content:space-between;gap:14px;margin-bottom:14px}.distribution-card__header :deep(.v-input){max-width:190px}.pie-layout{display:grid;grid-template-columns:minmax(150px,40%) minmax(0,1fr);gap:20px;align-items:center}.pie{display:grid;place-items:center;width:min(100%,220px);margin:auto;aspect-ratio:1;border-radius:50%;box-shadow:0 12px 32px rgba(0,0,0,.15)}.pie__hole{display:flex;flex-direction:column;align-items:center;justify-content:center;width:66%;aspect-ratio:1;border-radius:50%;background:rgb(var(--v-theme-surface));text-align:center}.pie__hole span{color:rgba(var(--v-theme-on-surface),.58);font-size:.68rem}.pie__hole strong{margin-top:5px;font-size:1rem}.pie-legend{max-height:250px;overflow-y:auto}.pie-legend>div{display:grid;grid-template-columns:9px minmax(80px,1fr) auto auto;gap:8px;align-items:center;padding:6px 2px;font-size:.74rem}.pie-legend i{width:8px;height:8px;border-radius:50%}.pie-legend strong{font-size:.72rem}.pie-legend em{color:rgba(var(--v-theme-on-surface),.5);font-style:normal}.table-shell,.twelve-overflow{overflow-x:auto;border:1px solid var(--pt-border);border-radius:14px}.site-table{min-width:1450px;background:transparent}.history-detail-shell{overflow-x:auto}.history-detail-table{min-width:1050px}.site-table th{color:rgba(var(--v-theme-on-surface),.55)!important;font-size:.7rem;letter-spacing:.04em;white-space:nowrap}.site-table td{white-space:nowrap}.site-identity{display:flex;align-items:center;gap:10px}.cell-sub{display:block;max-width:220px;overflow:hidden;color:rgba(var(--v-theme-on-surface),.52);font-size:.68rem;text-overflow:ellipsis;white-space:nowrap}.metric-upload{color:rgb(var(--v-theme-success));font-weight:650}.metric-download{color:rgb(var(--v-theme-error));font-weight:650}.empty-cell{height:140px!important;text-align:center;color:rgba(var(--v-theme-on-surface),.52)}.legend{display:flex;flex:0 0 auto;align-items:center;gap:14px;color:rgba(var(--v-theme-on-surface),.62);font-size:.75rem;white-space:nowrap}.legend>span{display:inline-flex;align-items:center;gap:5px;line-height:1}.legend i{display:block;flex:0 0 9px;width:9px;height:9px;border-radius:2px}.legend__upload{background:rgb(var(--v-theme-success))}.legend__download{background:rgb(var(--v-theme-error))}.bar-chart{display:flex;align-items:stretch;gap:5px;height:250px;overflow-x:auto;padding:10px 3px 0;border-bottom:1px solid var(--pt-border)}.bar-column{display:flex;flex:1 0 28px;flex-direction:column;min-width:28px}.bar-column__bars{display:flex;flex:1;align-items:flex-end;justify-content:center;gap:2px}.bar{display:block;width:7px;border-radius:5px 5px 1px 1px}.bar--upload{background:rgb(var(--v-theme-success))}.bar--download{background:rgb(var(--v-theme-error))}.empty-state{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;min-height:180px;color:rgba(var(--v-theme-on-surface),.54)}.compact-empty{min-height:120px}.twelve-track{position:relative;display:grid;grid-template-columns:repeat(12,minmax(54px,1fr));min-width:760px;padding:20px 4px 4px}.twelve-track__line{position:absolute;z-index:0;top:38px;left:4.2%;right:4.2%;height:5px;overflow:hidden;border-radius:999px;background:rgba(var(--v-theme-on-surface),.12)}.twelve-track__line i{display:block;height:100%;border-radius:inherit;background:linear-gradient(90deg,rgb(var(--v-theme-primary)),rgb(var(--v-theme-success)))}.twelve-node{z-index:1;display:flex;flex-direction:column;align-items:center;gap:8px;min-width:0;text-align:center}.twelve-node span{max-width:100%;overflow:hidden;font-size:.72rem;text-overflow:ellipsis;white-space:nowrap}.twelve-node--missing,.twelve-node--waiting{opacity:.66}.settings-layout{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px;border:0;padding:0;background:transparent}.settings-card{padding:20px;border:1px solid var(--pt-border);border-radius:18px;background:rgba(var(--v-theme-surface),.76)}.settings-card--wide{grid-column:1/-1}.settings-actions{display:flex;align-items:center;justify-content:space-between;gap:20px}.settings-actions p{margin:4px 0 0;color:rgba(var(--v-theme-on-surface),.56)}
 .twelve-panel{padding:18px 22px 14px}
@@ -1120,9 +1162,9 @@ onBeforeUnmount(() => historyChart?.destroy())
 .twelve-remaining{display:flex;justify-content:flex-end;gap:4px;min-width:920px;color:rgba(var(--v-theme-on-surface),.52);font-size:.7rem}
 .twelve-remaining strong{color:rgb(var(--v-theme-success));font-size:.8rem}
 @media(max-width:1280px){.metric-grid{grid-template-columns:repeat(3,minmax(0,1fr))}.retirement-target-grid{grid-template-columns:1fr}}
-@media(max-width:960px){.workbench-nav{align-items:stretch;flex-direction:column;gap:5px}.workbench-nav__actions{align-self:flex-end;padding-bottom:10px}.history-workspace{grid-template-columns:1fr;height:auto;overflow:visible}.history-site-sidebar{overflow:visible;border-right:0;border-bottom:1px solid var(--pt-border)}.history-site-sidebar__items{display:flex;max-height:none;overflow-x:auto;overflow-y:hidden;scrollbar-gutter:auto}.history-site-option{width:210px;flex:0 0 210px}.history-workspace__main{overflow:visible;scrollbar-gutter:auto}.history-record-shell{overflow-x:auto}.history-record-table{min-width:900px;table-layout:auto}.distribution-grid{grid-template-columns:1fr}.retirement-explorer{grid-template-columns:1fr;height:auto;min-height:0;overflow:visible}.retirement-site-list{overflow:visible;border-right:0;border-bottom:1px solid var(--pt-border)}.retirement-site-list__items{display:flex;max-height:none;overflow-x:auto;overflow-y:hidden;scrollbar-gutter:auto}.retirement-site-option{width:245px;flex:0 0 245px}.retirement-detail{overflow:visible;scrollbar-gutter:auto}}
+@media(max-width:960px){.workbench-nav{align-items:stretch;flex-direction:column;gap:5px}.workbench-nav__actions{align-self:flex-end;padding-bottom:10px}.history-workspace{grid-template-columns:1fr;height:auto;overflow:visible}.history-site-sidebar{overflow:visible;border-right:0;border-bottom:1px solid var(--pt-border)}.history-site-sidebar__items{display:flex;max-height:none;overflow-x:auto;overflow-y:hidden;scrollbar-gutter:auto}.history-site-option{width:210px;flex:0 0 210px}.history-workspace__main{overflow:visible;scrollbar-gutter:auto}.history-record-shell{overflow-x:auto}.history-record-table{min-width:900px;table-layout:auto}.distribution-grid{grid-template-columns:1fr}.retirement-explorer{grid-template-columns:1fr;height:auto;min-height:0;overflow:visible}.retirement-site-list{overflow:visible;border-right:0;border-bottom:1px solid var(--pt-border)}.retirement-site-list__items{display:flex;max-height:none;overflow-x:auto;overflow-y:hidden;scrollbar-gutter:auto}.retirement-site-option{width:245px;flex:0 0 245px}.retirement-detail{overflow:visible;scrollbar-gutter:auto}.requirement-overview{grid-template-columns:1fr}.requirement-overview__score{border-right:0;border-bottom:1px solid var(--pt-border);padding-bottom:14px}.requirement-table,.retirement-levels{overflow-x:auto}}
 .ptd-settings-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin-top:14px}.ptd-receiver-url,.ptd-site-mappings{grid-column:1/-1}
 @media(max-width:720px){.workbench-nav__actions{align-self:stretch}.data-refresh-btn{flex:1}.section-block{padding:14px}.metric-grid,.settings-layout,.ptd-settings-grid{grid-template-columns:1fr}.ptd-receiver-url,.ptd-site-mappings{grid-column:auto}.settings-card--wide{grid-column:auto}.settings-actions{align-items:stretch;flex-direction:column}.section-heading,.distribution-heading{align-items:flex-start;flex-direction:column}.pie-layout{grid-template-columns:1fr}.pie{width:180px}.history-detail-summary{align-items:flex-start;flex-direction:column}.history-detail-metrics{width:100%;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}.history-period-card{min-width:142px}.history-line-chart{height:220px}.history-site-panel .history-detail-shell{overflow-x:auto}.history-site-panel .history-detail-table{min-width:720px}}
-@media(max-width:720px){.site-sort-select{width:100%;flex:0 0 auto}.site-data-card{padding:12px}.site-data-card__header,.site-account-meta{align-items:flex-start;flex-direction:column}.site-stat-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.retirement-detail{padding:14px}.retirement-detail__header{align-items:flex-start;flex-direction:column}.retirement-detail__metrics{width:100%;justify-content:space-between;gap:10px}.retirement-route-rail{margin-right:-14px;margin-left:-14px;padding-right:14px;padding-left:14px}.requirement-row{grid-template-columns:auto minmax(0,1fr) minmax(0,1fr)}.requirement-row :deep(.v-progress-linear){grid-column:2/-1}.retirement-levels__heading{align-items:flex-start;flex-direction:column}.retirement-level-row summary{grid-template-columns:minmax(0,1fr) auto}.retirement-level-row__eta{grid-column:1/-1}.retirement-level-row summary>.v-icon{position:absolute;right:22px}.retirement-level-row__requirements{grid-template-columns:repeat(2,minmax(0,1fr))}.retirement-level-row__detail{grid-template-columns:1fr}}
+@media(max-width:720px){.site-sort-select{width:100%;flex:0 0 auto}.site-data-card{padding:12px}.site-data-card__header,.site-account-meta{align-items:flex-start;flex-direction:column}.site-stat-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.retirement-detail{padding:14px}.retirement-detail__header{align-items:flex-start;flex-direction:column}.retirement-detail__metrics{width:100%;justify-content:space-between;gap:10px}.retirement-route-rail{margin-right:-14px;margin-left:-14px;padding-right:14px;padding-left:14px}.requirement-panel__heading{grid-template-columns:1fr;align-items:flex-start}.requirement-panel__heading>div:first-child{flex-wrap:wrap}.requirement-table__head,.requirement-row{min-width:720px}.retirement-levels__heading{align-items:flex-start;flex-direction:column}}
 @media(max-width:960px){.retirement-site-list{position:static;max-height:none}.twelve-panel{padding:18px}.twelve-panel__heading{align-items:flex-start;flex-direction:column}.twelve-summary{width:100%;justify-content:flex-end}}
 </style>
