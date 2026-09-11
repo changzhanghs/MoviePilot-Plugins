@@ -799,13 +799,39 @@ class TwelveAndExportTests(unittest.TestCase):
         self.assertEqual(site["retirement_level"], "Extreme User")
         self.assertEqual(len(site["route"]), 10)
 
+    def test_uploaded_rule_can_match_site_domain_when_display_name_is_custom(self):
+        rule = {
+            "retirement_level": "Nexus Master",
+            "levels": [
+                {"name": "User"},
+                {"name": "Power User"},
+                {"name": "Nexus Master"},
+            ],
+        }
+        progress = core.build_retirement_progress(
+            [{
+                "site_id": 1,
+                "site_name": "我的猫站",
+                "domain": "pterclub.com",
+                "user_level": "POWER_USER",
+                "updated_day": "2026-09-12",
+            }],
+            {"pterclub.com": rule},
+        )
+        site = progress["sites"][0]
+
+        self.assertEqual(site["status"], "upgrading")
+        self.assertEqual(site["next_level"], "Nexus Master")
+        self.assertEqual(len(site["route"]), 3)
+
 
 class PackagingTests(unittest.TestCase):
     def test_v3_manifest_matches_source(self):
         manifest = json.loads((ROOT / "package.v3.json").read_text(encoding="utf-8"))
         meta = manifest["PTDataStatistics"]
         source = (PLUGIN / "__init__.py").read_text(encoding="utf-8")
-        self.assertEqual(meta["version"], "1.1.8")
+        self.assertEqual(meta["version"], "1.1.9")
+        self.assertEqual(meta["history"]["v1.1.9"], "不值一提")
         self.assertEqual(meta["history"]["v1.1.8"], "不值一提")
         self.assertEqual(meta["history"]["v1.1.7"], "更新了一些东西")
         self.assertEqual(meta["history"]["v1.1.6"], "更新了一些东西")
@@ -824,8 +850,8 @@ class PackagingTests(unittest.TestCase):
         self.assertEqual(meta["history"]["v1.0.2"], "更新了一些东西")
         self.assertEqual(meta["history"]["v1.0.1"], "更新了一些东西")
         self.assertEqual(meta["history"]["v1.0.0"], "更新了一些东西")
-        self.assertEqual(list(meta["history"]), ["v1.1.8", "v1.1.7", "v1.1.6", "v1.1.5", "v1.1.4", "v1.1.3", "v1.1.2", "v1.1.1", "v1.1.0", "v1.0.10", "v1.0.9", "v1.0.8", "v1.0.7", "v1.0.6", "v1.0.5", "v1.0.4", "v1.0.3", "v1.0.2", "v1.0.1", "v1.0.0"])
-        self.assertIn('plugin_version = "1.1.8"', source)
+        self.assertEqual(list(meta["history"]), ["v1.1.9", "v1.1.8", "v1.1.7", "v1.1.6", "v1.1.5", "v1.1.4", "v1.1.3", "v1.1.2", "v1.1.1", "v1.1.0", "v1.0.10", "v1.0.9", "v1.0.8", "v1.0.7", "v1.0.6", "v1.0.5", "v1.0.4", "v1.0.3", "v1.0.2", "v1.0.1", "v1.0.0"])
+        self.assertIn('plugin_version = "1.1.9"', source)
         self.assertEqual(meta["system_version"], ">=3.0.0")
         self.assertNotIn("release", meta)
 
@@ -988,6 +1014,7 @@ class PackagingTests(unittest.TestCase):
         self.assertIn('class="rules-file-input"', source)
         self.assertIn("async function uploadRuleFile(event)", source)
         self.assertIn("settingsDraft.value.custom_retirement_rules = rules", source)
+        self.assertIn("await props.api.post(`${pluginBase.value}/settings`, payload)", source)
         self.assertIn("下载模板", source)
         self.assertIn(':model-value="selectedRetirementView.routeProgress"', source)
         self.assertNotIn("待同步积分时速", source)

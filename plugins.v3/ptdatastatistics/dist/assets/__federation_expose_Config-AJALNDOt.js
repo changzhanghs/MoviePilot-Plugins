@@ -1,5 +1,5 @@
 import { importShared } from './__federation_fn_import-JrT3xvdd.js';
-import { P as PTStatsWorkbench } from './PTStatsWorkbench-D9vd4J-W.js';
+import { P as PTStatsWorkbench } from './PTStatsWorkbench-C6F8GP6t.js';
 
 const {openBlock:_openBlock,createBlock:_createBlock} = await importShared('vue');
 

@@ -1148,6 +1148,8 @@ def build_retirement_progress(
             "route": [],
         }
         rule = _match_named_rule(snapshot.get("site_name"), rules)
+        if not rule:
+            rule = _match_named_rule(snapshot.get("domain"), rules)
         raw_levels = list(rule.get("levels") or []) if rule else []
         retirement_name = as_text(rule.get("retirement_level")) if rule else ""
         if not raw_levels or not retirement_name:
