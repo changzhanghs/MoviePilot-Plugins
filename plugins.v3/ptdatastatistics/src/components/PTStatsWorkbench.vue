@@ -508,21 +508,15 @@ function displayRetirementRoute(site) {
   const currentIndex = route.findIndex(level => level.is_current)
   return currentIndex >= 0 ? route.slice(currentIndex) : route
 }
-function retirementProgressPercent(site) {
-  const route = retirementRoute(site)
-  if (!route.length) return 0
-  if (route.length === 1) return route[0].reached ? 100 : 0
-  let reachedIndex = -1
-  route.forEach((level, index) => {
-    if (level.reached) reachedIndex = index
-  })
-  if (reachedIndex >= route.length - 1) return 100
-  const nextLevel = nextLevelRule(site) || route[Math.max(0, reachedIndex + 1)]
-  const segmentProgress = averageRequirementProgress(requirementRows(site, nextLevel))
-  const completedSegments = Math.max(0, reachedIndex) + segmentProgress / 100
-  return Math.max(0, Math.min(100, completedSegments * 100 / (route.length - 1)))
+function nextLevelOverallProgress(site) {
+  const nextLevel = nextLevelRule(site)
+  if (!nextLevel) return site?.status === 'retired' ? 100 : 0
+  return averageRequirementProgress(requirementRows(site, nextLevel))
 }
 function routeNodeMeta(level) {
+  if (level.seeding_points_eta_hours !== null && level.seeding_points_eta_hours !== undefined) {
+    return `预计 ~${level.seeding_points_eta_hours}H${level.seeding_points_eta_date ? ` · ${level.seeding_points_eta_date}` : ''}`
+  }
   if (level.seeding_points_eta_date) return `预计 ${level.seeding_points_eta_date}`
   if (level.eligible_date && !level.reached) return `最早 ${level.eligible_date}`
   return level.reached ? '已达成' : '预计时间待补充'
@@ -638,6 +632,13 @@ function levelPointsRequirement(level) {
   if (level.min_bonus) return `魔力 ${formatNumber(level.min_bonus, 0)}`
   if (level.min_seeding) return `做种 ${formatNumber(level.min_seeding, 0)}`
   return '—'
+}
+
+function levelPointsEta(level) {
+  if (level?.seeding_points_eta_hours !== null && level?.seeding_points_eta_hours !== undefined) {
+    return `~${level.seeding_points_eta_hours}H${level.seeding_points_eta_date ? ` · ${level.seeding_points_eta_date}` : ''}`
+  }
+  return level?.seeding_points_eta_date || '—'
 }
 function routeMissingLabel(level) {
   return (level?.missing || []).join('；')
@@ -906,9 +907,9 @@ onBeforeUnmount(() => historyChart?.destroy())
                   <span class="retirement-site-option__body">
                     <span class="retirement-site-option__title"><strong>{{ site.site_name }}</strong><em :class="`status-${site.status}`">{{ retirementMeta(site.status).label }}</em></span>
                     <span>{{ site.current_level || '站点未提供等级' }}</span>
-                    <VProgressLinear :model-value="retirementProgressPercent(site)" color="primary" bg-color="surface-variant" height="4" rounded />
+                    <VProgressLinear :model-value="nextLevelOverallProgress(site)" color="primary" bg-color="surface-variant" height="4" rounded />
                   </span>
-                  <small>{{ Math.round(retirementProgressPercent(site)) }}%</small>
+                  <small>{{ nextLevelOverallProgress(site) }}%</small>
                 </button>
               </div>
             </aside>
@@ -986,7 +987,7 @@ onBeforeUnmount(() => historyChart?.destroy())
                       <span>{{ levelTrafficRequirement(level) }}</span>
                       <span>{{ levelRatioRequirement(level) }}</span>
                       <span>{{ levelPointsRequirement(level).replace(/^做种积分\s*/, '') }}</span>
-                      <span>{{ level.seeding_points_eta_date || '—' }}</span>
+                      <span>{{ levelPointsEta(level) }}</span>
                       <em :class="{ 'text-success': level.reached, 'text-warning': !level.reached, 'text-primary': level.is_current }">{{ levelStateLabel(level) }}</em>
                       <VIcon icon="mdi-chevron-down" size="18" />
                     </summary>

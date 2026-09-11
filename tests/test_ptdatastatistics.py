@@ -77,6 +77,33 @@ class PTDCookieCloudTests(unittest.TestCase):
         self.assertEqual(values[0]["estimated_bonus_hourly"], 41.35)
         self.assertEqual(values[0]["seeding_points_hourly"], 12.45)
 
+    def test_ptd_bonus_rate_is_used_for_seeding_points_eta_when_dedicated_rate_is_missing(self):
+        values = ptd_cookiecloud._extract_metrics(
+            {
+                "audiences": {
+                    "site": "audiences",
+                    "seedingBonus": 70_260,
+                    "bonusPerHour": 42.85,
+                }
+            }
+        )
+
+        self.assertEqual(values[0]["estimated_bonus_hourly"], 42.85)
+        self.assertEqual(values[0]["seeding_points_hourly"], 42.85)
+
+    def test_ptd_bonus_rate_fallback_applies_to_every_site(self):
+        values = ptd_cookiecloud._extract_metrics(
+            {
+                "hhanclub": {
+                    "site": "hhanclub",
+                    "seedingBonus": 56_000,
+                    "bonusPerHour": 10_000,
+                }
+            }
+        )
+
+        self.assertEqual(values[0]["seeding_points_hourly"], 10_000)
+
     def test_matches_known_alias_metadata_and_manual_mapping(self):
         configured = [
             {"id": 1, "name": "观众", "domain": "audiences.me"},
@@ -441,6 +468,30 @@ class TwelveAndExportTests(unittest.TestCase):
         )
         self.assertIn("分享率需大于 2", power["missing"])
 
+    def test_audiences_points_eta_matches_ptd_remaining_hours(self):
+        progress = core.build_retirement_progress(
+            [{
+                "site_id": 1,
+                "site_name": "观众",
+                "user_level": "User",
+                "join_at": "2026-01-01",
+                "updated_day": "2026-09-11",
+                "download": 200 * core.GIB,
+                "upload": 500 * core.GIB,
+                "ratio": 3,
+                "seeding_points": 70_260,
+                "seeding_points_hourly": 42.85,
+            }],
+        )
+
+        power = next(
+            level for level in progress["sites"][0]["route"]
+            if level["name"] == "Power User"
+        )
+        self.assertEqual(power["seeding_points_eta_hours"], 694)
+        self.assertEqual(power["seeding_points_eta_days"], 29)
+        self.assertEqual(power["seeding_points_eta_date"], "2026-10-10")
+
     def test_audiences_seeding_points_gap_uses_readable_integer_format(self):
         missing = core._requirement_missing(
             {"min_seeding_points": 1_500_000},
@@ -556,6 +607,7 @@ class TwelveAndExportTests(unittest.TestCase):
         self.assertTrue(levels["Ultimate User"]["is_retirement"])
         self.assertEqual(levels["Power User"]["seeding_points_eta_days"], 1)
         self.assertEqual(levels["Power User"]["seeding_points_eta_date"], "2026-09-12")
+        self.assertEqual(levels["Power User"]["seeding_points_eta_hours"], 0)
 
     def test_hhan_points_eta_never_uses_magic_rate(self):
         progress = core.build_retirement_progress(
@@ -753,7 +805,8 @@ class PackagingTests(unittest.TestCase):
         manifest = json.loads((ROOT / "package.v3.json").read_text(encoding="utf-8"))
         meta = manifest["PTDataStatistics"]
         source = (PLUGIN / "__init__.py").read_text(encoding="utf-8")
-        self.assertEqual(meta["version"], "1.1.5")
+        self.assertEqual(meta["version"], "1.1.6")
+        self.assertEqual(meta["history"]["v1.1.6"], "更新了一些东西")
         self.assertEqual(meta["history"]["v1.1.5"], "更新了一些东西")
         self.assertEqual(meta["history"]["v1.1.4"], "更新了一些东西")
         self.assertEqual(meta["history"]["v1.1.3"], "更新了一些东西")
@@ -769,8 +822,8 @@ class PackagingTests(unittest.TestCase):
         self.assertEqual(meta["history"]["v1.0.2"], "更新了一些东西")
         self.assertEqual(meta["history"]["v1.0.1"], "更新了一些东西")
         self.assertEqual(meta["history"]["v1.0.0"], "更新了一些东西")
-        self.assertEqual(list(meta["history"]), ["v1.1.5", "v1.1.4", "v1.1.3", "v1.1.2", "v1.1.1", "v1.1.0", "v1.0.10", "v1.0.9", "v1.0.8", "v1.0.7", "v1.0.6", "v1.0.5", "v1.0.4", "v1.0.3", "v1.0.2", "v1.0.1", "v1.0.0"])
-        self.assertIn('plugin_version = "1.1.5"', source)
+        self.assertEqual(list(meta["history"]), ["v1.1.6", "v1.1.5", "v1.1.4", "v1.1.3", "v1.1.2", "v1.1.1", "v1.1.0", "v1.0.10", "v1.0.9", "v1.0.8", "v1.0.7", "v1.0.6", "v1.0.5", "v1.0.4", "v1.0.3", "v1.0.2", "v1.0.1", "v1.0.0"])
+        self.assertIn('plugin_version = "1.1.6"', source)
         self.assertEqual(meta["system_version"], ">=3.0.0")
         self.assertNotIn("release", meta)
 
@@ -913,9 +966,9 @@ class PackagingTests(unittest.TestCase):
         self.assertIn('<details v-for="level in selectedRetirementView.route"', source)
         self.assertIn(':model-value="selectedRetirementView.routeProgress"', source)
         self.assertNotIn("待同步积分时速", source)
-        self.assertIn("retirementProgressPercent(site)", source)
-        self.assertIn("const segmentProgress = averageRequirementProgress(requirementRows(site, nextLevel))", source)
-        self.assertIn("const completedSegments = Math.max(0, reachedIndex) + segmentProgress / 100", source)
+        self.assertIn("nextLevelOverallProgress(site)", source)
+        self.assertIn("return averageRequirementProgress(requirementRows(site, nextLevel))", source)
+        self.assertNotIn("retirementProgressPercent(site)", source)
         self.assertIn("const overallProgress = averageRequirementProgress(requirements)", source)
         self.assertNotIn("retirement-preview-grid", source)
         self.assertNotIn("retirement-mini-progress", source)

@@ -108,6 +108,7 @@ class LevelRequirementData(BaseModel):
     min_bonus: float | None = None
     min_seeding_points: float | None = None
     min_seeding_points_strict: bool = False
+    seeding_points_eta_hours: int | None = None
     seeding_points_eta_days: int | None = None
     seeding_points_eta_date: str = ""
     min_seeding: int = 0
