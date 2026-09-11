@@ -16422,6 +16422,10 @@ async function saveSettings() {
     const payload = JSON.parse(JSON.stringify(settingsDraft.value));
     delete payload.sync_interval_minutes;
     if (props.hostManagedConfig) {
+      const data = unwrapResponse(await props.api.post(`${pluginBase.value}/settings`, payload)) || {};
+      settingsDraft.value = JSON.parse(JSON.stringify(data.settings || payload));
+      exportFields.value = data.export_fields || exportFields.value;
+      notify('设置已保存');
       emit('save', payload);
       return
     }
@@ -18171,6 +18175,6 @@ return (_ctx, _cache) => {
 }
 
 };
-const PTStatsWorkbench = /*#__PURE__*/_export_sfc(_sfc_main, [['__scopeId',"data-v-8e337d90"]]);
+const PTStatsWorkbench = /*#__PURE__*/_export_sfc(_sfc_main, [['__scopeId',"data-v-39721865"]]);
 
 export { PTStatsWorkbench as P };
