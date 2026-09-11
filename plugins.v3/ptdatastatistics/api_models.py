@@ -359,6 +359,7 @@ class SettingsResponse(BaseModel):
 
     settings: SettingsData
     export_fields: list[ExportFieldData] = Field(default_factory=list)
+    rule_sites: list[str] = Field(default_factory=list)
 
 
 class SyncResponse(BaseModel):

@@ -15956,10 +15956,13 @@ const _hoisted_118 = {
   class: "ptd-settings-grid"
 };
 const _hoisted_119 = { class: "settings-card settings-card--wide" };
-const _hoisted_120 = { class: "rules-upload" };
-const _hoisted_121 = { key: 0 };
-const _hoisted_122 = { key: 0 };
-const _hoisted_123 = { class: "rules-upload__actions" };
+const _hoisted_120 = { class: "section-heading" };
+const _hoisted_121 = { class: "rules-upload__actions" };
+const _hoisted_122 = {
+  key: 0,
+  class: "rules-upload"
+};
+const _hoisted_123 = { key: 0 };
 const _hoisted_124 = { class: "settings-card settings-card--wide" };
 const _hoisted_125 = { class: "data-actions" };
 const _hoisted_126 = { class: "settings-card settings-card--wide settings-actions" };
@@ -16005,6 +16008,7 @@ const overview = ref({
 const distribution = ref({ month: '', day: '', monthly: [], daily: [] });
 const distributionFilters = ref({ month: '', day: '' });
 const distributionMetric = ref('upload');
+const ruleAnchorSites = ref([]);
 const siteSortKey = ref('upload');
 const siteSortOptions = [
   { title: '累计上传', value: 'upload' },
@@ -16376,6 +16380,7 @@ async function loadAll() {
       ...hostSettings,
     }));
     exportFields.value = parsed.export_fields || [];
+    ruleAnchorSites.value = parsed.rule_sites || [];
     setDefaultRanges();
     await loadDistribution();
   } catch (err) {
@@ -16426,6 +16431,7 @@ async function saveSettings() {
       const data = unwrapResponse(await props.api.post(`${pluginBase.value}/settings`, payload)) || {};
       settingsDraft.value = JSON.parse(JSON.stringify(data.settings || payload));
       exportFields.value = data.export_fields || exportFields.value;
+      ruleAnchorSites.value = data.rule_sites || ruleAnchorSites.value;
       notify('设置已保存');
       emit('save', payload);
       return
@@ -16433,6 +16439,7 @@ async function saveSettings() {
     const data = unwrapResponse(await props.api.post(`${pluginBase.value}/settings`, payload)) || {};
     settingsDraft.value = JSON.parse(JSON.stringify(data.settings || settingsDraft.value));
     exportFields.value = data.export_fields || exportFields.value;
+    ruleAnchorSites.value = data.rule_sites || ruleAnchorSites.value;
     notify('设置已保存');
     emit('action');
   } catch (err) {
@@ -16496,16 +16503,30 @@ function normalizeUploadedRules(payload) {
   if (rules.length > 100) throw new Error('单个规则文件最多包含 100 个站点')
   return rules
 }
+function normalizedSiteName(value) {
+  return String(value || '').trim().toLocaleLowerCase()
+}
+function alignRulesToMoviePilotSites(rules) {
+  const moviePilotNames = new Map(
+    (ruleAnchorSites.value || []).map(name => [normalizedSiteName(name), String(name).trim()]).filter(([key]) => key)
+  );
+  if (!moviePilotNames.size) throw new Error('MoviePilot 当前没有可用于匹配的站点名称')
+  return rules.map(rule => {
+    const matchedName = moviePilotNames.get(normalizedSiteName(rule.site));
+    if (!matchedName) throw new Error(`${rule.site} 未匹配到 MoviePilot 站点名称`)
+    return { ...rule, site: matchedName, aliases: [] }
+  })
+}
 async function uploadRuleFile(event) {
   const file = event?.target?.files?.[0];
   if (!file) return
   try {
     if (file.size > 2 * 1024 * 1024) throw new Error('规则文件不能超过 2 MB')
     const payload = JSON.parse(await file.text());
-    const rules = normalizeUploadedRules(payload);
+    const rules = alignRulesToMoviePilotSites(normalizeUploadedRules(payload));
     settingsDraft.value.custom_retirement_rules = rules;
     rulesUploadName.value = file.name;
-    notify(`已载入 ${rules.length} 个站点规则，请保存设置后生效`);
+    notify(`已按 MoviePilot 站点名称载入 ${rules.length} 个站点规则，请保存设置后生效`);
   } catch (err) {
     notify(err instanceof SyntaxError ? '规则文件不是有效的 JSON' : err?.message || '读取规则文件失败', 'error');
   } finally {
@@ -16517,26 +16538,18 @@ function clearUploadedRules() {
   rulesUploadName.value = '';
   notify('已清空自定义规则，请保存设置后生效', 'warning');
 }
-function downloadRuleTemplate() {
-  const template = {
-    version: 1,
-    rules: [{
-      site: '站点显示名称',
-      aliases: ['example.org'],
-      retirement_level: 'Extreme User',
-      levels: [
-        { name: 'User', description: '默认等级' },
-        { name: 'Power User', min_join_days: 28, min_upload: 53687091200, min_ratio: 1.5 },
-        { name: 'Extreme User', min_join_days: 168, min_upload: 2199023255552, min_ratio: 4, description: '达到后永久保号' },
-      ],
-    }],
-  };
-  const url = URL.createObjectURL(new Blob([JSON.stringify(template, null, 2)], { type: 'application/json' }));
-  const anchor = document.createElement('a');
-  anchor.href = url;
-  anchor.download = 'pt-level-rules-template.json';
-  anchor.click();
-  URL.revokeObjectURL(url);
+async function downloadRuleTemplate() {
+  try {
+    const template = unwrapResponse(await props.api.get(`${pluginBase.value}/rules/template`, { feedback: 'silent' }));
+    const url = URL.createObjectURL(new Blob([JSON.stringify(template, null, 2)], { type: 'application/json' }));
+    const anchor = document.createElement('a');
+    anchor.href = url;
+    anchor.download = 'mteam-level-rules-template.json';
+    anchor.click();
+    URL.revokeObjectURL(url);
+  } catch (err) {
+    notify(err?.message || '下载规则模板失败', 'error');
+  }
 }
 function distributionSegments(items) {
   const key = distributionMetric.value;
@@ -18018,31 +18031,12 @@ return (_ctx, _cache) => {
                 _cache[84] || (_cache[84] = _createElementVNode("div", { class: "setting-hint mt-3" }, "先保存本页，再在 PTD 中新增 CookieCloud 备份服务器：地址使用上方接收地址，UUID、密码和可选 Headers 与这里保持一致；备份项目勾选“用户信息”。收到新备份后会立即解析并覆盖上一份数据，过程可在 MoviePilot 插件日志中查看。", -1))
               ]),
               _createElementVNode("div", _hoisted_119, [
-                _cache[88] || (_cache[88] = _createElementVNode("div", { class: "section-heading" }, [
-                  _createElementVNode("div", null, [
+                _createElementVNode("div", _hoisted_120, [
+                  _cache[88] || (_cache[88] = _createElementVNode("div", null, [
                     _createElementVNode("span", { class: "section-kicker" }, "LEVEL RULES"),
                     _createElementVNode("h2", null, "等级规则")
-                  ])
-                ], -1)),
-                _createElementVNode("input", {
-                  ref_key: "rulesFileInput",
-                  ref: rulesFileInput,
-                  class: "rules-file-input",
-                  type: "file",
-                  accept: "application/json,.json",
-                  onChange: uploadRuleFile
-                }, null, 544),
-                _createElementVNode("div", _hoisted_120, [
-                  (customRuleSites.value.length)
-                    ? (_openBlock(), _createElementBlock("div", _hoisted_121, [
-                        _createElementVNode("strong", null, "已载入 " + _toDisplayString(customRuleSites.value.length) + " 个站点", 1),
-                        _createElementVNode("p", null, _toDisplayString(customRuleSites.value.join('、')), 1),
-                        (rulesUploadName.value)
-                          ? (_openBlock(), _createElementBlock("small", _hoisted_122, "文件：" + _toDisplayString(rulesUploadName.value), 1))
-                          : _createCommentVNode("", true)
-                      ]))
-                    : _createCommentVNode("", true),
-                  _createElementVNode("div", _hoisted_123, [
+                  ], -1)),
+                  _createElementVNode("div", _hoisted_121, [
                     _createVNode(_component_VBtn, {
                       variant: "tonal",
                       color: "primary",
@@ -18080,7 +18074,26 @@ return (_ctx, _cache) => {
                       : _createCommentVNode("", true)
                   ])
                 ]),
-                _cache[89] || (_cache[89] = _createElementVNode("div", { class: "setting-hint mt-3" }, "支持单个或多个站点；流量门槛使用字节，等级按 levels 中的顺序展示。文件只写入插件设置，不会上传到外部服务。", -1))
+                _createElementVNode("input", {
+                  ref_key: "rulesFileInput",
+                  ref: rulesFileInput,
+                  class: "rules-file-input",
+                  type: "file",
+                  accept: "application/json,.json",
+                  onChange: uploadRuleFile
+                }, null, 544),
+                (customRuleSites.value.length)
+                  ? (_openBlock(), _createElementBlock("div", _hoisted_122, [
+                      _createElementVNode("div", null, [
+                        _createElementVNode("strong", null, "已载入 " + _toDisplayString(customRuleSites.value.length) + " 个站点", 1),
+                        _createElementVNode("p", null, _toDisplayString(customRuleSites.value.join('、')), 1),
+                        (rulesUploadName.value)
+                          ? (_openBlock(), _createElementBlock("small", _hoisted_123, "文件：" + _toDisplayString(rulesUploadName.value), 1))
+                          : _createCommentVNode("", true)
+                      ])
+                    ]))
+                  : _createCommentVNode("", true),
+                _cache[89] || (_cache[89] = _createElementVNode("div", { class: "setting-hint mt-3" }, "支持单个或多个站点；流量门槛使用字节，等级按 levels 中的顺序展示。模板中的 _comment 仅用于说明，导入时忽略；文件只写入插件设置，不会上传到外部服务。", -1))
               ]),
               _createElementVNode("div", _hoisted_124, [
                 _cache[93] || (_cache[93] = _createElementVNode("div", { class: "section-heading" }, [
@@ -18179,6 +18192,6 @@ return (_ctx, _cache) => {
 }
 
 };
-const PTStatsWorkbench = /*#__PURE__*/_export_sfc(_sfc_main, [['__scopeId',"data-v-bc0dcc41"]]);
+const PTStatsWorkbench = /*#__PURE__*/_export_sfc(_sfc_main, [['__scopeId',"data-v-a779c85f"]]);
 
 export { PTStatsWorkbench as P };

@@ -114,11 +114,22 @@ class HostContractTests(unittest.TestCase):
         self.assertIn(("/overview", ("GET",)), paths)
         self.assertIn(("/distribution", ("GET",)), paths)
         self.assertIn(("/settings", ("POST",)), paths)
+        self.assertIn(("/rules/template", ("GET",)), paths)
         self.assertIn(("/cookiecloud", ("GET",)), paths)
         self.assertIn(("/cookiecloud/update", ("POST",)), paths)
         receiver_routes = [item for item in plugin.get_api() if item["path"].startswith("/cookiecloud")]
         self.assertTrue(all(item.get("allow_anonymous") is True for item in receiver_routes))
         self.assertNotIn(("/export/xlsx", ("GET",)), paths)
+
+        template = plugin.api_rule_template()
+        self.assertEqual(template["rules"][0]["site"], "馒头")
+        self.assertEqual(template["rules"][0]["retirement_level"], "Extreme User")
+        self.assertEqual(len(template["rules"][0]["levels"]), 9)
+        self.assertTrue(template["_comment"])
+        self.assertEqual(len(SettingsData(custom_retirement_rules=template["rules"]).custom_retirement_rules), 1)
+
+        plugin._configured_sites = lambda: [{"id": 7, "name": "馒头", "domain": "kp.m-team.cc"}]
+        self.assertEqual(plugin.api_settings().rule_sites, ["馒头"])
 
     def test_settings_are_clamped_and_modes_filtered(self):
         value = SettingsData(
@@ -138,7 +149,6 @@ class HostContractTests(unittest.TestCase):
     def test_uploaded_level_rules_are_validated_and_override_builtins(self):
         value = SettingsData(custom_retirement_rules=[{
             "site": "红豆饭",
-            "aliases": ["HDFans-Custom"],
             "retirement_level": "Keeper",
             "levels": [
                 {"name": "User"},
@@ -146,12 +156,18 @@ class HostContractTests(unittest.TestCase):
             ],
         }])
         plugin = PTDataStatistics.__new__(PTDataStatistics)
-        plugin.init_plugin(value.model_dump())
+        with patch.object(plugin_module.logger, "info") as log_info:
+            plugin.init_plugin(value.model_dump())
+
+        self.assertTrue(any(
+            "自定义等级规则已加载：1 个站点（红豆饭）" in str(call.args[0])
+            for call in log_info.call_args_list
+        ))
 
         rules = plugin._retirement_rules()
 
         self.assertEqual(rules["红豆饭"]["retirement_level"], "Keeper")
-        self.assertEqual(rules["HDFans-Custom"]["levels"][1]["min_upload"], 1024)
+        self.assertEqual(rules["红豆饭"]["levels"][1]["min_upload"], 1024)
         self.assertIn("观众", rules)
         progress = importlib.import_module("ptdatastatistics.core").build_retirement_progress(
             [{"site_name": "红豆饭", "user_level": "User", "updated_day": "2026-09-12"}],
@@ -164,7 +180,7 @@ class HostContractTests(unittest.TestCase):
             [{"site_name": "红豆饭 HDFans", "user_level": "User", "updated_day": "2026-09-12"}],
             rules,
         )
-        self.assertEqual(decorated["sites"][0]["retirement_level"], "Keeper")
+        self.assertNotEqual(decorated["sites"][0]["retirement_level"], "Keeper")
 
     def test_uploaded_level_rule_requires_retirement_level_in_route(self):
         with self.assertRaisesRegex(ValueError, "保号等级不在等级路线中"):
