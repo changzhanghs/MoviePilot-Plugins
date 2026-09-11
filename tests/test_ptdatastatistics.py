@@ -446,7 +446,7 @@ class TwelveAndExportTests(unittest.TestCase):
             {"seeding_points": 70_260},
         )
 
-        self.assertIn("做种积分还差 1,429,740", missing)
+        self.assertIn("做种积分剩余 1,429,740", missing)
         self.assertFalse(any("e+" in item.casefold() for item in missing))
 
     def test_strict_seeding_points_at_threshold_does_not_report_zero_gap(self):
@@ -459,7 +459,7 @@ class TwelveAndExportTests(unittest.TestCase):
         )
 
         self.assertIn("做种积分需大于 80,000", missing)
-        self.assertNotIn("做种积分还差 0", missing)
+        self.assertNotIn("做种积分剩余 0", missing)
 
     def test_mteam_retirement_rules_match_published_level_route(self):
         progress = core.build_retirement_progress(
@@ -486,9 +486,9 @@ class TwelveAndExportTests(unittest.TestCase):
         self.assertTrue(levels["Power User"]["min_upload_strict"])
         self.assertTrue(levels["Power User"]["min_download_strict"])
         self.assertTrue(levels["Power User"]["min_ratio_strict"])
-        self.assertIn("账号时间还差 1 天", levels["Power User"]["missing"])
+        self.assertIn("账号时间剩余 1 天", levels["Power User"]["missing"])
         self.assertIn("下载需大于 200.0 GB", levels["Power User"]["missing"])
-        self.assertIn("上传还差 400.0 GB", levels["Power User"]["missing"])
+        self.assertIn("上传剩余 400.0 GB", levels["Power User"]["missing"])
         self.assertIn("分享率需大于 2", levels["Power User"]["missing"])
         self.assertTrue(levels["Extreme User"]["is_retirement"])
         self.assertIn("永久保号", levels["Extreme User"]["description"])
@@ -535,7 +535,7 @@ class TwelveAndExportTests(unittest.TestCase):
         self.assertEqual(levels["Power User"]["min_seeding_points"], 80_000)
         self.assertTrue(levels["Power User"]["min_seeding_points_strict"])
         self.assertIsNone(levels["Power User"]["min_bonus"])
-        self.assertIn("做种积分还差 1", levels["Power User"]["missing"])
+        self.assertIn("做种积分剩余 1", levels["Power User"]["missing"])
         self.assertFalse(any("魔力" in item for item in levels["Power User"]["missing"]))
         self.assertEqual(levels["Power User"]["min_upload"], 63 * core.GIB)
         self.assertEqual(
@@ -752,7 +752,8 @@ class PackagingTests(unittest.TestCase):
         manifest = json.loads((ROOT / "package.v3.json").read_text(encoding="utf-8"))
         meta = manifest["PTDataStatistics"]
         source = (PLUGIN / "__init__.py").read_text(encoding="utf-8")
-        self.assertEqual(meta["version"], "1.1.1")
+        self.assertEqual(meta["version"], "1.1.2")
+        self.assertEqual(meta["history"]["v1.1.2"], "更新了一些内容")
         self.assertEqual(meta["history"]["v1.1.1"], "更新了一些内容")
         self.assertEqual(meta["history"]["v1.1.0"], "更新了一些内容")
         self.assertEqual(meta["history"]["v1.0.10"], "更新了一些内容")
@@ -765,8 +766,8 @@ class PackagingTests(unittest.TestCase):
         self.assertEqual(meta["history"]["v1.0.2"], "更新了一些东西")
         self.assertEqual(meta["history"]["v1.0.1"], "更新了一些东西")
         self.assertEqual(meta["history"]["v1.0.0"], "更新了一些东西")
-        self.assertEqual(list(meta["history"]), ["v1.1.1", "v1.1.0", "v1.0.10", "v1.0.9", "v1.0.8", "v1.0.7", "v1.0.6", "v1.0.5", "v1.0.4", "v1.0.3", "v1.0.2", "v1.0.1", "v1.0.0"])
-        self.assertIn('plugin_version = "1.1.1"', source)
+        self.assertEqual(list(meta["history"]), ["v1.1.2", "v1.1.1", "v1.1.0", "v1.0.10", "v1.0.9", "v1.0.8", "v1.0.7", "v1.0.6", "v1.0.5", "v1.0.4", "v1.0.3", "v1.0.2", "v1.0.1", "v1.0.0"])
+        self.assertIn('plugin_version = "1.1.2"', source)
         self.assertEqual(meta["system_version"], ">=3.0.0")
         self.assertNotIn("release", meta)
 
@@ -811,7 +812,7 @@ class PackagingTests(unittest.TestCase):
         self.assertNotIn("item.state === 'joined' ? item.name : '未解锁'", source)
         self.assertNotIn('class="twelve-node__latest"', source)
         self.assertNotIn('>最近加入</span>', source)
-        self.assertIn('class="twelve-remaining">还差', source)
+        self.assertIn('class="twelve-remaining">剩余', source)
         self.assertNotIn(":hint=\"`服务器日期 ${overview.server_date || '—'}`\"", source)
         self.assertNotIn("查询数据</VBtn>", source)
         self.assertIn(":label=\"panel.inputLabel\"", source)
@@ -887,7 +888,7 @@ class PackagingTests(unittest.TestCase):
         self.assertIn("--route-count", source)
         self.assertIn(".retirement-detail{min-width:0;min-height:0;overflow:visible", source)
         self.assertNotIn(".retirement-detail{min-width:0;min-height:0;overflow-y:auto", source)
-        self.assertNotIn("距离保号还差", source)
+        self.assertNotIn("还差", source)
         self.assertNotIn("MoviePilot 不提供站点等级门槛和保号等级", source)
         self.assertIn('class="requirement-panel"', source)
         self.assertIn('class="retirement-levels"', source)
