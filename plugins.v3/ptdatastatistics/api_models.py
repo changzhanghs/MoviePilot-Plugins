@@ -13,6 +13,7 @@ class SiteSnapshotData(BaseModel):
     id: int | None = None
     site_id: int | None = None
     site_name: str = ""
+    site_priority: int | None = None
     is_active: bool = False
     username: str = ""
     userid: str = ""
@@ -124,6 +125,7 @@ class RetirementSiteData(BaseModel):
 
     site_id: int | None = None
     site_name: str = ""
+    site_priority: int | None = None
     current_level: str = ""
     next_level: str = ""
     retirement_level: str = ""

@@ -1105,6 +1105,7 @@ def build_retirement_progress(
         base = {
             "site_id": snapshot.get("site_id"),
             "site_name": as_text(snapshot.get("site_name")),
+            "site_priority": snapshot.get("site_priority"),
             "current_level": as_text(snapshot.get("user_level")),
             "next_level": "",
             "retirement_level": "",
