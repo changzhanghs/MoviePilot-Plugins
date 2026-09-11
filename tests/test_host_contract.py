@@ -139,6 +139,22 @@ class HostContractTests(unittest.TestCase):
     def _request(headers: list[tuple[bytes, bytes]] | None = None) -> Request:
         return Request({"type": "http", "method": "GET", "path": "/", "headers": headers or []})
 
+    def test_saved_ptd_metrics_gain_ptd_hourly_fallback_without_new_backup(self):
+        plugin = PTDataStatistics.__new__(PTDataStatistics)
+        plugin.init_plugin({"enabled": True, "ptd_cookiecloud_enabled": True})
+        plugin.get_data = lambda key: {
+            "metrics": [{
+                "domain": "audiences.me",
+                "seeding_points": 70_260,
+                "estimated_bonus_hourly": 42.85,
+                "seeding_points_hourly": None,
+            }]
+        } if key == "ptd_latest_metrics_v1" else None
+
+        metric = plugin._ptd_metrics_by_domain()["audiences.me"]
+
+        self.assertEqual(metric["seeding_points_hourly"], 42.85)
+
     def test_ptd_receiver_replaces_the_single_latest_payload(self):
         plugin = PTDataStatistics.__new__(PTDataStatistics)
         plugin.init_plugin(

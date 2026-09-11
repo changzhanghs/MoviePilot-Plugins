@@ -514,9 +514,6 @@ function nextLevelOverallProgress(site) {
   return averageRequirementProgress(requirementRows(site, nextLevel))
 }
 function routeNodeMeta(level) {
-  if (level.seeding_points_eta_hours !== null && level.seeding_points_eta_hours !== undefined) {
-    return `预计 ~${level.seeding_points_eta_hours}H${level.seeding_points_eta_date ? ` · ${level.seeding_points_eta_date}` : ''}`
-  }
   if (level.seeding_points_eta_date) return `预计 ${level.seeding_points_eta_date}`
   if (level.eligible_date && !level.reached) return `最早 ${level.eligible_date}`
   return level.reached ? '已达成' : '预计时间待补充'

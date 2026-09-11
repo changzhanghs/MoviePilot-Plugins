@@ -67,7 +67,7 @@ class PTDataStatistics(_PluginBase):
     plugin_name = "PT数据统计"
     plugin_desc = "统计 PT 站点累计与每日上传下载，提供历史、通知和导出。"
     plugin_icon = "ptdatastatistics.svg"
-    plugin_version = "1.1.6"
+    plugin_version = "1.1.7"
     plugin_author = "cz"
     author_url = "https://github.com/changzhanghs"
     plugin_config_prefix = "ptdatastatistics_"
@@ -560,11 +560,21 @@ class PTDataStatistics(_PluginBase):
             return {}
         saved = self.get_data("ptd_latest_metrics_v1") or {}
         values = saved.get("metrics") if isinstance(saved, dict) else []
-        return {
-            as_text(item.get("domain")).casefold(): item
-            for item in (values or [])
-            if isinstance(item, dict) and item.get("domain")
-        }
+        metrics: dict[str, dict[str, Any]] = {}
+        for saved_item in values or []:
+            if not isinstance(saved_item, dict) or not saved_item.get("domain"):
+                continue
+            item = dict(saved_item)
+            # Upgrade already-imported v1.1.5/v1.1.6 data in memory so users do
+            # not have to send another PTD backup before all sites receive the
+            # same bonusPerHour fallback used by PTD's remaining-time display.
+            if (
+                item.get("seeding_points_hourly") is None
+                and item.get("estimated_bonus_hourly") is not None
+            ):
+                item["seeding_points_hourly"] = item["estimated_bonus_hourly"]
+            metrics[as_text(item.get("domain")).casefold()] = item
+        return metrics
 
     def sync_from_mp(self, *, full: bool = False, site_id: int | None = None) -> SyncResponse:
         """只读 MoviePilot 的站点数据并复制到插件历史库。"""
