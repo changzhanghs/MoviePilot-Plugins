@@ -74,6 +74,7 @@ class PTDCookieCloudTests(unittest.TestCase):
 
         self.assertEqual(values[0]["seeding_points"], 439_222)
         self.assertEqual(values[0]["estimated_bonus_hourly"], 41.35)
+        self.assertEqual(values[0]["seeding_points_hourly"], 12.45)
 
     def test_matches_known_alias_metadata_and_manual_mapping(self):
         configured = [
@@ -138,6 +139,7 @@ class PTDCookieCloudTests(unittest.TestCase):
         self.assertEqual(backup.name, "PTD_backup_current")
         self.assertEqual(backup.metrics[0]["seeding_points"], 1200)
         self.assertIsNone(backup.metrics[0]["estimated_bonus_hourly"])
+        self.assertEqual(backup.metrics[0]["seeding_points_hourly"], 3.5)
 
 class DeltaTests(unittest.TestCase):
     def test_requires_exact_previous_server_day(self):
@@ -522,6 +524,7 @@ class TwelveAndExportTests(unittest.TestCase):
                 "ratio": 1.1,
                 "bonus": 9_999_999,
                 "seeding_points": 79_999,
+                "seeding_points_hourly": 10,
             }],
         )
         site = progress["sites"][0]
@@ -550,6 +553,33 @@ class TwelveAndExportTests(unittest.TestCase):
             )
         ))
         self.assertTrue(levels["Ultimate User"]["is_retirement"])
+        self.assertEqual(levels["Power User"]["seeding_points_eta_days"], 1)
+        self.assertEqual(levels["Power User"]["seeding_points_eta_date"], "2026-09-12")
+
+    def test_hhan_points_eta_never_uses_magic_rate(self):
+        progress = core.build_retirement_progress(
+            [{
+                "site_id": 1,
+                "site_name": "憨憨",
+                "user_level": "憨头憨脑 User",
+                "join_at": "2026-01-01",
+                "updated_day": "2026-09-11",
+                "upload": 100 * core.GIB,
+                "download": 60 * core.GIB,
+                "ratio": 1.1,
+                "bonus": 999_999,
+                "estimated_bonus_hourly": 10_000,
+                "seeding_points": 56_000,
+                "seeding_points_hourly": 100,
+            }],
+        )
+
+        power = next(
+            level for level in progress["sites"][0]["route"]
+            if level["name"] == "Power User"
+        )
+        self.assertEqual(power["seeding_points_eta_days"], 11)
+        self.assertEqual(power["seeding_points_eta_date"], "2026-09-22")
 
     def test_home_retirement_rules_match_published_requirements(self):
         progress = core.build_retirement_progress(
@@ -722,7 +752,8 @@ class PackagingTests(unittest.TestCase):
         manifest = json.loads((ROOT / "package.v3.json").read_text(encoding="utf-8"))
         meta = manifest["PTDataStatistics"]
         source = (PLUGIN / "__init__.py").read_text(encoding="utf-8")
-        self.assertEqual(meta["version"], "1.1.0")
+        self.assertEqual(meta["version"], "1.1.1")
+        self.assertEqual(meta["history"]["v1.1.1"], "更新了一些内容")
         self.assertEqual(meta["history"]["v1.1.0"], "更新了一些内容")
         self.assertEqual(meta["history"]["v1.0.10"], "更新了一些内容")
         self.assertEqual(meta["history"]["v1.0.9"], "更新了一些内容")
@@ -734,8 +765,8 @@ class PackagingTests(unittest.TestCase):
         self.assertEqual(meta["history"]["v1.0.2"], "更新了一些东西")
         self.assertEqual(meta["history"]["v1.0.1"], "更新了一些东西")
         self.assertEqual(meta["history"]["v1.0.0"], "更新了一些东西")
-        self.assertEqual(list(meta["history"]), ["v1.1.0", "v1.0.10", "v1.0.9", "v1.0.8", "v1.0.7", "v1.0.6", "v1.0.5", "v1.0.4", "v1.0.3", "v1.0.2", "v1.0.1", "v1.0.0"])
-        self.assertIn('plugin_version = "1.1.0"', source)
+        self.assertEqual(list(meta["history"]), ["v1.1.1", "v1.1.0", "v1.0.10", "v1.0.9", "v1.0.8", "v1.0.7", "v1.0.6", "v1.0.5", "v1.0.4", "v1.0.3", "v1.0.2", "v1.0.1", "v1.0.0"])
+        self.assertIn('plugin_version = "1.1.1"', source)
         self.assertEqual(meta["system_version"], ">=3.0.0")
         self.assertNotIn("release", meta)
 

@@ -13,7 +13,7 @@ from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
 from cryptography.hazmat.primitives.padding import PKCS7
 
 
-_METRIC_KEYS = {"seedingBonus", "bonusPerHour"}
+_METRIC_KEYS = {"seedingBonus", "bonusPerHour", "seedingBonusPerHour"}
 _KNOWN_ALIASES = {
     "mteam": ("馒头", "mteam", "m-team"),
     "audiences": ("观众", "audiences", "audience"),
@@ -99,12 +99,12 @@ def _extract_metrics(user_info: Any) -> list[dict[str, Any]]:
             continue
         day_key, record = max(records, key=lambda item: _record_score(item[1], item[0]))
         seeding_points = _number(record.get("seedingBonus"))
-        # PTD keeps two different rates: bonusPerHour is the site's hourly
-        # magic/bonus gain, while seedingBonusPerHour is the hourly gain of
-        # seeding points. They differ on sites such as HHanClub and cannot be
-        # used interchangeably.
+        # PTD keeps two independent rates.  HHanClub in particular applies
+        # different rules to magic and seeding points, so never substitute one
+        # for the other.
         bonus_hourly = _number(record.get("bonusPerHour"))
-        if seeding_points is None and bonus_hourly is None:
+        seeding_points_hourly = _number(record.get("seedingBonusPerHour"))
+        if seeding_points is None and bonus_hourly is None and seeding_points_hourly is None:
             continue
         output.append(
             {
@@ -112,6 +112,7 @@ def _extract_metrics(user_info: Any) -> list[dict[str, Any]]:
                 "site_name": str(record.get("siteName") or record.get("name") or ""),
                 "seeding_points": seeding_points,
                 "estimated_bonus_hourly": bonus_hourly,
+                "seeding_points_hourly": seeding_points_hourly,
                 "source_updated_at": str(record.get("updateAt") or day_key or ""),
             }
         )

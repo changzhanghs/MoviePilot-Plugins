@@ -67,7 +67,7 @@ class PTDataStatistics(_PluginBase):
     plugin_name = "PT数据统计"
     plugin_desc = "统计 PT 站点累计与每日上传下载，提供历史、通知和导出。"
     plugin_icon = "ptdatastatistics.svg"
-    plugin_version = "1.1.0"
+    plugin_version = "1.1.1"
     plugin_author = "cz"
     author_url = "https://github.com/changzhanghs"
     plugin_config_prefix = "ptdatastatistics_"
@@ -510,6 +510,16 @@ class PTDataStatistics(_PluginBase):
             f"PTD CookieCloud 备份导入成功：{backup.name}，"
             f"读取 {len(backup.metrics)} 个站点，匹配 {len(matched)} 个站点；旧数据已覆盖"
         )
+        missing_magic = [
+            as_text(item.get("site_name") or item.get("ptd_site"))
+            for item in matched
+            if item.get("estimated_bonus_hourly") is None
+        ]
+        if missing_magic:
+            logger.warning(
+                "PTD 备份未提供以下站点的时魔，界面将显示暂不可估算："
+                + "、".join(name for name in missing_magic if name)
+            )
         return CookieCloudActionResponse(action="done")
 
     def api_cookiecloud_get(self, uuid: str, request: Request) -> CookieCloudEncryptedData:
@@ -723,15 +733,23 @@ class PTDataStatistics(_PluginBase):
                     previous_bonus_rows.get(domain),
                 ) if domain in valid_by_domain else None,
                 "seeding_points": None,
+                "seeding_points_hourly": None,
             }
             ptd_metric = ptd_by_domain.get(domain)
             if ptd_metric:
-                if ptd_metric.get("estimated_bonus_hourly") is not None:
-                    item["estimated_bonus_hourly"] = as_float(
-                        ptd_metric.get("estimated_bonus_hourly")
-                    )
+                # A matched PTD record is authoritative.  Do not silently show
+                # an MP snapshot estimate when PTD did not provide time magic;
+                # HHanClub's seeding-points rate is a different metric and must
+                # never be presented as time magic.
+                item["estimated_bonus_hourly"] = as_float(
+                    ptd_metric.get("estimated_bonus_hourly")
+                )
                 if ptd_metric.get("seeding_points") is not None:
                     item["seeding_points"] = as_float(ptd_metric.get("seeding_points"))
+                if ptd_metric.get("seeding_points_hourly") is not None:
+                    item["seeding_points_hourly"] = as_float(
+                        ptd_metric.get("seeding_points_hourly")
+                    )
             sites.append(item)
             if current and delta["baseline_valid"] and (
                 delta["daily_upload"] > 0 or delta["daily_download"] > 0
@@ -786,14 +804,16 @@ class PTDataStatistics(_PluginBase):
         retirement_snapshots = [
             {
                 **item,
-                "estimated_bonus_hourly": as_float(
-                    ptd_by_domain.get(item["domain"], {}).get("estimated_bonus_hourly")
-                )
-                if ptd_by_domain.get(item["domain"], {}).get("estimated_bonus_hourly")
-                is not None
-                else estimate_bonus_hourly(item, previous_bonus_rows.get(item["domain"])),
+                "estimated_bonus_hourly": (
+                    as_float(ptd_by_domain[item["domain"]].get("estimated_bonus_hourly"))
+                    if item["domain"] in ptd_by_domain
+                    else estimate_bonus_hourly(item, previous_bonus_rows.get(item["domain"]))
+                ),
                 "seeding_points": as_float(
                     ptd_by_domain.get(item["domain"], {}).get("seeding_points")
+                ),
+                "seeding_points_hourly": as_float(
+                    ptd_by_domain.get(item["domain"], {}).get("seeding_points_hourly")
                 ),
             }
             for item in latest_valid_all

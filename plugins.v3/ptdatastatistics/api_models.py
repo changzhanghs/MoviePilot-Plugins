@@ -28,6 +28,7 @@ class SiteSnapshotData(BaseModel):
     bonus: float | None = None
     estimated_bonus_hourly: float | None = None
     seeding_points: float | None = None
+    seeding_points_hourly: float | None = None
     seeding: int = 0
     seeding_size: int = 0
     updated_day: str = ""
@@ -107,6 +108,8 @@ class LevelRequirementData(BaseModel):
     min_bonus: float | None = None
     min_seeding_points: float | None = None
     min_seeding_points_strict: bool = False
+    seeding_points_eta_days: int | None = None
+    seeding_points_eta_date: str = ""
     min_seeding: int = 0
     eligible_date: str = ""
     reached: bool = False
@@ -131,6 +134,7 @@ class RetirementSiteData(BaseModel):
     bonus: float | None = None
     seeding_points: float | None = None
     estimated_bonus_hourly: float | None = None
+    seeding_points_hourly: float | None = None
     seeding: int = 0
     updated_day: str = ""
     levels_remaining: int | None = None
