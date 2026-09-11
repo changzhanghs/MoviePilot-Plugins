@@ -1,5 +1,13 @@
 import { importShared } from './__federation_fn_import-JrT3xvdd.js';
 
+const _export_sfc = (sfc, props) => {
+  const target = sfc.__vccOpts || sfc;
+  for (const [key, val] of props) {
+    target[key] = val;
+  }
+  return target;
+};
+
 /** 将字节数格式化为紧凑容量文本。 */
 function formatBytes(value) {
   let bytes = Number(value || 0);
@@ -71,21 +79,6 @@ function withQuery(path, query = {}) {
   return suffix ? `${path}?${suffix}` : path
 }
 
-/** 将后端原生文件响应保存到浏览器下载目录。 */
-async function downloadApiFile(api, path, filename, mimeType) {
-  const response = await api.get(path, { responseType: 'blob', feedback: 'silent' });
-  const payload = unwrapResponse(response);
-  const blob = payload instanceof Blob ? payload : new Blob([payload], { type: mimeType });
-  const url = URL.createObjectURL(blob);
-  const anchor = document.createElement('a');
-  anchor.href = url;
-  anchor.download = filename;
-  document.body.appendChild(anchor);
-  anchor.click();
-  anchor.remove();
-  URL.revokeObjectURL(url);
-}
-
 const iconCache = new Map();
 
 /** 通过宿主站点图标 API 获取图标并跨组件缓存。 */
@@ -119,14 +112,6 @@ const siteColors = [
   '#e879f9',
   '#38bdf8',
 ];
-
-const _export_sfc = (sfc, props) => {
-  const target = sfc.__vccOpts || sfc;
-  for (const [key, val] of props) {
-    target[key] = val;
-  }
-  return target;
-};
 
 const {resolveComponent:_resolveComponent,openBlock:_openBlock,createBlock:_createBlock,createCommentVNode:_createCommentVNode,toDisplayString:_toDisplayString,createElementBlock:_createElementBlock,withCtx:_withCtx} = await importShared('vue');
 
@@ -185,4 +170,4 @@ return (_ctx, _cache) => {
 
 };
 
-export { _export_sfc as _, _sfc_main as a, formatNumber as b, downloadApiFile as d, formatBytes as f, getSiteIcon as g, openNativePicker as o, siteColors as s, unwrapResponse as u, withQuery as w };
+export { _export_sfc as _, _sfc_main as a, formatNumber as b, formatBytes as f, openNativePicker as o, siteColors as s, unwrapResponse as u, withQuery as w };

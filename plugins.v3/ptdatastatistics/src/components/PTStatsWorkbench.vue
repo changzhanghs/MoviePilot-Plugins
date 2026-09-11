@@ -1,10 +1,7 @@
 <script setup>
 import { computed, inject, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import Chart from 'chart.js/auto'
-import CareerExportDialog from './CareerExportDialog.vue'
-import ExportDialog from './ExportDialog.vue'
 import MetricCard from './MetricCard.vue'
-import RetirementExportDialog from './RetirementExportDialog.vue'
 import SiteAvatar from './SiteAvatar.vue'
 import { formatBytes, formatNumber, openNativePicker, siteColors, unwrapResponse, withQuery } from '../utils'
 
@@ -22,13 +19,9 @@ const hostToast = inject('moviepilot:toast', null)
 const activeTab = ref(props.initialTab)
 const loading = ref(false)
 const saving = ref(false)
-const syncing = ref(false)
 const historyLoading = ref(false)
 const distributionLoading = ref(false)
 const error = ref('')
-const exportOpen = ref(false)
-const careerOpen = ref(false)
-const retirementExportOpen = ref(false)
 const rulesFileInput = ref(null)
 const rulesUploadName = ref('')
 const overview = ref({
@@ -50,7 +43,6 @@ const siteSortOptions = [
   { title: '做种体积', value: 'seeding_size' },
 ]
 let distributionRequestSequence = 0
-const exportFields = ref([])
 const settingsDraft = ref({
   enabled: false, show_sidebar: true, retention_days: 365,
   notification_enabled: false, notification_cron: '0 9 * * *', notification_modes: ['today'],
@@ -73,7 +65,9 @@ const selectedRetirementSiteKey = ref('')
 const pluginBase = computed(() => `plugin/${props.pluginId || 'PTDataStatistics'}`)
 const ptdReceiverUrl = computed(() => {
   if (typeof window === 'undefined') return `/api/v1/${pluginBase.value}/cookiecloud`
-  return `${window.location.origin}/api/v1/${pluginBase.value}/cookiecloud`
+  const url = new URL(`/api/v1/${pluginBase.value}/cookiecloud`, window.location.href)
+  url.hostname = 'localhost'
+  return url.toString()
 })
 const currentSites = computed(() => overview.value.sites || [])
 const sortedCurrentSites = computed(() => [...currentSites.value].sort((left, right) => {
@@ -411,7 +405,6 @@ async function loadAll() {
       ...(parsed.settings || {}),
       ...hostSettings,
     }))
-    exportFields.value = parsed.export_fields || []
     ruleAnchorSites.value = parsed.rule_sites || []
     setDefaultRanges()
     await loadDistribution()
@@ -419,23 +412,6 @@ async function loadAll() {
     error.value = err?.message || '加载 PT 数据统计失败'
   } finally {
     loading.value = false
-  }
-}
-async function syncFromMP() {
-  syncing.value = true
-  try {
-    const result = unwrapResponse(await props.api.post(`${pluginBase.value}/sync`, {})) || {}
-    await loadAll()
-    await loadHistory()
-    const ptdMessage = result.ptd_error
-      ? `；PTD 同步失败：${result.ptd_error}`
-      : result.ptd_backup ? `；PTD ${result.ptd_backup} 匹配 ${result.ptd_imported || 0} 个站点` : ''
-    notify(`已同步 MoviePilot 数据：写入 ${result.imported || 0} 条${ptdMessage}`, result.ptd_error ? 'warning' : 'success')
-    emit('action')
-  } catch (err) {
-    notify(err?.message || '同步 MoviePilot 数据失败', 'error')
-  } finally {
-    syncing.value = false
   }
 }
 async function loadHistory() {
@@ -462,7 +438,6 @@ async function saveSettings() {
     if (props.hostManagedConfig) {
       const data = unwrapResponse(await props.api.post(`${pluginBase.value}/settings`, payload)) || {}
       settingsDraft.value = JSON.parse(JSON.stringify(data.settings || payload))
-      exportFields.value = data.export_fields || exportFields.value
       ruleAnchorSites.value = data.rule_sites || ruleAnchorSites.value
       notify('设置已保存')
       emit('save', payload)
@@ -470,7 +445,6 @@ async function saveSettings() {
     }
     const data = unwrapResponse(await props.api.post(`${pluginBase.value}/settings`, payload)) || {}
     settingsDraft.value = JSON.parse(JSON.stringify(data.settings || settingsDraft.value))
-    exportFields.value = data.export_fields || exportFields.value
     ruleAnchorSites.value = data.rule_sites || ruleAnchorSites.value
     notify('设置已保存')
     emit('action')
@@ -834,7 +808,6 @@ onBeforeUnmount(() => historyChart?.destroy())
         <VTab value="config" prepend-icon="mdi-tune-variant">设置</VTab>
       </VTabs>
       <div class="workbench-nav__actions">
-        <VBtn class="data-refresh-btn" color="primary" variant="flat" prepend-icon="mdi-refresh" :loading="syncing" @click="syncFromMP">数据刷新</VBtn>
         <VBtn v-if="showClose" icon="mdi-close" variant="text" aria-label="关闭" @click="$emit('close')" />
       </div>
     </div>
@@ -955,7 +928,7 @@ onBeforeUnmount(() => historyChart?.destroy())
               </div>
             </section>
           </template>
-          <div v-else class="empty-state"><VIcon icon="mdi-database-search-outline" size="44" /><span>暂无历史数据，请点击顶部“数据刷新”</span></div>
+          <div v-else class="empty-state"><VIcon icon="mdi-database-search-outline" size="44" /><span>暂无历史数据，请等待 MoviePilot 站点刷新</span></div>
         </section>
       </VWindowItem>
 
@@ -1115,16 +1088,12 @@ onBeforeUnmount(() => historyChart?.destroy())
         <section class="section-block settings-layout">
           <div class="settings-card"><div class="section-heading"><div><span class="section-kicker">GENERAL</span><h2>基础设置</h2></div></div><VSwitch v-model="settingsDraft.enabled" color="primary" label="启用插件" hint="启用后跟随 MP 的站点刷新设置同步已保存数据，并开放插件定时任务" persistent-hint /><VSwitch v-model="settingsDraft.show_sidebar" color="primary" label="在发现栏显示入口" /><VTextField v-model.number="settingsDraft.retention_days" type="number" min="0" max="36500" label="历史保留天数" hint="0 表示永久保留；仅清理插件历史副本" persistent-hint variant="outlined" class="mt-3" /></div>
           <div class="settings-card"><div class="section-heading"><div><span class="section-kicker">NOTIFICATION</span><h2>每日通知</h2></div></div><VSwitch v-model="settingsDraft.notification_enabled" color="primary" label="启用汇总通知" /><VTextField v-model="settingsDraft.notification_cron" label="通知 Cron（五段式）" placeholder="0 9 * * *" hint="分 时 日 月 星期；按服务器时区执行，每个自然日最多通知一次" persistent-hint variant="outlined" /><VCheckbox v-model="settingsDraft.notification_modes" value="today" label="今日数据：仅上传和下载增量" hide-details /><VCheckbox v-model="settingsDraft.notification_modes" value="all" label="所有数据：仅累计上传和累计下载" hide-details /><div class="setting-hint mt-2">Cron 错过后不补发；无数据站点不会通知。</div></div>
-          <div class="settings-card settings-card--wide"><div class="section-heading"><div><span class="section-kicker">PTD RECEIVER</span><h2>PTD 数据补充</h2></div><span class="section-note">仅导入时魔和做种积分</span></div><VSwitch v-model="settingsDraft.ptd_cookiecloud_enabled" color="primary" label="启用 PTD 兼容接收端" hint="PTD 直接把最新备份发送给本插件；不需要启用 MoviePilot 内置 CookieCloud" persistent-hint /><div v-if="settingsDraft.ptd_cookiecloud_enabled" class="ptd-settings-grid"><VTextField :model-value="ptdReceiverUrl" class="ptd-receiver-url" label="PTD CookieCloud 地址" hint="把此地址填写到 PTD 的 CookieCloud 备份服务器" persistent-hint readonly variant="outlined" /><VTextField v-model="settingsDraft.ptd_cookiecloud_uuid" label="PTD 专用 UUID" hint="插件与 PTD 必须填写完全相同的 UUID" persistent-hint variant="outlined"><template #append-inner><VBtn icon="mdi-shuffle-variant" size="small" variant="text" title="随机生成 UUID" @click="randomizePtdUuid" /></template></VTextField><VTextField v-model="settingsDraft.ptd_cookiecloud_password" label="CookieCloud 密码" hint="插件与 PTD 必须填写完全相同的密码" persistent-hint type="text" autocomplete="off" variant="outlined"><template #append-inner><VBtn icon="mdi-shuffle-variant" size="small" variant="text" title="随机生成密码" @click="randomizePtdPassword" /></template></VTextField><VTextarea v-model="settingsDraft.ptd_cookiecloud_headers" label="接收鉴权 Headers（可选）" placeholder="X-PTD-Token: 自定义密钥" hint="如填写，PTD 的 Headers 也要逐行填写相同内容；日志不会记录值" persistent-hint variant="outlined" rows="3" /><VTextarea v-model="settingsDraft.ptd_site_mappings" class="ptd-site-mappings" label="站点映射（可选）" placeholder="audiences=audiences.me\nmteam=kp.m-team.cc" hint="自动匹配失败时，每行填写 PTD站点ID=MP域名或站点名" persistent-hint variant="outlined" rows="3" /></div><div class="setting-hint mt-3">先保存本页，再在 PTD 中新增 CookieCloud 备份服务器：地址使用上方接收地址，UUID、密码和可选 Headers 与这里保持一致；备份项目勾选“用户信息”。收到新备份后会立即解析并覆盖上一份数据，过程可在 MoviePilot 插件日志中查看。</div></div>
+          <div class="settings-card settings-card--wide"><div class="section-heading"><div><span class="section-kicker">PTD RECEIVER</span><h2>PTD 数据补充</h2></div><span class="section-note">仅导入时魔和做种积分</span></div><VSwitch v-model="settingsDraft.ptd_cookiecloud_enabled" color="primary" label="启用 PTD 兼容接收端" hint="PTD 直接把最新备份发送给本插件；不需要启用 MoviePilot 内置 CookieCloud" persistent-hint /><div v-if="settingsDraft.ptd_cookiecloud_enabled" class="ptd-settings-grid"><VTextField :model-value="ptdReceiverUrl" class="ptd-receiver-url" label="PTD CookieCloud 地址" hint="同机使用 localhost；其它局域网设备请替换为 MoviePilot 主机 IP" persistent-hint readonly variant="outlined" /><VTextField v-model="settingsDraft.ptd_cookiecloud_uuid" label="PTD 专用 UUID" hint="插件与 PTD 必须填写完全相同的 UUID" persistent-hint variant="outlined"><template #append-inner><VBtn icon="mdi-shuffle-variant" size="small" variant="text" title="随机生成 UUID" @click="randomizePtdUuid" /></template></VTextField><VTextField v-model="settingsDraft.ptd_cookiecloud_password" label="CookieCloud 密码" hint="插件与 PTD 必须填写完全相同的密码" persistent-hint type="text" autocomplete="off" variant="outlined"><template #append-inner><VBtn icon="mdi-shuffle-variant" size="small" variant="text" title="随机生成密码" @click="randomizePtdPassword" /></template></VTextField><VTextarea v-model="settingsDraft.ptd_cookiecloud_headers" label="接收鉴权 Headers（可选）" placeholder="X-PTD-Token: 自定义密钥" hint="如填写，PTD 的 Headers 也要逐行填写相同内容；日志不会记录值" persistent-hint variant="outlined" rows="3" /><VTextarea v-model="settingsDraft.ptd_site_mappings" class="ptd-site-mappings" label="站点映射（可选）" placeholder="audiences=audiences.me\nmteam=kp.m-team.cc" hint="自动匹配失败时，每行填写 PTD站点ID=MP域名或站点名" persistent-hint variant="outlined" rows="3" /></div><div class="setting-hint mt-3">先保存本页，再在 PTD 中新增 CookieCloud 备份服务器：PTD 与 MoviePilot 同机时使用上方 localhost 地址；其它局域网设备将 localhost 替换为 MoviePilot 主机 IP。UUID、密码和可选 Headers 与这里保持一致；备份项目勾选“用户信息”。收到新备份后会立即解析并覆盖上一份数据，过程可在 MoviePilot 插件日志中查看。</div></div>
           <div class="settings-card settings-card--wide"><div class="section-heading"><div><span class="section-kicker">LEVEL RULES</span><h2>等级规则</h2></div><div class="rules-upload__actions"><VBtn variant="tonal" color="primary" prepend-icon="mdi-upload-outline" @click="rulesFileInput?.click()">上传规则文件</VBtn><VBtn variant="text" prepend-icon="mdi-file-download-outline" @click="downloadRuleTemplate">下载模板</VBtn><VBtn v-if="customRuleSites.length" variant="text" color="error" prepend-icon="mdi-delete-outline" @click="clearUploadedRules">清空</VBtn></div></div><input ref="rulesFileInput" class="rules-file-input" type="file" accept="application/json,.json" @change="uploadRuleFile"><div v-if="customRuleSites.length" class="rules-upload"><div><strong>已载入 {{ customRuleSites.length }} 个站点</strong><p>{{ customRuleSites.join('、') }}</p><small v-if="rulesUploadName">文件：{{ rulesUploadName }}</small></div></div><div class="setting-hint mt-3">支持单个或多个站点；流量门槛使用字节，等级按 levels 中的顺序展示。模板中的 _comment 仅用于说明，导入时忽略；文件只写入插件设置，不会上传到外部服务。</div></div>
-          <div class="settings-card settings-card--wide"><div class="section-heading"><div><span class="section-kicker">DATA EXPORT</span><h2>数据导出</h2></div><span class="section-note">导出历史数据或生成高清进度图片</span></div><div class="data-actions"><VBtn variant="tonal" color="primary" prepend-icon="mdi-file-delimited-outline" @click="exportOpen = true">历史数据</VBtn><VBtn variant="tonal" color="primary" prepend-icon="mdi-image-outline" @click="careerOpen = true">PT 生涯</VBtn><VBtn variant="tonal" color="primary" prepend-icon="mdi-shield-star-outline" @click="retirementExportOpen = true">养老进度</VBtn></div></div>
           <div class="settings-card settings-card--wide settings-actions"><div><strong>数据来源</strong><p>上传、下载、分享率等仍仅来自 MoviePilot；PTD 只补充最新时魔和做种积分。</p></div><VBtn color="primary" size="large" variant="flat" prepend-icon="mdi-content-save-outline" :loading="saving" @click="saveSettings">保存设置</VBtn></div>
         </section>
       </VWindowItem>
     </VWindow>
-    <ExportDialog v-model="exportOpen" :api="api" :plugin-base="pluginBase" :sites="historySites" :fields="exportFields" :first-day="overview.first_history_day" :last-day="overview.last_history_day" />
-    <CareerExportDialog v-model="careerOpen" :api="api" :overview="overview" />
-    <RetirementExportDialog v-model="retirementExportOpen" :api="api" :overview="overview" />
   </div>
 </template>
 
@@ -1135,7 +1104,6 @@ onBeforeUnmount(() => historyChart?.destroy())
 .workbench-nav{display:flex;align-items:center;justify-content:space-between;gap:18px;border-bottom:1px solid var(--pt-border)}
 .workbench-nav .workbench-tabs{min-width:0;flex:1 1 auto;margin:0;border-bottom:0}
 .workbench-nav__actions{display:flex;flex:0 0 auto;align-items:center;gap:6px;padding-right:4px}
-.data-refresh-btn{border-radius:11px;font-weight:700}
 .history-console{min-width:0;margin-top:16px;overflow:hidden;border:1px solid var(--pt-border);border-radius:18px;background:rgba(var(--v-theme-surface),.55)}
 .history-period-strip{display:flex;gap:7px;overflow-x:auto;padding:10px 14px;border-bottom:1px solid var(--pt-border);scrollbar-width:thin;scroll-snap-type:x proximity}
 .history-period-card{appearance:none;display:grid;flex:0 0 minmax(150px,1fr);min-width:150px;gap:7px;padding:10px 12px;border:1px solid var(--pt-border);border-radius:11px;background:rgba(var(--v-theme-surface),.34);color:inherit;font:inherit;text-align:left;cursor:pointer;scroll-snap-align:start;transition:background-color .16s ease,border-color .16s ease,box-shadow .16s ease}
@@ -1258,7 +1226,7 @@ onBeforeUnmount(() => historyChart?.destroy())
 .retirement-level-row.is-retirement{box-shadow:inset 3px 0 rgb(var(--v-theme-success))}
 .retirement-level-row__detail{display:flex;flex-wrap:wrap;justify-content:space-between;gap:10px;padding:0 15px 10px 15px;color:rgba(var(--v-theme-on-surface),.6);font-size:.64rem}
 .retirement-level-row__detail strong{max-width:100%;margin-left:auto;color:rgb(var(--v-theme-warning));overflow-wrap:anywhere;text-align:right}
-.pt-workbench{--pt-border:rgba(var(--v-border-color),var(--v-border-opacity));min-width:0;padding:4px}.data-actions,.retirement-summary{display:flex;flex-wrap:wrap;gap:9px}.section-block{margin-top:16px;padding:20px;border:1px solid var(--pt-border);border-radius:20px;background:rgba(var(--v-theme-surface),.7)}.section-heading{display:flex;align-items:center;justify-content:space-between;gap:16px;margin-bottom:18px}.section-heading h2{margin:2px 0 0;font-size:1.18rem}.section-kicker{color:rgb(var(--v-theme-primary));font-size:.72rem;font-weight:800;letter-spacing:.12em}.section-note,.setting-hint,.row-label{color:rgba(var(--v-theme-on-surface),.56);font-size:.76rem}.metric-grid{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:12px}.distribution-panel,.twelve-panel{background:linear-gradient(135deg,rgba(var(--v-theme-primary),.07),rgba(var(--v-theme-surface),.72))}.distribution-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}.distribution-card{min-width:0;padding:18px;border:1px solid var(--pt-border);border-radius:17px;background:rgba(var(--v-theme-surface),.55)}.distribution-card__header{display:flex;align-items:center;justify-content:space-between;gap:14px;margin-bottom:14px}.distribution-card__header :deep(.v-input){max-width:190px}.pie-layout{display:grid;grid-template-columns:minmax(150px,40%) minmax(0,1fr);gap:20px;align-items:center}.pie{display:grid;place-items:center;width:min(100%,220px);margin:auto;aspect-ratio:1;border-radius:50%;box-shadow:0 12px 32px rgba(0,0,0,.15)}.pie__hole{display:flex;flex-direction:column;align-items:center;justify-content:center;width:66%;aspect-ratio:1;border-radius:50%;background:rgb(var(--v-theme-surface));text-align:center}.pie__hole span{color:rgba(var(--v-theme-on-surface),.58);font-size:.68rem}.pie__hole strong{margin-top:5px;font-size:1rem}.pie-legend{max-height:250px;overflow-y:auto}.pie-legend>div{display:grid;grid-template-columns:9px minmax(80px,1fr) auto auto;gap:8px;align-items:center;padding:6px 2px;font-size:.74rem}.pie-legend i{width:8px;height:8px;border-radius:50%}.pie-legend strong{font-size:.72rem}.pie-legend em{color:rgba(var(--v-theme-on-surface),.5);font-style:normal}.table-shell,.twelve-overflow{overflow-x:auto;border:1px solid var(--pt-border);border-radius:14px}.site-table{min-width:1450px;background:transparent}.history-detail-shell{overflow-x:auto}.history-detail-table{min-width:1050px}.site-table th{color:rgba(var(--v-theme-on-surface),.55)!important;font-size:.7rem;letter-spacing:.04em;white-space:nowrap}.site-table td{white-space:nowrap}.site-identity{display:flex;align-items:center;gap:10px}.cell-sub{display:block;max-width:220px;overflow:hidden;color:rgba(var(--v-theme-on-surface),.52);font-size:.68rem;text-overflow:ellipsis;white-space:nowrap}.metric-upload{color:rgb(var(--v-theme-success));font-weight:650}.metric-download{color:rgb(var(--v-theme-error));font-weight:650}.empty-cell{height:140px!important;text-align:center;color:rgba(var(--v-theme-on-surface),.52)}.legend{display:flex;flex:0 0 auto;align-items:center;gap:14px;color:rgba(var(--v-theme-on-surface),.62);font-size:.75rem;white-space:nowrap}.legend>span{display:inline-flex;align-items:center;gap:5px;line-height:1}.legend i{display:block;flex:0 0 9px;width:9px;height:9px;border-radius:2px}.legend__upload{background:rgb(var(--v-theme-success))}.legend__download{background:rgb(var(--v-theme-error))}.bar-chart{display:flex;align-items:stretch;gap:5px;height:250px;overflow-x:auto;padding:10px 3px 0;border-bottom:1px solid var(--pt-border)}.bar-column{display:flex;flex:1 0 28px;flex-direction:column;min-width:28px}.bar-column__bars{display:flex;flex:1;align-items:flex-end;justify-content:center;gap:2px}.bar{display:block;width:7px;border-radius:5px 5px 1px 1px}.bar--upload{background:rgb(var(--v-theme-success))}.bar--download{background:rgb(var(--v-theme-error))}.empty-state{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;min-height:180px;color:rgba(var(--v-theme-on-surface),.54)}.compact-empty{min-height:120px}.twelve-track{position:relative;display:grid;grid-template-columns:repeat(12,minmax(54px,1fr));min-width:760px;padding:20px 4px 4px}.twelve-track__line{position:absolute;z-index:0;top:38px;left:4.2%;right:4.2%;height:5px;overflow:hidden;border-radius:999px;background:rgba(var(--v-theme-on-surface),.12)}.twelve-track__line i{display:block;height:100%;border-radius:inherit;background:linear-gradient(90deg,rgb(var(--v-theme-primary)),rgb(var(--v-theme-success)))}.twelve-node{z-index:1;display:flex;flex-direction:column;align-items:center;gap:8px;min-width:0;text-align:center}.twelve-node span{max-width:100%;overflow:hidden;font-size:.72rem;text-overflow:ellipsis;white-space:nowrap}.twelve-node--missing,.twelve-node--waiting{opacity:.66}.settings-layout{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px;border:0;padding:0;background:transparent}.settings-card{padding:20px;border:1px solid var(--pt-border);border-radius:18px;background:rgba(var(--v-theme-surface),.76)}.settings-card--wide{grid-column:1/-1}.settings-actions{display:flex;align-items:center;justify-content:space-between;gap:20px}.settings-actions p{margin:4px 0 0;color:rgba(var(--v-theme-on-surface),.56)}
+.pt-workbench{--pt-border:rgba(var(--v-border-color),var(--v-border-opacity));min-width:0;padding:4px}.retirement-summary{display:flex;flex-wrap:wrap;gap:9px}.section-block{margin-top:16px;padding:20px;border:1px solid var(--pt-border);border-radius:20px;background:rgba(var(--v-theme-surface),.7)}.section-heading{display:flex;align-items:center;justify-content:space-between;gap:16px;margin-bottom:18px}.section-heading h2{margin:2px 0 0;font-size:1.18rem}.section-kicker{color:rgb(var(--v-theme-primary));font-size:.72rem;font-weight:800;letter-spacing:.12em}.section-note,.setting-hint,.row-label{color:rgba(var(--v-theme-on-surface),.56);font-size:.76rem}.metric-grid{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:12px}.distribution-panel,.twelve-panel{background:linear-gradient(135deg,rgba(var(--v-theme-primary),.07),rgba(var(--v-theme-surface),.72))}.distribution-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}.distribution-card{min-width:0;padding:18px;border:1px solid var(--pt-border);border-radius:17px;background:rgba(var(--v-theme-surface),.55)}.distribution-card__header{display:flex;align-items:center;justify-content:space-between;gap:14px;margin-bottom:14px}.distribution-card__header :deep(.v-input){max-width:190px}.pie-layout{display:grid;grid-template-columns:minmax(150px,40%) minmax(0,1fr);gap:20px;align-items:center}.pie{display:grid;place-items:center;width:min(100%,220px);margin:auto;aspect-ratio:1;border-radius:50%;box-shadow:0 12px 32px rgba(0,0,0,.15)}.pie__hole{display:flex;flex-direction:column;align-items:center;justify-content:center;width:66%;aspect-ratio:1;border-radius:50%;background:rgb(var(--v-theme-surface));text-align:center}.pie__hole span{color:rgba(var(--v-theme-on-surface),.58);font-size:.68rem}.pie__hole strong{margin-top:5px;font-size:1rem}.pie-legend{max-height:250px;overflow-y:auto}.pie-legend>div{display:grid;grid-template-columns:9px minmax(80px,1fr) auto auto;gap:8px;align-items:center;padding:6px 2px;font-size:.74rem}.pie-legend i{width:8px;height:8px;border-radius:50%}.pie-legend strong{font-size:.72rem}.pie-legend em{color:rgba(var(--v-theme-on-surface),.5);font-style:normal}.table-shell,.twelve-overflow{overflow-x:auto;border:1px solid var(--pt-border);border-radius:14px}.site-table{min-width:1450px;background:transparent}.history-detail-shell{overflow-x:auto}.history-detail-table{min-width:1050px}.site-table th{color:rgba(var(--v-theme-on-surface),.55)!important;font-size:.7rem;letter-spacing:.04em;white-space:nowrap}.site-table td{white-space:nowrap}.site-identity{display:flex;align-items:center;gap:10px}.cell-sub{display:block;max-width:220px;overflow:hidden;color:rgba(var(--v-theme-on-surface),.52);font-size:.68rem;text-overflow:ellipsis;white-space:nowrap}.metric-upload{color:rgb(var(--v-theme-success));font-weight:650}.metric-download{color:rgb(var(--v-theme-error));font-weight:650}.empty-cell{height:140px!important;text-align:center;color:rgba(var(--v-theme-on-surface),.52)}.legend{display:flex;flex:0 0 auto;align-items:center;gap:14px;color:rgba(var(--v-theme-on-surface),.62);font-size:.75rem;white-space:nowrap}.legend>span{display:inline-flex;align-items:center;gap:5px;line-height:1}.legend i{display:block;flex:0 0 9px;width:9px;height:9px;border-radius:2px}.legend__upload{background:rgb(var(--v-theme-success))}.legend__download{background:rgb(var(--v-theme-error))}.bar-chart{display:flex;align-items:stretch;gap:5px;height:250px;overflow-x:auto;padding:10px 3px 0;border-bottom:1px solid var(--pt-border)}.bar-column{display:flex;flex:1 0 28px;flex-direction:column;min-width:28px}.bar-column__bars{display:flex;flex:1;align-items:flex-end;justify-content:center;gap:2px}.bar{display:block;width:7px;border-radius:5px 5px 1px 1px}.bar--upload{background:rgb(var(--v-theme-success))}.bar--download{background:rgb(var(--v-theme-error))}.empty-state{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;min-height:180px;color:rgba(var(--v-theme-on-surface),.54)}.compact-empty{min-height:120px}.twelve-track{position:relative;display:grid;grid-template-columns:repeat(12,minmax(54px,1fr));min-width:760px;padding:20px 4px 4px}.twelve-track__line{position:absolute;z-index:0;top:38px;left:4.2%;right:4.2%;height:5px;overflow:hidden;border-radius:999px;background:rgba(var(--v-theme-on-surface),.12)}.twelve-track__line i{display:block;height:100%;border-radius:inherit;background:linear-gradient(90deg,rgb(var(--v-theme-primary)),rgb(var(--v-theme-success)))}.twelve-node{z-index:1;display:flex;flex-direction:column;align-items:center;gap:8px;min-width:0;text-align:center}.twelve-node span{max-width:100%;overflow:hidden;font-size:.72rem;text-overflow:ellipsis;white-space:nowrap}.twelve-node--missing,.twelve-node--waiting{opacity:.66}.settings-layout{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px;border:0;padding:0;background:transparent}.settings-card{padding:20px;border:1px solid var(--pt-border);border-radius:18px;background:rgba(var(--v-theme-surface),.76)}.settings-card--wide{grid-column:1/-1}.settings-actions{display:flex;align-items:center;justify-content:space-between;gap:20px}.settings-actions p{margin:4px 0 0;color:rgba(var(--v-theme-on-surface),.56)}
 .rules-file-input{display:none}.rules-upload{display:flex;align-items:center;justify-content:space-between;gap:20px}.rules-upload>div:first-child{display:grid;min-width:0;gap:5px}.rules-upload p{max-width:760px;margin:0;color:rgba(var(--v-theme-on-surface),.62);overflow-wrap:anywhere}.rules-upload small{color:rgba(var(--v-theme-on-surface),.48)}.rules-upload__actions{display:flex;flex:0 0 auto;flex-wrap:wrap;justify-content:flex-end;gap:8px}
 .twelve-panel{padding:18px 22px 14px}
 .twelve-panel__heading{align-items:flex-start;margin-bottom:0}
@@ -1284,7 +1252,7 @@ onBeforeUnmount(() => historyChart?.destroy())
 @media(max-width:1280px){.metric-grid{grid-template-columns:repeat(3,minmax(0,1fr))}.retirement-target-grid{grid-template-columns:1fr}}
 @media(max-width:960px){.workbench-nav{align-items:stretch;flex-direction:column;gap:5px}.workbench-nav__actions{align-self:flex-end;padding-bottom:10px}.history-workspace{grid-template-columns:1fr;height:auto;overflow:visible}.history-site-sidebar{overflow:visible;border-right:0;border-bottom:1px solid var(--pt-border)}.history-site-sidebar__items{display:flex;max-height:none;overflow-x:auto;overflow-y:hidden;scrollbar-gutter:auto}.history-site-option{width:210px;flex:0 0 210px}.history-workspace__main{overflow:visible;scrollbar-gutter:auto}.history-record-shell{overflow-x:auto}.history-record-table{min-width:900px;table-layout:auto}.distribution-grid{grid-template-columns:1fr}.retirement-explorer{grid-template-columns:1fr;height:auto;min-height:0;overflow:visible}.retirement-site-list{overflow:visible;border-right:0;border-bottom:1px solid var(--pt-border)}.retirement-site-list__items{display:flex;max-height:none;overflow-x:auto;overflow-y:hidden;scrollbar-gutter:auto}.retirement-site-option{width:245px;flex:0 0 245px}.retirement-detail{overflow:visible;scrollbar-gutter:auto}.requirement-overview{grid-template-columns:1fr}.requirement-overview__score{border-right:0;border-bottom:1px solid var(--pt-border);padding-bottom:14px}.requirement-table,.retirement-levels{overflow-x:auto}}
 .ptd-settings-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin-top:14px}.ptd-receiver-url,.ptd-site-mappings{grid-column:1/-1}
-@media(max-width:720px){.workbench-nav__actions{align-self:stretch}.data-refresh-btn{flex:1}.section-block{padding:14px}.metric-grid,.settings-layout,.ptd-settings-grid{grid-template-columns:1fr}.ptd-receiver-url,.ptd-site-mappings{grid-column:auto}.settings-card--wide{grid-column:auto}.settings-actions{align-items:stretch;flex-direction:column}.section-heading,.distribution-heading{align-items:flex-start;flex-direction:column}.pie-layout{grid-template-columns:1fr}.pie{width:180px}.history-detail-summary{align-items:flex-start;flex-direction:column}.history-detail-metrics{width:100%;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}.history-period-card{min-width:142px}.history-line-chart{height:220px}.history-site-panel .history-detail-shell{overflow-x:auto}.history-site-panel .history-detail-table{min-width:720px}}
+@media(max-width:720px){.workbench-nav__actions{align-self:stretch}.section-block{padding:14px}.metric-grid,.settings-layout,.ptd-settings-grid{grid-template-columns:1fr}.ptd-receiver-url,.ptd-site-mappings{grid-column:auto}.settings-card--wide{grid-column:auto}.settings-actions{align-items:stretch;flex-direction:column}.section-heading,.distribution-heading{align-items:flex-start;flex-direction:column}.pie-layout{grid-template-columns:1fr}.pie{width:180px}.history-detail-summary{align-items:flex-start;flex-direction:column}.history-detail-metrics{width:100%;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}.history-period-card{min-width:142px}.history-line-chart{height:220px}.history-site-panel .history-detail-shell{overflow-x:auto}.history-site-panel .history-detail-table{min-width:720px}}
 @media(max-width:720px){.site-sort-select{width:100%;flex:0 0 auto}.site-data-card{padding:12px}.site-data-card__header,.site-account-meta{align-items:flex-start;flex-direction:column}.site-stat-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.retirement-detail{padding:14px}.retirement-detail__header{align-items:flex-start;flex-direction:column}.retirement-detail__metrics{width:100%;justify-content:space-between;gap:10px}.retirement-route-rail{margin-right:-14px;margin-left:-14px;padding-right:14px;padding-left:14px}.requirement-panel__heading{grid-template-columns:1fr;align-items:flex-start}.requirement-panel__heading>div:first-child{flex-wrap:wrap}.requirement-table__head,.requirement-row{min-width:840px}.retirement-levels__heading{align-items:flex-start;flex-direction:column}}
 @media(max-width:720px){.rules-upload{align-items:flex-start;flex-direction:column}.rules-upload__actions{width:100%;justify-content:flex-start}}
 @media(max-width:960px){.retirement-site-list{position:static;max-height:none}.twelve-panel{padding:18px}.twelve-panel__heading{align-items:flex-start;flex-direction:column}.twelve-summary{width:100%;justify-content:flex-end}}

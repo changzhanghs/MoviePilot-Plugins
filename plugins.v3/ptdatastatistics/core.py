@@ -11,27 +11,6 @@ from collections.abc import Iterable, Mapping
 from datetime import date, datetime, timedelta
 from typing import Any
 
-EXPORT_FIELDS: tuple[tuple[str, str], ...] = (
-    ("site_name", "站点"),
-    ("updated_day", "数据日期"),
-    ("username", "用户名"),
-    ("userid", "UID"),
-    ("join_at", "加入时间"),
-    ("user_level", "用户等级"),
-    ("upload", "累计上传(B)"),
-    ("download", "累计下载(B)"),
-    ("daily_upload", "当日上传(B)"),
-    ("daily_download", "当日下载(B)"),
-    ("ratio", "分享率"),
-    ("bonus", "魔力"),
-    ("seeding", "做种数量"),
-    ("seeding_size", "做种体积(B)"),
-)
-
-EXPORT_FIELD_LABELS = dict(EXPORT_FIELDS)
-EXPORT_FIELD_KEYS = tuple(key for key, _ in EXPORT_FIELDS)
-
-
 TWELVE_SITES: tuple[dict[str, Any], ...] = (
     {
         "key": "mteam",
@@ -1312,14 +1291,3 @@ def format_bytes(value: Any) -> str:
         return f"{int(number)} {unit}"
     precision = 2 if number < 100 else 1
     return f"{number:.{precision}f} {unit}"
-
-
-def selected_export_fields(raw_fields: str | None) -> list[str]:
-    """校验并保持用户选择的导出字段顺序。"""
-
-    if not raw_fields:
-        return list(EXPORT_FIELD_KEYS)
-    requested = [item.strip() for item in raw_fields.split(",") if item.strip()]
-    allowed = set(EXPORT_FIELD_KEYS)
-    selected = [item for item in requested if item in allowed]
-    return selected or list(EXPORT_FIELD_KEYS)

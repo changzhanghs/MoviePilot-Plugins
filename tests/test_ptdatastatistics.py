@@ -1,9 +1,7 @@
 from __future__ import annotations
 
 import base64
-import csv
 import importlib.util
-import io
 import json
 import sys
 import types
@@ -28,7 +26,6 @@ package = types.ModuleType("ptdatastatistics")
 package.__path__ = [str(PLUGIN)]
 sys.modules.setdefault("ptdatastatistics", package)
 core = load_module("ptdatastatistics.core", PLUGIN / "core.py")
-exporters = load_module("ptdatastatistics.exporters", PLUGIN / "exporters.py")
 ptd_cookiecloud = load_module("ptdatastatistics.ptd_cookiecloud", PLUGIN / "ptd_cookiecloud.py")
 
 
@@ -354,30 +351,6 @@ class TwelveAndExportTests(unittest.TestCase):
         )
         joined = [item for item in progress["items"] if item["state"] == "joined"]
         self.assertEqual([item["key"] for item in joined], ["u2", "mteam", "ttg"])
-
-    def test_export_field_filter_preserves_selection_order(self):
-        self.assertEqual(
-            core.selected_export_fields("download,unknown,site_name"),
-            ["download", "site_name"],
-        )
-
-    def test_csv_has_utf8_bom_and_chinese_headers(self):
-        content = exporters.build_csv(
-            [{"site_name": "馒头", "upload": 123}],
-            ["site_name", "upload"],
-        )
-        self.assertTrue(content.startswith(b"\xef\xbb\xbf"))
-        rows = list(csv.reader(io.StringIO(content.decode("utf-8-sig"))))
-        self.assertEqual(rows[0], ["站点", "累计上传(B)"])
-        self.assertEqual(rows[1], ["馒头", "123"])
-
-    def test_export_fields_never_include_removed_fields(self):
-        labels = dict(core.EXPORT_FIELDS)
-        keys = list(labels)
-        self.assertNotIn("domain", keys)
-        self.assertNotIn("leeching", keys)
-        self.assertNotIn("err_msg", keys)
-        self.assertEqual(labels["bonus"], "魔力")
 
     def test_retirement_progress_does_not_guess_missing_rules(self):
         progress = core.build_retirement_progress(
@@ -831,7 +804,8 @@ class PackagingTests(unittest.TestCase):
         manifest = json.loads((ROOT / "package.v3.json").read_text(encoding="utf-8"))
         meta = manifest["PTDataStatistics"]
         source = (PLUGIN / "__init__.py").read_text(encoding="utf-8")
-        self.assertEqual(meta["version"], "1.2.1")
+        self.assertEqual(meta["version"], "1.2.2")
+        self.assertEqual(meta["history"]["v1.2.2"], "不值一提。")
         self.assertEqual(meta["history"]["v1.2.1"], "不值一提")
         self.assertEqual(meta["history"]["v1.2.0"], "不值一提")
         self.assertEqual(meta["history"]["v1.1.9"], "不值一提")
@@ -853,8 +827,8 @@ class PackagingTests(unittest.TestCase):
         self.assertEqual(meta["history"]["v1.0.2"], "更新了一些东西")
         self.assertEqual(meta["history"]["v1.0.1"], "更新了一些东西")
         self.assertEqual(meta["history"]["v1.0.0"], "更新了一些东西")
-        self.assertEqual(list(meta["history"]), ["v1.2.1", "v1.2.0", "v1.1.9", "v1.1.8", "v1.1.7", "v1.1.6", "v1.1.5", "v1.1.4", "v1.1.3", "v1.1.2", "v1.1.1", "v1.1.0", "v1.0.10", "v1.0.9", "v1.0.8", "v1.0.7", "v1.0.6", "v1.0.5", "v1.0.4", "v1.0.3", "v1.0.2", "v1.0.1", "v1.0.0"])
-        self.assertIn('plugin_version = "1.2.1"', source)
+        self.assertEqual(list(meta["history"]), ["v1.2.2", "v1.2.1", "v1.2.0", "v1.1.9", "v1.1.8", "v1.1.7", "v1.1.6", "v1.1.5", "v1.1.4", "v1.1.3", "v1.1.2", "v1.1.1", "v1.1.0", "v1.0.10", "v1.0.9", "v1.0.8", "v1.0.7", "v1.0.6", "v1.0.5", "v1.0.4", "v1.0.3", "v1.0.2", "v1.0.1", "v1.0.0"])
+        self.assertIn('plugin_version = "1.2.2"', source)
         self.assertEqual(meta["system_version"], ">=3.0.0")
         self.assertNotIn("release", meta)
 
@@ -878,31 +852,6 @@ class PackagingTests(unittest.TestCase):
         config = (PLUGIN / "src" / "components" / "Config.vue").read_text(encoding="utf-8")
         self.assertIn("initialConfig", config)
         self.assertIn("'save'", config)
-
-    def test_career_export_does_not_leak_hidden_site_name_in_avatar(self):
-        source = (PLUGIN / "src" / "components" / "CareerExportDialog.vue").read_text(
-            encoding="utf-8"
-        )
-        self.assertIn("const avatarLabel = showSiteNames", source)
-        self.assertIn(": String(siteIndex + 1)", source)
-        self.assertNotIn("完整档案", source)
-        self.assertNotIn("公开分享", source)
-        self.assertNotIn("applyPreset", source)
-
-    def test_retirement_export_generates_complete_route_png(self):
-        source = (PLUGIN / "src" / "components" / "RetirementExportDialog.vue").read_text(
-            encoding="utf-8"
-        )
-        workbench = (PLUGIN / "src" / "components" / "PTStatsWorkbench.vue").read_text(
-            encoding="utf-8"
-        )
-        self.assertIn("养老进度-${props.overview.server_date", source)
-        self.assertIn("const route = site.route || []", source)
-        self.assertIn("图片包含当前等级、保号目标、账户关键数据和完整等级路线", source)
-        self.assertIn("<h2>数据导出</h2>", workbench)
-        self.assertNotIn("<h2>数据管理</h2>", workbench)
-        self.assertIn("retirementExportOpen = true", workbench)
-        self.assertIn("<RetirementExportDialog", workbench)
 
     def test_workbench_ui_polish_contract(self):
         source = (PLUGIN / "src" / "components" / "PTStatsWorkbench.vue").read_text(
@@ -948,7 +897,7 @@ class PackagingTests(unittest.TestCase):
         self.assertNotIn('class="history-period-scope"', source)
         self.assertLess(source.index('class="history-summary-scope"'), source.index('class="history-detail-metrics"'))
         self.assertLess(source.index('class="history-detail-summary"'), source.index('class="history-site-sidebar"'))
-        self.assertIn("await loadHistory()", source)
+        self.assertIn("if (value === 'history' && !(history.value.records || []).length) loadHistory()", source)
         self.assertIn("选择左侧站点可查看该站点历史数据", source)
         self.assertIn("const selectedHistoryRecords = computed", source)
         self.assertIn('class="history-record-table"', source)
@@ -962,7 +911,9 @@ class PackagingTests(unittest.TestCase):
         self.assertIn('<span><i class="legend__download" />下载</span>', source)
         self.assertNotIn("history-line-chart--expanded", source)
         self.assertIn('>数据统计</VTab>', source)
-        self.assertIn(">数据刷新</VBtn>", source)
+        self.assertNotIn(">数据刷新</VBtn>", source)
+        self.assertNotIn("syncFromMP", source)
+        self.assertIn("暂无历史数据，请等待 MoviePilot 站点刷新", source)
         self.assertNotIn("重新读取 MP 数据", source)
         self.assertNotIn('<header class="hero">', source)
         self.assertLess(source.index('value="retirement"'), source.index('value="history"'))
@@ -1056,10 +1007,11 @@ class PackagingTests(unittest.TestCase):
         )
         self.assertLess(dashboard.index("统计日期"), dashboard.index("上传增量"))
 
-        export_dialog = (PLUGIN / "src" / "components" / "ExportDialog.vue").read_text(
-            encoding="utf-8"
-        )
-        self.assertEqual(export_dialog.count('@click="openNativePicker"'), 2)
+        self.assertNotIn("<h2>数据导出</h2>", source)
+        self.assertNotIn("ExportDialog", source)
+        self.assertNotIn("export_fields", source)
+        self.assertIn("url.hostname = 'localhost'", source)
+        self.assertIn("其它局域网设备请替换为 MoviePilot 主机 IP", source)
 
         utils = (PLUGIN / "src" / "utils.js").read_text(encoding="utf-8")
         self.assertIn("event?.preventDefault?.()", utils)
