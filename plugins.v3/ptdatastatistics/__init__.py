@@ -64,7 +64,7 @@ class PTDataStatistics(_PluginBase):
     plugin_name = "PT数据统计"
     plugin_desc = "统计 PT 站点累计与每日上传下载，提供历史、养老进度和通知。"
     plugin_icon = "ptdatastatistics.svg"
-    plugin_version = "1.2.2"
+    plugin_version = "1.2.3"
     plugin_author = "cz"
     author_url = "https://github.com/changzhanghs"
     plugin_config_prefix = "ptdatastatistics_"
@@ -374,11 +374,13 @@ class PTDataStatistics(_PluginBase):
     def _site_dict(site: Any) -> dict[str, Any]:
         """把宿主站点对象投影为不含认证信息的普通字典。"""
 
+        priority = getattr(site, "pri", None)
         return {
             "id": getattr(site, "id", None),
             "name": as_text(getattr(site, "name", "")),
             "domain": as_text(getattr(site, "domain", "")).casefold(),
             "is_active": bool(getattr(site, "is_active", False)),
+            "site_priority": as_int(priority) if priority is not None else None,
         }
 
     @staticmethod
@@ -710,6 +712,9 @@ class PTDataStatistics(_PluginBase):
 
         configured_all = self._configured_sites()
         configured = [site for site in configured_all if site["is_active"]]
+        configured_by_domain = {
+            site["domain"]: site for site in configured_all if site.get("domain")
+        }
         valid_by_domain = {item["domain"]: item for item in latest_valid}
         any_by_domain = {item["domain"]: item for item in latest_any}
         sites: list[dict[str, Any]] = []
@@ -751,6 +756,7 @@ class PTDataStatistics(_PluginBase):
             item = {
                 **latest_row,
                 **delta,
+                "site_priority": configured_site.get("site_priority"),
                 "contribution": 0.0,
                 "estimated_bonus_hourly": estimate_bonus_hourly(
                     latest_row,
@@ -828,6 +834,9 @@ class PTDataStatistics(_PluginBase):
         retirement_snapshots = [
             {
                 **item,
+                "site_priority": configured_by_domain.get(item["domain"], {}).get(
+                    "site_priority"
+                ),
                 "estimated_bonus_hourly": (
                     as_float(ptd_by_domain[item["domain"]].get("estimated_bonus_hourly"))
                     if item["domain"] in ptd_by_domain

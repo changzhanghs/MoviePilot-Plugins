@@ -36,11 +36,20 @@ const distributionMetric = ref('upload')
 const ruleAnchorSites = ref([])
 const siteSortKey = ref('upload')
 const siteSortOptions = [
+  { title: '站点优先级', value: 'site_priority' },
   { title: '累计上传', value: 'upload' },
   { title: '累计下载', value: 'download' },
   { title: '魔力', value: 'bonus' },
   { title: '做种数', value: 'seeding' },
   { title: '做种体积', value: 'seeding_size' },
+]
+const retirementSortKey = ref('site_priority')
+const retirementSortOptions = [
+  { title: '站点优先级', value: 'site_priority' },
+  { title: '养老进度', value: 'retirement_progress' },
+  { title: '累计上传', value: 'upload' },
+  { title: '累计下载', value: 'download' },
+  { title: '站点名称', value: 'site_name' },
 ]
 let distributionRequestSequence = 0
 const settingsDraft = ref({
@@ -70,10 +79,23 @@ const ptdReceiverUrl = computed(() => {
   return url.toString()
 })
 const currentSites = computed(() => overview.value.sites || [])
-const sortedCurrentSites = computed(() => [...currentSites.value].sort((left, right) => {
-  const difference = Number(right?.[siteSortKey.value] ?? -1) - Number(left?.[siteSortKey.value] ?? -1)
-  return difference || String(left?.site_name || '').localeCompare(String(right?.site_name || ''), 'zh-CN')
-}))
+function compareSiteNames(left, right) {
+  return String(left?.site_name || '').localeCompare(String(right?.site_name || ''), 'zh-CN')
+}
+function sitePriority(site) {
+  const raw = site?.site_priority
+  const value = Number(raw)
+  return raw !== null && raw !== undefined && Number.isFinite(value) ? value : Number.MAX_SAFE_INTEGER
+}
+function compareSites(left, right, key) {
+  if (key === 'site_priority') return sitePriority(left) - sitePriority(right) || compareSiteNames(left, right)
+  if (key === 'site_name') return compareSiteNames(left, right)
+  const difference = Number(right?.[key] ?? -1) - Number(left?.[key] ?? -1)
+  return difference || compareSiteNames(left, right)
+}
+const sortedCurrentSites = computed(() => [...currentSites.value].sort(
+  (left, right) => compareSites(left, right, siteSortKey.value),
+))
 const historySites = computed(() => overview.value.history_sites?.length ? overview.value.history_sites : currentSites.value)
 const todaySites = computed(() => overview.value.today_sites || [])
 const summary = computed(() => overview.value.summary || {})
@@ -86,11 +108,17 @@ const twelveTrackPercent = computed(() => {
   return Math.min(100, (twelveJoinedCount.value - 1) * 100 / (twelveTotalCount.value - 1))
 })
 const retirement = computed(() => overview.value.retirement || { sites: [] })
+const sortedRetirementSites = computed(() => [...(retirement.value.sites || [])].sort((left, right) => {
+  if (retirementSortKey.value === 'retirement_progress') {
+    return nextLevelOverallProgress(right) - nextLevelOverallProgress(left) || compareSiteNames(left, right)
+  }
+  return compareSites(left, right, retirementSortKey.value)
+}))
 const customRuleSites = computed(() => (
   settingsDraft.value.custom_retirement_rules || []
 ).map(rule => rule.site).filter(Boolean))
 const selectedRetirementSite = computed(() => {
-  const sites = retirement.value.sites || []
+  const sites = sortedRetirementSites.value
   return sites.find(site => retirementSiteKey(site) === selectedRetirementSiteKey.value) || sites[0] || null
 })
 const historyGroups = computed(() => {
@@ -758,9 +786,9 @@ const selectedRetirementView = computed(() => {
   }
 })
 watch(
-  () => (retirement.value.sites || []).map(retirementSiteKey).join('|'),
+  () => sortedRetirementSites.value.map(retirementSiteKey).join('|'),
   () => {
-    const sites = retirement.value.sites || []
+    const sites = sortedRetirementSites.value
     if (!sites.some(site => retirementSiteKey(site) === selectedRetirementSiteKey.value)) {
       selectedRetirementSiteKey.value = retirementSiteKey(sites[0])
     }
@@ -975,9 +1003,10 @@ onBeforeUnmount(() => historyChart?.destroy())
           <div v-if="selectedRetirementSite" class="retirement-explorer">
             <aside class="retirement-site-list" aria-label="养老进度站点列表">
               <div class="retirement-site-list__heading"><strong>站点列表</strong><span>共 {{ retirement.sites?.length || 0 }} 个站点</span></div>
+              <VSelect v-model="retirementSortKey" :items="retirementSortOptions" label="排序方式" prepend-inner-icon="mdi-sort" density="compact" variant="outlined" hide-details class="retirement-site-sort" />
               <div class="retirement-site-list__items">
                 <button
-                  v-for="site in retirement.sites || []"
+                  v-for="site in sortedRetirementSites"
                   :key="retirementSiteKey(site)"
                   type="button"
                   class="retirement-site-option"
@@ -1149,6 +1178,7 @@ onBeforeUnmount(() => historyChart?.destroy())
 .retirement-site-list{position:sticky;top:16px;display:flex;min-width:0;min-height:0;max-height:calc(100vh - 32px);flex-direction:column;overflow:hidden;padding:14px;border-right:1px solid var(--pt-border);background:rgba(var(--v-theme-surface-variant),.1)}
 .retirement-site-list__heading{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:2px 4px 12px}
 .retirement-site-list__heading span{color:rgba(var(--v-theme-on-surface),.52);font-size:.7rem}
+.retirement-site-sort{width:100%;flex:0 0 auto;margin-bottom:10px}
 .retirement-site-list__items{display:grid;min-height:0;flex:1 1 auto;align-content:start;gap:5px;overflow-y:auto;overscroll-behavior:contain;scrollbar-gutter:stable}
 .retirement-site-option{appearance:none;display:grid;grid-template-columns:auto minmax(0,1fr) auto;align-items:center;gap:10px;width:100%;padding:11px 10px;border:1px solid transparent;border-radius:12px;background:transparent;color:inherit;font:inherit;text-align:left;cursor:pointer;transition:background-color .16s ease,border-color .16s ease}
 .retirement-site-option:hover,.retirement-site-option:focus-visible{border-color:rgba(var(--v-theme-primary),.34);background:rgba(var(--v-theme-primary),.08);outline:none}

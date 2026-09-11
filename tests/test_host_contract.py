@@ -103,6 +103,22 @@ class DatabaseHandle:
 
 
 class HostContractTests(unittest.TestCase):
+    def test_site_projection_exposes_priority_without_credentials(self):
+        site = SimpleNamespace(
+            id=7,
+            name="示例站点",
+            domain="Example.Test",
+            is_active=True,
+            pri=3,
+            cookie="secret",
+        )
+
+        value = PTDataStatistics._site_dict(site)
+
+        self.assertEqual(value["site_priority"], 3)
+        self.assertEqual(value["domain"], "example.test")
+        self.assertNotIn("cookie", value)
+
     def test_v3_render_and_api_contracts(self):
         plugin = PTDataStatistics.__new__(PTDataStatistics)
         plugin.init_plugin({"enabled": True})
@@ -535,7 +551,7 @@ class HostContractTests(unittest.TestCase):
         plugin._ensure_history = lambda: None
         plugin._repository = lambda: repository
         plugin._configured_sites = lambda: [
-            {"id": 7, "name": "U2", "domain": "inactive.test", "is_active": False}
+            {"id": 7, "name": "U2", "domain": "inactive.test", "is_active": False, "site_priority": 6}
         ]
         plugin._now = lambda: datetime(2026, 9, 5, 12, 0, tzinfo=ZoneInfo("Asia/Shanghai"))
 
@@ -543,6 +559,7 @@ class HostContractTests(unittest.TestCase):
 
         self.assertEqual(result.sites, [])
         self.assertEqual(result.retirement.total, 1)
+        self.assertEqual(result.retirement.sites[0].site_priority, 6)
         u2 = next(item for item in result.twelve.items if item.key == "u2")
         self.assertEqual(u2.state, "joined")
 
