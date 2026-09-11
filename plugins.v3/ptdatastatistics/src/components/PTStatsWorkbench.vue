@@ -40,6 +40,7 @@ const overview = ref({
 const distribution = ref({ month: '', day: '', monthly: [], daily: [] })
 const distributionFilters = ref({ month: '', day: '' })
 const distributionMetric = ref('upload')
+const ruleAnchorSites = ref([])
 const siteSortKey = ref('upload')
 const siteSortOptions = [
   { title: '累计上传', value: 'upload' },
@@ -411,6 +412,7 @@ async function loadAll() {
       ...hostSettings,
     }))
     exportFields.value = parsed.export_fields || []
+    ruleAnchorSites.value = parsed.rule_sites || []
     setDefaultRanges()
     await loadDistribution()
   } catch (err) {
@@ -461,6 +463,7 @@ async function saveSettings() {
       const data = unwrapResponse(await props.api.post(`${pluginBase.value}/settings`, payload)) || {}
       settingsDraft.value = JSON.parse(JSON.stringify(data.settings || payload))
       exportFields.value = data.export_fields || exportFields.value
+      ruleAnchorSites.value = data.rule_sites || ruleAnchorSites.value
       notify('设置已保存')
       emit('save', payload)
       return
@@ -468,6 +471,7 @@ async function saveSettings() {
     const data = unwrapResponse(await props.api.post(`${pluginBase.value}/settings`, payload)) || {}
     settingsDraft.value = JSON.parse(JSON.stringify(data.settings || settingsDraft.value))
     exportFields.value = data.export_fields || exportFields.value
+    ruleAnchorSites.value = data.rule_sites || ruleAnchorSites.value
     notify('设置已保存')
     emit('action')
   } catch (err) {
@@ -531,16 +535,30 @@ function normalizeUploadedRules(payload) {
   if (rules.length > 100) throw new Error('单个规则文件最多包含 100 个站点')
   return rules
 }
+function normalizedSiteName(value) {
+  return String(value || '').trim().toLocaleLowerCase()
+}
+function alignRulesToMoviePilotSites(rules) {
+  const moviePilotNames = new Map(
+    (ruleAnchorSites.value || []).map(name => [normalizedSiteName(name), String(name).trim()]).filter(([key]) => key)
+  )
+  if (!moviePilotNames.size) throw new Error('MoviePilot 当前没有可用于匹配的站点名称')
+  return rules.map(rule => {
+    const matchedName = moviePilotNames.get(normalizedSiteName(rule.site))
+    if (!matchedName) throw new Error(`${rule.site} 未匹配到 MoviePilot 站点名称`)
+    return { ...rule, site: matchedName, aliases: [] }
+  })
+}
 async function uploadRuleFile(event) {
   const file = event?.target?.files?.[0]
   if (!file) return
   try {
     if (file.size > 2 * 1024 * 1024) throw new Error('规则文件不能超过 2 MB')
     const payload = JSON.parse(await file.text())
-    const rules = normalizeUploadedRules(payload)
+    const rules = alignRulesToMoviePilotSites(normalizeUploadedRules(payload))
     settingsDraft.value.custom_retirement_rules = rules
     rulesUploadName.value = file.name
-    notify(`已载入 ${rules.length} 个站点规则，请保存设置后生效`)
+    notify(`已按 MoviePilot 站点名称载入 ${rules.length} 个站点规则，请保存设置后生效`)
   } catch (err) {
     notify(err instanceof SyntaxError ? '规则文件不是有效的 JSON' : err?.message || '读取规则文件失败', 'error')
   } finally {
@@ -552,26 +570,18 @@ function clearUploadedRules() {
   rulesUploadName.value = ''
   notify('已清空自定义规则，请保存设置后生效', 'warning')
 }
-function downloadRuleTemplate() {
-  const template = {
-    version: 1,
-    rules: [{
-      site: '站点显示名称',
-      aliases: ['example.org'],
-      retirement_level: 'Extreme User',
-      levels: [
-        { name: 'User', description: '默认等级' },
-        { name: 'Power User', min_join_days: 28, min_upload: 53687091200, min_ratio: 1.5 },
-        { name: 'Extreme User', min_join_days: 168, min_upload: 2199023255552, min_ratio: 4, description: '达到后永久保号' },
-      ],
-    }],
+async function downloadRuleTemplate() {
+  try {
+    const template = unwrapResponse(await props.api.get(`${pluginBase.value}/rules/template`, { feedback: 'silent' }))
+    const url = URL.createObjectURL(new Blob([JSON.stringify(template, null, 2)], { type: 'application/json' }))
+    const anchor = document.createElement('a')
+    anchor.href = url
+    anchor.download = 'mteam-level-rules-template.json'
+    anchor.click()
+    URL.revokeObjectURL(url)
+  } catch (err) {
+    notify(err?.message || '下载规则模板失败', 'error')
   }
-  const url = URL.createObjectURL(new Blob([JSON.stringify(template, null, 2)], { type: 'application/json' }))
-  const anchor = document.createElement('a')
-  anchor.href = url
-  anchor.download = 'pt-level-rules-template.json'
-  anchor.click()
-  URL.revokeObjectURL(url)
 }
 function distributionSegments(items) {
   const key = distributionMetric.value
@@ -1106,7 +1116,7 @@ onBeforeUnmount(() => historyChart?.destroy())
           <div class="settings-card"><div class="section-heading"><div><span class="section-kicker">GENERAL</span><h2>基础设置</h2></div></div><VSwitch v-model="settingsDraft.enabled" color="primary" label="启用插件" hint="启用后跟随 MP 的站点刷新设置同步已保存数据，并开放插件定时任务" persistent-hint /><VSwitch v-model="settingsDraft.show_sidebar" color="primary" label="在发现栏显示入口" /><VTextField v-model.number="settingsDraft.retention_days" type="number" min="0" max="36500" label="历史保留天数" hint="0 表示永久保留；仅清理插件历史副本" persistent-hint variant="outlined" class="mt-3" /></div>
           <div class="settings-card"><div class="section-heading"><div><span class="section-kicker">NOTIFICATION</span><h2>每日通知</h2></div></div><VSwitch v-model="settingsDraft.notification_enabled" color="primary" label="启用汇总通知" /><VTextField v-model="settingsDraft.notification_cron" label="通知 Cron（五段式）" placeholder="0 9 * * *" hint="分 时 日 月 星期；按服务器时区执行，每个自然日最多通知一次" persistent-hint variant="outlined" /><VCheckbox v-model="settingsDraft.notification_modes" value="today" label="今日数据：仅上传和下载增量" hide-details /><VCheckbox v-model="settingsDraft.notification_modes" value="all" label="所有数据：仅累计上传和累计下载" hide-details /><div class="setting-hint mt-2">Cron 错过后不补发；无数据站点不会通知。</div></div>
           <div class="settings-card settings-card--wide"><div class="section-heading"><div><span class="section-kicker">PTD RECEIVER</span><h2>PTD 数据补充</h2></div><span class="section-note">仅导入时魔和做种积分</span></div><VSwitch v-model="settingsDraft.ptd_cookiecloud_enabled" color="primary" label="启用 PTD 兼容接收端" hint="PTD 直接把最新备份发送给本插件；不需要启用 MoviePilot 内置 CookieCloud" persistent-hint /><div v-if="settingsDraft.ptd_cookiecloud_enabled" class="ptd-settings-grid"><VTextField :model-value="ptdReceiverUrl" class="ptd-receiver-url" label="PTD CookieCloud 地址" hint="把此地址填写到 PTD 的 CookieCloud 备份服务器" persistent-hint readonly variant="outlined" /><VTextField v-model="settingsDraft.ptd_cookiecloud_uuid" label="PTD 专用 UUID" hint="插件与 PTD 必须填写完全相同的 UUID" persistent-hint variant="outlined"><template #append-inner><VBtn icon="mdi-shuffle-variant" size="small" variant="text" title="随机生成 UUID" @click="randomizePtdUuid" /></template></VTextField><VTextField v-model="settingsDraft.ptd_cookiecloud_password" label="CookieCloud 密码" hint="插件与 PTD 必须填写完全相同的密码" persistent-hint type="text" autocomplete="off" variant="outlined"><template #append-inner><VBtn icon="mdi-shuffle-variant" size="small" variant="text" title="随机生成密码" @click="randomizePtdPassword" /></template></VTextField><VTextarea v-model="settingsDraft.ptd_cookiecloud_headers" label="接收鉴权 Headers（可选）" placeholder="X-PTD-Token: 自定义密钥" hint="如填写，PTD 的 Headers 也要逐行填写相同内容；日志不会记录值" persistent-hint variant="outlined" rows="3" /><VTextarea v-model="settingsDraft.ptd_site_mappings" class="ptd-site-mappings" label="站点映射（可选）" placeholder="audiences=audiences.me\nmteam=kp.m-team.cc" hint="自动匹配失败时，每行填写 PTD站点ID=MP域名或站点名" persistent-hint variant="outlined" rows="3" /></div><div class="setting-hint mt-3">先保存本页，再在 PTD 中新增 CookieCloud 备份服务器：地址使用上方接收地址，UUID、密码和可选 Headers 与这里保持一致；备份项目勾选“用户信息”。收到新备份后会立即解析并覆盖上一份数据，过程可在 MoviePilot 插件日志中查看。</div></div>
-          <div class="settings-card settings-card--wide"><div class="section-heading"><div><span class="section-kicker">LEVEL RULES</span><h2>等级规则</h2></div></div><input ref="rulesFileInput" class="rules-file-input" type="file" accept="application/json,.json" @change="uploadRuleFile"><div class="rules-upload"><div v-if="customRuleSites.length"><strong>已载入 {{ customRuleSites.length }} 个站点</strong><p>{{ customRuleSites.join('、') }}</p><small v-if="rulesUploadName">文件：{{ rulesUploadName }}</small></div><div class="rules-upload__actions"><VBtn variant="tonal" color="primary" prepend-icon="mdi-upload-outline" @click="rulesFileInput?.click()">上传规则文件</VBtn><VBtn variant="text" prepend-icon="mdi-file-download-outline" @click="downloadRuleTemplate">下载模板</VBtn><VBtn v-if="customRuleSites.length" variant="text" color="error" prepend-icon="mdi-delete-outline" @click="clearUploadedRules">清空</VBtn></div></div><div class="setting-hint mt-3">支持单个或多个站点；流量门槛使用字节，等级按 levels 中的顺序展示。文件只写入插件设置，不会上传到外部服务。</div></div>
+          <div class="settings-card settings-card--wide"><div class="section-heading"><div><span class="section-kicker">LEVEL RULES</span><h2>等级规则</h2></div><div class="rules-upload__actions"><VBtn variant="tonal" color="primary" prepend-icon="mdi-upload-outline" @click="rulesFileInput?.click()">上传规则文件</VBtn><VBtn variant="text" prepend-icon="mdi-file-download-outline" @click="downloadRuleTemplate">下载模板</VBtn><VBtn v-if="customRuleSites.length" variant="text" color="error" prepend-icon="mdi-delete-outline" @click="clearUploadedRules">清空</VBtn></div></div><input ref="rulesFileInput" class="rules-file-input" type="file" accept="application/json,.json" @change="uploadRuleFile"><div v-if="customRuleSites.length" class="rules-upload"><div><strong>已载入 {{ customRuleSites.length }} 个站点</strong><p>{{ customRuleSites.join('、') }}</p><small v-if="rulesUploadName">文件：{{ rulesUploadName }}</small></div></div><div class="setting-hint mt-3">支持单个或多个站点；流量门槛使用字节，等级按 levels 中的顺序展示。模板中的 _comment 仅用于说明，导入时忽略；文件只写入插件设置，不会上传到外部服务。</div></div>
           <div class="settings-card settings-card--wide"><div class="section-heading"><div><span class="section-kicker">DATA EXPORT</span><h2>数据导出</h2></div><span class="section-note">导出历史数据或生成高清进度图片</span></div><div class="data-actions"><VBtn variant="tonal" color="primary" prepend-icon="mdi-file-delimited-outline" @click="exportOpen = true">历史数据</VBtn><VBtn variant="tonal" color="primary" prepend-icon="mdi-image-outline" @click="careerOpen = true">PT 生涯</VBtn><VBtn variant="tonal" color="primary" prepend-icon="mdi-shield-star-outline" @click="retirementExportOpen = true">养老进度</VBtn></div></div>
           <div class="settings-card settings-card--wide settings-actions"><div><strong>数据来源</strong><p>上传、下载、分享率等仍仅来自 MoviePilot；PTD 只补充最新时魔和做种积分。</p></div><VBtn color="primary" size="large" variant="flat" prepend-icon="mdi-content-save-outline" :loading="saving" @click="saveSettings">保存设置</VBtn></div>
         </section>

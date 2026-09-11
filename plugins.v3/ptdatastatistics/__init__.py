@@ -42,6 +42,7 @@ from .api_models import (
 from .core import (
     DEFAULT_RETIREMENT_RULES,
     EXPORT_FIELDS,
+    MTEAM_RETIREMENT_RULE,
     as_float,
     as_int,
     as_text,
@@ -68,7 +69,7 @@ class PTDataStatistics(_PluginBase):
     plugin_name = "PT数据统计"
     plugin_desc = "统计 PT 站点累计与每日上传下载，提供历史、通知和导出。"
     plugin_icon = "ptdatastatistics.svg"
-    plugin_version = "1.2.0"
+    plugin_version = "1.2.1"
     plugin_author = "cz"
     author_url = "https://github.com/changzhanghs"
     plugin_config_prefix = "ptdatastatistics_"
@@ -105,6 +106,7 @@ class PTDataStatistics(_PluginBase):
             logger.warning(f"PT数据统计配置无效，已回退安全默认值：{error}")
             normalized = SettingsData()
         self._apply_settings(normalized)
+        self._log_custom_rule_state("已加载")
         self._sync_lock = threading.RLock()
 
     def _apply_settings(self, value: SettingsData) -> None:
@@ -122,6 +124,15 @@ class PTDataStatistics(_PluginBase):
         self._ptd_cookiecloud_headers = value.ptd_cookiecloud_headers
         self._ptd_site_mappings = value.ptd_site_mappings
         self._custom_retirement_rules = [rule.model_dump() for rule in value.custom_retirement_rules]
+
+    def _log_custom_rule_state(self, action: str) -> None:
+        """记录自定义规则状态，不输出具体门槛或说明正文。"""
+
+        sites = [as_text(rule.get("site")) for rule in self._custom_retirement_rules]
+        logger.info(
+            f"自定义等级规则{action}：{len(sites)} 个站点"
+            + (f"（{'、'.join(sites)}）" if sites else "")
+        )
 
     def _settings(self) -> SettingsData:
         """返回当前设置模型。"""
@@ -153,8 +164,7 @@ class PTDataStatistics(_PluginBase):
                 "levels": uploaded["levels"],
                 "_custom_rule": True,
             }
-            for identity in (uploaded["site"], *(uploaded.get("aliases") or [])):
-                rules[identity] = rule
+            rules[uploaded["site"]] = rule
         return rules
 
     def get_state(self) -> bool:
@@ -345,6 +355,14 @@ class PTDataStatistics(_PluginBase):
                 "auth": "bear",
                 "summary": "读取插件设置",
                 "response_model": SettingsResponse,
+            },
+            {
+                "path": "/rules/template",
+                "endpoint": self.api_rule_template,
+                "methods": ["GET"],
+                "auth": "bear",
+                "summary": "下载馒头等级规则模板",
+                "response_model": None,
             },
             {
                 "path": "/settings",
@@ -1033,13 +1051,42 @@ class PTDataStatistics(_PluginBase):
         return SettingsResponse(
             settings=self._settings(),
             export_fields=[ExportFieldData(key=key, label=label) for key, label in EXPORT_FIELDS],
+            rule_sites=[site["name"] for site in self._configured_sites() if site.get("name")],
         )
+
+    @staticmethod
+    def api_rule_template() -> dict[str, Any]:
+        """从内置馒头规则生成带说明、可直接上传的 JSON 模板。"""
+
+        levels = [
+            {
+                **level,
+                "aliases": list(level.get("aliases") or ()),
+            }
+            for level in MTEAM_RETIREMENT_RULE["levels"]
+        ]
+        return {
+            "version": 1,
+            "_comment": [
+                "这是馒头完整等级规则示例，可直接上传，也可复制后修改为其他站点。",
+                "site 必须与 MoviePilot 站点管理中的名称完全一致。",
+                "站点 ID、域名和站点 aliases 不参与匹配；levels[].aliases 仅用于匹配等级名称。",
+                "流量门槛使用字节；strict 为 true 表示严格大于，否则表示大于等于。",
+                "_comment 仅用于说明，导入时不会写入插件规则。",
+            ],
+            "rules": [{
+                "site": "馒头",
+                "retirement_level": MTEAM_RETIREMENT_RULE["retirement_level"],
+                "levels": levels,
+            }],
+        }
 
     def api_update_settings(self, payload: SettingsData) -> SettingsResponse:
         """保存设置并让宿主重建当前插件的定时任务。"""
 
         old_retention = self._retention_days
         self._apply_settings(payload)
+        self._log_custom_rule_state("已保存")
         self.update_config(payload.model_dump())
         if self._ptd_cookiecloud_enabled:
             logger.info(

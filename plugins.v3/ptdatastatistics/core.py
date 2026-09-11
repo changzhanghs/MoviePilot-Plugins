@@ -899,11 +899,11 @@ def _match_named_rule(
     if exact:
         return exact
     candidates = [
-        (bool(rule.get("_custom_rule")), len(alias), rule)
+        (len(alias), rule)
         for alias, rule in rules.items()
         if alias and (alias in identity or identity in alias)
     ]
-    return max(candidates, key=lambda item: (item[0], item[1]))[2] if candidates else None
+    return max(candidates, key=lambda item: item[0])[1] if candidates else None
 
 
 def _match_level_index(current_level: Any, levels: Iterable[Mapping[str, Any]]) -> int:
@@ -1147,9 +1147,22 @@ def build_retirement_progress(
             "levels_remaining": None,
             "route": [],
         }
-        rule = _match_named_rule(snapshot.get("site_name"), rules)
+        site_identity = normalize_identity(snapshot.get("site_name"))
+        rule = next(
+            (
+                candidate
+                for name, candidate in rules.items()
+                if candidate.get("_custom_rule") and normalize_identity(name) == site_identity
+            ),
+            None,
+        )
         if not rule:
-            rule = _match_named_rule(snapshot.get("domain"), rules)
+            builtin_rules = {
+                name: candidate
+                for name, candidate in rules.items()
+                if not candidate.get("_custom_rule")
+            }
+            rule = _match_named_rule(snapshot.get("site_name"), builtin_rules)
         raw_levels = list(rule.get("levels") or []) if rule else []
         retirement_name = as_text(rule.get("retirement_level")) if rule else ""
         if not raw_levels or not retirement_name:

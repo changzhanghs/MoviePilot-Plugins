@@ -799,8 +799,9 @@ class TwelveAndExportTests(unittest.TestCase):
         self.assertEqual(site["retirement_level"], "Extreme User")
         self.assertEqual(len(site["route"]), 10)
 
-    def test_uploaded_rule_can_match_site_domain_when_display_name_is_custom(self):
+    def test_uploaded_rule_does_not_match_site_domain_when_display_name_differs(self):
         rule = {
+            "_custom_rule": True,
             "retirement_level": "Nexus Master",
             "levels": [
                 {"name": "User"},
@@ -820,9 +821,9 @@ class TwelveAndExportTests(unittest.TestCase):
         )
         site = progress["sites"][0]
 
-        self.assertEqual(site["status"], "upgrading")
-        self.assertEqual(site["next_level"], "Nexus Master")
-        self.assertEqual(len(site["route"]), 3)
+        self.assertEqual(site["status"], "rule_missing")
+        self.assertEqual(site["next_level"], "")
+        self.assertEqual(len(site["route"]), 0)
 
 
 class PackagingTests(unittest.TestCase):
@@ -830,7 +831,8 @@ class PackagingTests(unittest.TestCase):
         manifest = json.loads((ROOT / "package.v3.json").read_text(encoding="utf-8"))
         meta = manifest["PTDataStatistics"]
         source = (PLUGIN / "__init__.py").read_text(encoding="utf-8")
-        self.assertEqual(meta["version"], "1.2.0")
+        self.assertEqual(meta["version"], "1.2.1")
+        self.assertEqual(meta["history"]["v1.2.1"], "不值一提")
         self.assertEqual(meta["history"]["v1.2.0"], "不值一提")
         self.assertEqual(meta["history"]["v1.1.9"], "不值一提")
         self.assertEqual(meta["history"]["v1.1.8"], "不值一提")
@@ -851,8 +853,8 @@ class PackagingTests(unittest.TestCase):
         self.assertEqual(meta["history"]["v1.0.2"], "更新了一些东西")
         self.assertEqual(meta["history"]["v1.0.1"], "更新了一些东西")
         self.assertEqual(meta["history"]["v1.0.0"], "更新了一些东西")
-        self.assertEqual(list(meta["history"]), ["v1.2.0", "v1.1.9", "v1.1.8", "v1.1.7", "v1.1.6", "v1.1.5", "v1.1.4", "v1.1.3", "v1.1.2", "v1.1.1", "v1.1.0", "v1.0.10", "v1.0.9", "v1.0.8", "v1.0.7", "v1.0.6", "v1.0.5", "v1.0.4", "v1.0.3", "v1.0.2", "v1.0.1", "v1.0.0"])
-        self.assertIn('plugin_version = "1.2.0"', source)
+        self.assertEqual(list(meta["history"]), ["v1.2.1", "v1.2.0", "v1.1.9", "v1.1.8", "v1.1.7", "v1.1.6", "v1.1.5", "v1.1.4", "v1.1.3", "v1.1.2", "v1.1.1", "v1.1.0", "v1.0.10", "v1.0.9", "v1.0.8", "v1.0.7", "v1.0.6", "v1.0.5", "v1.0.4", "v1.0.3", "v1.0.2", "v1.0.1", "v1.0.0"])
+        self.assertIn('plugin_version = "1.2.1"', source)
         self.assertEqual(meta["system_version"], ">=3.0.0")
         self.assertNotIn("release", meta)
 
@@ -1016,8 +1018,13 @@ class PackagingTests(unittest.TestCase):
         self.assertIn('class="rules-file-input"', source)
         self.assertIn("async function uploadRuleFile(event)", source)
         self.assertIn("settingsDraft.value.custom_retirement_rules = rules", source)
+        self.assertIn("alignRulesToMoviePilotSites(normalizeUploadedRules(payload))", source)
+        self.assertIn("return { ...rule, site: matchedName, aliases: [] }", source)
         self.assertIn("await props.api.post(`${pluginBase.value}/settings`, payload)", source)
+        self.assertIn("`${pluginBase.value}/rules/template`", source)
+        self.assertIn("mteam-level-rules-template.json", source)
         self.assertIn("下载模板", source)
+        self.assertLess(source.index('class="rules-upload__actions"'), source.index('class="rules-file-input"'))
         self.assertNotIn("使用内置等级规则", source)
         self.assertNotIn("自定义规则优先于同名内置规则", source)
         self.assertIn(':model-value="selectedRetirementView.routeProgress"', source)
