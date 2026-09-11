@@ -40,6 +40,7 @@ from .api_models import (
     TwelveProgressData,
 )
 from .core import (
+    DEFAULT_RETIREMENT_RULES,
     EXPORT_FIELDS,
     as_float,
     as_int,
@@ -67,7 +68,7 @@ class PTDataStatistics(_PluginBase):
     plugin_name = "PT数据统计"
     plugin_desc = "统计 PT 站点累计与每日上传下载，提供历史、通知和导出。"
     plugin_icon = "ptdatastatistics.svg"
-    plugin_version = "1.1.7"
+    plugin_version = "1.1.8"
     plugin_author = "cz"
     author_url = "https://github.com/changzhanghs"
     plugin_config_prefix = "ptdatastatistics_"
@@ -85,6 +86,7 @@ class PTDataStatistics(_PluginBase):
     _ptd_cookiecloud_password = ""
     _ptd_cookiecloud_headers = ""
     _ptd_site_mappings = ""
+    _custom_retirement_rules: ClassVar[list[dict[str, Any]]] = []
 
     def init_plugin(self, config: dict | None = None) -> None:
         """读取配置；数据库建表由 V3 插件生命周期在本方法之后完成。"""
@@ -119,6 +121,7 @@ class PTDataStatistics(_PluginBase):
         self._ptd_cookiecloud_password = value.ptd_cookiecloud_password
         self._ptd_cookiecloud_headers = value.ptd_cookiecloud_headers
         self._ptd_site_mappings = value.ptd_site_mappings
+        self._custom_retirement_rules = [rule.model_dump() for rule in value.custom_retirement_rules]
 
     def _settings(self) -> SettingsData:
         """返回当前设置模型。"""
@@ -135,7 +138,23 @@ class PTDataStatistics(_PluginBase):
             ptd_cookiecloud_password=self._ptd_cookiecloud_password,
             ptd_cookiecloud_headers=self._ptd_cookiecloud_headers,
             ptd_site_mappings=self._ptd_site_mappings,
+            custom_retirement_rules=self._custom_retirement_rules,
         )
+
+    def _retirement_rules(self) -> dict[str, dict[str, Any]]:
+        """将用户规则覆盖到内置规则，同时保留未覆盖的内置站点。"""
+
+        rules: dict[str, dict[str, Any]] = {
+            name: dict(rule) for name, rule in DEFAULT_RETIREMENT_RULES.items()
+        }
+        for uploaded in self._custom_retirement_rules:
+            rule = {
+                "retirement_level": uploaded["retirement_level"],
+                "levels": uploaded["levels"],
+            }
+            for identity in (uploaded["site"], *(uploaded.get("aliases") or [])):
+                rules[identity] = rule
+        return rules
 
     def get_state(self) -> bool:
         """返回插件启用状态。"""
@@ -829,7 +848,7 @@ class PTDataStatistics(_PluginBase):
             for item in latest_valid_all
         ]
         retirement = RetirementProgressData.model_validate(
-            build_retirement_progress(retirement_snapshots)
+            build_retirement_progress(retirement_snapshots, self._retirement_rules())
         )
         first_day, last_day = repository.date_bounds()
         last_mp_update = max(

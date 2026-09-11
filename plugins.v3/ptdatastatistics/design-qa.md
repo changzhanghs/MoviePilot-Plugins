@@ -32,4 +32,26 @@
 - Python contract suite: 62 tests passed.
 - `git diff --check`: passed.
 
+## 2026-09-12 完整等级路线复核
+
+- Source visual truth: `C:\Users\cz\AppData\Local\Temp\codex-clipboard-f65e13e4-26d5-451f-bfbe-219c7d1e9a92.png`（1544 × 1151）。
+- Implementation capture: Codex 内置浏览器中的本地 QA 页面 `http://127.0.0.1:4173/qa.html`（会话截图，1544 × 1000 CSS px，未持久化为仓库文件）。
+- Test state: 红豆饭，当前 `Power User`，下一等级 `Elite User`，保号目标 `Extreme User`；完整路线还包含目标后的 `Ultimate User` 与 `Nexus Master`。
+
+### Full-view and focused comparison
+
+- 顶部养老路线现从首级开始显示：`Peasant`、`User` 等已到达等级不会再因当前等级过滤而消失，并继续显示到保号目标 `Extreme User`。
+- 顶部进度线把当前等级之前的完整区段计入进度，再叠加下一等级要求的当前完成比例；编号、状态色、间距、文字层级和既有暗色主题保持不变。
+- 底部“等级路线与要求”改用站点完整 `route`，QA 中确认从 `Peasant` 一直列到 `Nexus Master`，不再被保号目标截断。
+- 当前等级与下一等级仍默认展开，普通已到达、待达成及保号目标的状态样式和展开交互均保留。
+- 聚焦检查未发现文字重叠、水平溢出、错位或颜色回归；字体、间距、色彩、图标资源和中文文案与原组件一致。
+
+### Iteration history and checks
+
+- Initial implementation issue: 顶部通过 `route.slice(currentIndex)` 隐藏已到达等级，底部又复用了截断到保号目标的路线。
+- Fix: 顶部使用完整养老路线，底部独立使用站点完整等级列表，同时修正顶部路线总进度基准。
+- Post-fix evidence: 浏览器可访问性树确认顶部包含当前等级前的节点，底部包含保号目标后的 `Ultimate User`、`Nexus Master`；浏览器控制台无 warning/error。
+- Automated verification: 插件 45 项测试、宿主契约 21 项测试、Vite production build 和 `git diff --check` 全部通过。
+- Findings: 无 P0、P1 或 P2 缺陷。
+
 final result: passed

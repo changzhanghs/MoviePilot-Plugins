@@ -805,7 +805,8 @@ class PackagingTests(unittest.TestCase):
         manifest = json.loads((ROOT / "package.v3.json").read_text(encoding="utf-8"))
         meta = manifest["PTDataStatistics"]
         source = (PLUGIN / "__init__.py").read_text(encoding="utf-8")
-        self.assertEqual(meta["version"], "1.1.7")
+        self.assertEqual(meta["version"], "1.1.8")
+        self.assertEqual(meta["history"]["v1.1.8"], "不值一提")
         self.assertEqual(meta["history"]["v1.1.7"], "更新了一些东西")
         self.assertEqual(meta["history"]["v1.1.6"], "更新了一些东西")
         self.assertEqual(meta["history"]["v1.1.5"], "更新了一些东西")
@@ -823,8 +824,8 @@ class PackagingTests(unittest.TestCase):
         self.assertEqual(meta["history"]["v1.0.2"], "更新了一些东西")
         self.assertEqual(meta["history"]["v1.0.1"], "更新了一些东西")
         self.assertEqual(meta["history"]["v1.0.0"], "更新了一些东西")
-        self.assertEqual(list(meta["history"]), ["v1.1.7", "v1.1.6", "v1.1.5", "v1.1.4", "v1.1.3", "v1.1.2", "v1.1.1", "v1.1.0", "v1.0.10", "v1.0.9", "v1.0.8", "v1.0.7", "v1.0.6", "v1.0.5", "v1.0.4", "v1.0.3", "v1.0.2", "v1.0.1", "v1.0.0"])
-        self.assertIn('plugin_version = "1.1.7"', source)
+        self.assertEqual(list(meta["history"]), ["v1.1.8", "v1.1.7", "v1.1.6", "v1.1.5", "v1.1.4", "v1.1.3", "v1.1.2", "v1.1.1", "v1.1.0", "v1.0.10", "v1.0.9", "v1.0.8", "v1.0.7", "v1.0.6", "v1.0.5", "v1.0.4", "v1.0.3", "v1.0.2", "v1.0.1", "v1.0.0"])
+        self.assertIn('plugin_version = "1.1.8"', source)
         self.assertEqual(meta["system_version"], ">=3.0.0")
         self.assertNotIn("release", meta)
 
@@ -858,6 +859,21 @@ class PackagingTests(unittest.TestCase):
         self.assertNotIn("完整档案", source)
         self.assertNotIn("公开分享", source)
         self.assertNotIn("applyPreset", source)
+
+    def test_retirement_export_generates_complete_route_png(self):
+        source = (PLUGIN / "src" / "components" / "RetirementExportDialog.vue").read_text(
+            encoding="utf-8"
+        )
+        workbench = (PLUGIN / "src" / "components" / "PTStatsWorkbench.vue").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn("养老进度-${props.overview.server_date", source)
+        self.assertIn("const route = site.route || []", source)
+        self.assertIn("图片包含当前等级、保号目标、账户关键数据和完整等级路线", source)
+        self.assertIn("<h2>数据导出</h2>", workbench)
+        self.assertNotIn("<h2>数据管理</h2>", workbench)
+        self.assertIn("retirementExportOpen = true", workbench)
+        self.assertIn("<RetirementExportDialog", workbench)
 
     def test_workbench_ui_polish_contract(self):
         source = (PLUGIN / "src" / "components" / "PTStatsWorkbench.vue").read_text(
@@ -964,7 +980,15 @@ class PackagingTests(unittest.TestCase):
         self.assertIn("eta: nextLevelEta(site, requirements)", source)
         self.assertIn("row.detail.replace(/^剩余\\s*/, '')", source)
         self.assertIn('class="retirement-levels__columns"', source)
-        self.assertIn('<details v-for="level in selectedRetirementView.route"', source)
+        self.assertIn('<details v-for="level in selectedRetirementView.levels"', source)
+        self.assertIn("const route = retirementRoute(site)", source)
+        self.assertIn("const levels = site.route || []", source)
+        self.assertNotIn("route.slice(currentIndex)", source)
+        self.assertIn("completedRouteSegments + overallProgress / 100", source)
+        self.assertIn('class="rules-file-input"', source)
+        self.assertIn("async function uploadRuleFile(event)", source)
+        self.assertIn("settingsDraft.value.custom_retirement_rules = rules", source)
+        self.assertIn("下载模板", source)
         self.assertIn(':model-value="selectedRetirementView.routeProgress"', source)
         self.assertNotIn("待同步积分时速", source)
         self.assertIn("nextLevelOverallProgress(site)", source)

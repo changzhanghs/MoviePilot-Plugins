@@ -135,6 +135,39 @@ class HostContractTests(unittest.TestCase):
         self.assertEqual(value.notification_cron, "30 8 * * *")
         self.assertEqual(value.notification_modes, ["today", "all"])
 
+    def test_uploaded_level_rules_are_validated_and_override_builtins(self):
+        value = SettingsData(custom_retirement_rules=[{
+            "site": "红豆饭",
+            "aliases": ["HDFans-Custom"],
+            "retirement_level": "Keeper",
+            "levels": [
+                {"name": "User"},
+                {"name": "Keeper", "min_join_days": 30, "min_upload": 1024},
+            ],
+        }])
+        plugin = PTDataStatistics.__new__(PTDataStatistics)
+        plugin.init_plugin(value.model_dump())
+
+        rules = plugin._retirement_rules()
+
+        self.assertEqual(rules["红豆饭"]["retirement_level"], "Keeper")
+        self.assertEqual(rules["HDFans-Custom"]["levels"][1]["min_upload"], 1024)
+        self.assertIn("观众", rules)
+        progress = importlib.import_module("ptdatastatistics.core").build_retirement_progress(
+            [{"site_name": "红豆饭", "user_level": "User", "updated_day": "2026-09-12"}],
+            rules,
+        )
+        self.assertEqual(progress["sites"][0]["retirement_level"], "Keeper")
+        self.assertEqual([item["name"] for item in progress["sites"][0]["route"]], ["User", "Keeper"])
+
+    def test_uploaded_level_rule_requires_retirement_level_in_route(self):
+        with self.assertRaisesRegex(ValueError, "保号等级不在等级路线中"):
+            SettingsData(custom_retirement_rules=[{
+                "site": "示例站",
+                "retirement_level": "Extreme User",
+                "levels": [{"name": "User"}],
+            }])
+
     @staticmethod
     def _request(headers: list[tuple[bytes, bytes]] | None = None) -> Request:
         return Request({"type": "http", "method": "GET", "path": "/", "headers": headers or []})

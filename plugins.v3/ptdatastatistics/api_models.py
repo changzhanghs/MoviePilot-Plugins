@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 
 class SiteSnapshotData(BaseModel):
@@ -204,6 +204,81 @@ class ExportFieldData(BaseModel):
     label: str
 
 
+class UploadedLevelRuleData(BaseModel):
+    """用户上传规则中的单个等级。"""
+
+    model_config = ConfigDict(extra="forbid")
+
+    name: str = Field(min_length=1, max_length=128)
+    aliases: list[str] = Field(default_factory=list)
+    description: str = Field(default="", max_length=2000)
+    min_join_days: int = Field(default=0, ge=0)
+    min_join_days_strict: bool = False
+    min_upload: int = Field(default=0, ge=0)
+    min_upload_strict: bool = False
+    min_download: int = Field(default=0, ge=0)
+    min_download_strict: bool = False
+    min_ratio: float | None = Field(default=None, ge=0)
+    min_ratio_strict: bool = False
+    min_bonus: float | None = Field(default=None, ge=0)
+    min_seeding_points: float | None = Field(default=None, ge=0)
+    min_seeding_points_strict: bool = False
+    min_seeding: int = Field(default=0, ge=0)
+
+    @field_validator("name", "description")
+    @classmethod
+    def strip_level_text(cls, value: str) -> str:
+        return str(value or "").strip()
+
+    @field_validator("aliases")
+    @classmethod
+    def normalize_level_aliases(cls, value: list[str]) -> list[str]:
+        return list(dict.fromkeys(str(item).strip() for item in value if str(item).strip()))
+
+
+class UploadedRetirementRuleData(BaseModel):
+    """用户上传的单站完整等级规则。"""
+
+    model_config = ConfigDict(extra="forbid")
+
+    site: str = Field(min_length=1, max_length=128)
+    aliases: list[str] = Field(default_factory=list)
+    retirement_level: str = Field(min_length=1, max_length=128)
+    levels: list[UploadedLevelRuleData] = Field(min_length=1, max_length=100)
+
+    @field_validator("site", "retirement_level")
+    @classmethod
+    def strip_rule_text(cls, value: str) -> str:
+        return str(value or "").strip()
+
+    @field_validator("aliases")
+    @classmethod
+    def normalize_site_aliases(cls, value: list[str]) -> list[str]:
+        return list(dict.fromkeys(str(item).strip() for item in value if str(item).strip()))
+
+    @model_validator(mode="after")
+    def validate_level_route(self):
+        """等级名不可重复，保号等级必须存在于完整路线。"""
+
+        identities: set[str] = set()
+        retirement_identity = "".join(character for character in self.retirement_level.casefold() if character.isalnum())
+        retirement_found = False
+        for level in self.levels:
+            level_identities = {
+                "".join(character for character in value.casefold() if character.isalnum())
+                for value in (level.name, *level.aliases)
+            }
+            if not level_identities or "" in level_identities:
+                raise ValueError("等级名称不能为空")
+            if identities.intersection(level_identities):
+                raise ValueError(f"等级名称或别名重复：{level.name}")
+            identities.update(level_identities)
+            retirement_found = retirement_found or retirement_identity in level_identities
+        if not retirement_found:
+            raise ValueError(f"保号等级不在等级路线中：{self.retirement_level}")
+        return self
+
+
 class SettingsData(BaseModel):
     """插件可编辑设置。"""
 
@@ -218,6 +293,7 @@ class SettingsData(BaseModel):
     ptd_cookiecloud_password: str = ""
     ptd_cookiecloud_headers: str = ""
     ptd_site_mappings: str = ""
+    custom_retirement_rules: list[UploadedRetirementRuleData] = Field(default_factory=list, max_length=100)
 
     @field_validator("retention_days")
     @classmethod
@@ -250,6 +326,23 @@ class SettingsData(BaseModel):
         allowed = {"today", "all"}
         modes = [item for item in value if item in allowed]
         return list(dict.fromkeys(modes))
+
+    @field_validator("custom_retirement_rules")
+    @classmethod
+    def validate_custom_rule_sites(
+        cls,
+        value: list[UploadedRetirementRuleData],
+    ) -> list[UploadedRetirementRuleData]:
+        """同一上传文件中的站点名称和别名必须唯一，避免匹配歧义。"""
+
+        identities: set[str] = set()
+        for rule in value:
+            for name in (rule.site, *rule.aliases):
+                identity = "".join(character for character in name.casefold() if character.isalnum())
+                if identity in identities:
+                    raise ValueError(f"站点名称或别名重复：{name}")
+                identities.add(identity)
+        return value
 
     @field_validator(
         "ptd_cookiecloud_uuid",

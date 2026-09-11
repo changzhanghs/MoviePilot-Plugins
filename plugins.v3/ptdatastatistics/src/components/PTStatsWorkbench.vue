@@ -4,6 +4,7 @@ import Chart from 'chart.js/auto'
 import CareerExportDialog from './CareerExportDialog.vue'
 import ExportDialog from './ExportDialog.vue'
 import MetricCard from './MetricCard.vue'
+import RetirementExportDialog from './RetirementExportDialog.vue'
 import SiteAvatar from './SiteAvatar.vue'
 import { formatBytes, formatNumber, openNativePicker, siteColors, unwrapResponse, withQuery } from '../utils'
 
@@ -27,6 +28,9 @@ const distributionLoading = ref(false)
 const error = ref('')
 const exportOpen = ref(false)
 const careerOpen = ref(false)
+const retirementExportOpen = ref(false)
+const rulesFileInput = ref(null)
+const rulesUploadName = ref('')
 const overview = ref({
   server_date: '', generated_at: '', first_history_day: '', last_history_day: '',
   summary: {}, sites: [], today_sites: [], history_sites: [],
@@ -52,6 +56,7 @@ const settingsDraft = ref({
   ptd_cookiecloud_enabled: false, ptd_cookiecloud_uuid: '',
   ptd_cookiecloud_password: '', ptd_cookiecloud_headers: '',
   ptd_site_mappings: '',
+  custom_retirement_rules: [],
 })
 const history = ref({ start_day: '', end_day: '', count: 0, records: [] })
 const historyFilters = ref({ startDay: '', endDay: '', siteIds: [], includeArchived: true })
@@ -86,6 +91,9 @@ const twelveTrackPercent = computed(() => {
   return Math.min(100, (twelveJoinedCount.value - 1) * 100 / (twelveTotalCount.value - 1))
 })
 const retirement = computed(() => overview.value.retirement || { sites: [] })
+const customRuleSites = computed(() => (
+  settingsDraft.value.custom_retirement_rules || []
+).map(rule => rule.site).filter(Boolean))
 const selectedRetirementSite = computed(() => {
   const sites = retirement.value.sites || []
   return sites.find(site => retirementSiteKey(site) === selectedRetirementSiteKey.value) || sites[0] || null
@@ -476,6 +484,91 @@ function randomizePtdUuid() {
 function randomizePtdPassword() {
   settingsDraft.value.ptd_cookiecloud_password = randomPtdValue(24)
 }
+function uploadedRuleList(payload) {
+  if (Array.isArray(payload)) return payload
+  if (Array.isArray(payload?.rules)) return payload.rules
+  if (Array.isArray(payload?.sites)) return payload.sites
+  const container = payload?.rules && typeof payload.rules === 'object' ? payload.rules : payload
+  if (!container || typeof container !== 'object') throw new Error('规则文件必须包含 rules 或 sites 数组')
+  return Object.entries(container)
+    .filter(([key]) => key !== 'version')
+    .map(([site, rule]) => ({ site, ...(rule || {}) }))
+}
+function normalizeUploadedRules(payload) {
+  const rules = uploadedRuleList(payload).map((rule, index) => {
+    const site = String(rule?.site || rule?.name || '').trim()
+    const retirementLevel = String(rule?.retirement_level || '').trim()
+    const levels = Array.isArray(rule?.levels) ? rule.levels : []
+    if (!site) throw new Error(`第 ${index + 1} 条规则缺少 site`)
+    if (!retirementLevel) throw new Error(`${site} 缺少 retirement_level`)
+    if (!levels.length) throw new Error(`${site} 缺少完整 levels 列表`)
+    const levelNames = new Set()
+    let retirementFound = false
+    const normalizedLevels = levels.map((level, levelIndex) => {
+      const name = String(level?.name || '').trim()
+      if (!name) throw new Error(`${site} 的第 ${levelIndex + 1} 个等级缺少 name`)
+      const aliases = Array.isArray(level.aliases) ? level.aliases.map(value => String(value).trim()).filter(Boolean) : []
+      for (const identity of [name, ...aliases].map(value => value.toLocaleLowerCase())) {
+        if (levelNames.has(identity)) throw new Error(`${site} 的等级名称或别名重复：${name}`)
+        levelNames.add(identity)
+      }
+      retirementFound ||= [name, ...aliases].some(value => value.toLocaleLowerCase() === retirementLevel.toLocaleLowerCase())
+      return { ...level, name, aliases }
+    })
+    if (!retirementFound) throw new Error(`${site} 的保号等级不在 levels 中：${retirementLevel}`)
+    return {
+      site,
+      aliases: Array.isArray(rule.aliases) ? rule.aliases.map(value => String(value).trim()).filter(Boolean) : [],
+      retirement_level: retirementLevel,
+      levels: normalizedLevels,
+    }
+  })
+  if (!rules.length) throw new Error('规则文件中没有可用站点')
+  if (rules.length > 100) throw new Error('单个规则文件最多包含 100 个站点')
+  return rules
+}
+async function uploadRuleFile(event) {
+  const file = event?.target?.files?.[0]
+  if (!file) return
+  try {
+    if (file.size > 2 * 1024 * 1024) throw new Error('规则文件不能超过 2 MB')
+    const payload = JSON.parse(await file.text())
+    const rules = normalizeUploadedRules(payload)
+    settingsDraft.value.custom_retirement_rules = rules
+    rulesUploadName.value = file.name
+    notify(`已载入 ${rules.length} 个站点规则，请保存设置后生效`)
+  } catch (err) {
+    notify(err instanceof SyntaxError ? '规则文件不是有效的 JSON' : err?.message || '读取规则文件失败', 'error')
+  } finally {
+    if (event?.target) event.target.value = ''
+  }
+}
+function clearUploadedRules() {
+  settingsDraft.value.custom_retirement_rules = []
+  rulesUploadName.value = ''
+  notify('已清空自定义规则，请保存设置后生效', 'warning')
+}
+function downloadRuleTemplate() {
+  const template = {
+    version: 1,
+    rules: [{
+      site: '站点显示名称',
+      aliases: ['example.org'],
+      retirement_level: 'Extreme User',
+      levels: [
+        { name: 'User', description: '默认等级' },
+        { name: 'Power User', min_join_days: 28, min_upload: 53687091200, min_ratio: 1.5 },
+        { name: 'Extreme User', min_join_days: 168, min_upload: 2199023255552, min_ratio: 4, description: '达到后永久保号' },
+      ],
+    }],
+  }
+  const url = URL.createObjectURL(new Blob([JSON.stringify(template, null, 2)], { type: 'application/json' }))
+  const anchor = document.createElement('a')
+  anchor.href = url
+  anchor.download = 'pt-level-rules-template.json'
+  anchor.click()
+  URL.revokeObjectURL(url)
+}
 function distributionSegments(items) {
   const key = distributionMetric.value
   const total = (items || []).reduce((sum, item) => sum + Number(item[key] || 0), 0)
@@ -502,11 +595,6 @@ function retirementRoute(site) {
   const route = site.route || []
   const retirementIndex = route.findIndex(level => level.is_retirement)
   return retirementIndex >= 0 ? route.slice(0, retirementIndex + 1) : route
-}
-function displayRetirementRoute(site) {
-  const route = retirementRoute(site)
-  const currentIndex = route.findIndex(level => level.is_current)
-  return currentIndex >= 0 ? route.slice(currentIndex) : route
 }
 function nextLevelOverallProgress(site) {
   const nextLevel = nextLevelRule(site)
@@ -649,21 +737,29 @@ const selectedRetirementView = computed(() => {
   const site = selectedRetirementSite.value
   if (!site) return null
 
-  const route = displayRetirementRoute(site)
+  const route = retirementRoute(site)
+  const levels = site.route || []
   const nextLevel = nextLevelRule(site)
   const requirements = requirementRows(site, nextLevel)
   const overallProgress = averageRequirementProgress(requirements)
   const completedCount = requirements.filter(row => row.complete).length
   const routeCount = route.length
+  const currentRouteIndex = route.findIndex(level => level.is_current)
+  const completedRouteSegments = currentRouteIndex >= 0
+    ? Math.min(currentRouteIndex, Math.max(routeCount - 1, 0))
+    : site.status === 'retired' ? Math.max(routeCount - 1, 0) : 0
 
   return {
     route,
+    levels,
     routeStyle: routeCount ? {
       '--route-count': routeCount,
       '--route-inset': `${50 / routeCount}%`,
       '--route-span': `${100 - 100 / routeCount}%`,
     } : {},
-    routeProgress: routeCount <= 1 ? 100 : overallProgress / (routeCount - 1),
+    routeProgress: routeCount <= 1
+      ? 100
+      : Math.min(100, (completedRouteSegments + overallProgress / 100) * 100 / (routeCount - 1)),
     requirements,
     overallProgress,
     completedCount,
@@ -973,11 +1069,11 @@ onBeforeUnmount(() => historyChart?.destroy())
 
               </div>
 
-              <section v-if="selectedRetirementView.route.length" class="retirement-levels">
+              <section v-if="selectedRetirementView.levels.length" class="retirement-levels">
                 <div class="retirement-levels__heading"><div><VIcon icon="mdi-chart-bar" color="primary" /><strong>等级路线与要求</strong></div></div>
                 <div class="retirement-levels__table">
                   <div class="retirement-levels__columns"><span>等级</span><span>注册</span><span>流量</span><span>分享率</span><span>做种积分</span><span>积分预计</span><span>状态</span><i /></div>
-                  <details v-for="level in selectedRetirementView.route" :key="level.name" class="retirement-level-row" :class="{ 'is-current': level.is_current, 'is-next': level.name === selectedRetirementSite.next_level, 'is-retirement': level.is_retirement }" :open="level.is_current || level.name === selectedRetirementSite.next_level">
+                  <details v-for="level in selectedRetirementView.levels" :key="level.name" class="retirement-level-row" :class="{ 'is-current': level.is_current, 'is-next': level.name === selectedRetirementSite.next_level, 'is-retirement': level.is_retirement }" :open="level.is_current || level.name === selectedRetirementSite.next_level">
                     <summary>
                       <strong>{{ level.name }}</strong>
                       <span>{{ level.min_join_days ? `${level.min_join_days_strict ? '>' : '≥'} ${durationLabel(level.min_join_days)}` : '无限制' }}</span>
@@ -1004,13 +1100,15 @@ onBeforeUnmount(() => historyChart?.destroy())
           <div class="settings-card"><div class="section-heading"><div><span class="section-kicker">GENERAL</span><h2>基础设置</h2></div></div><VSwitch v-model="settingsDraft.enabled" color="primary" label="启用插件" hint="启用后跟随 MP 的站点刷新设置同步已保存数据，并开放插件定时任务" persistent-hint /><VSwitch v-model="settingsDraft.show_sidebar" color="primary" label="在发现栏显示入口" /><VTextField v-model.number="settingsDraft.retention_days" type="number" min="0" max="36500" label="历史保留天数" hint="0 表示永久保留；仅清理插件历史副本" persistent-hint variant="outlined" class="mt-3" /></div>
           <div class="settings-card"><div class="section-heading"><div><span class="section-kicker">NOTIFICATION</span><h2>每日通知</h2></div></div><VSwitch v-model="settingsDraft.notification_enabled" color="primary" label="启用汇总通知" /><VTextField v-model="settingsDraft.notification_cron" label="通知 Cron（五段式）" placeholder="0 9 * * *" hint="分 时 日 月 星期；按服务器时区执行，每个自然日最多通知一次" persistent-hint variant="outlined" /><VCheckbox v-model="settingsDraft.notification_modes" value="today" label="今日数据：仅上传和下载增量" hide-details /><VCheckbox v-model="settingsDraft.notification_modes" value="all" label="所有数据：仅累计上传和累计下载" hide-details /><div class="setting-hint mt-2">Cron 错过后不补发；无数据站点不会通知。</div></div>
           <div class="settings-card settings-card--wide"><div class="section-heading"><div><span class="section-kicker">PTD RECEIVER</span><h2>PTD 数据补充</h2></div><span class="section-note">仅导入时魔和做种积分</span></div><VSwitch v-model="settingsDraft.ptd_cookiecloud_enabled" color="primary" label="启用 PTD 兼容接收端" hint="PTD 直接把最新备份发送给本插件；不需要启用 MoviePilot 内置 CookieCloud" persistent-hint /><div v-if="settingsDraft.ptd_cookiecloud_enabled" class="ptd-settings-grid"><VTextField :model-value="ptdReceiverUrl" class="ptd-receiver-url" label="PTD CookieCloud 地址" hint="把此地址填写到 PTD 的 CookieCloud 备份服务器" persistent-hint readonly variant="outlined" /><VTextField v-model="settingsDraft.ptd_cookiecloud_uuid" label="PTD 专用 UUID" hint="插件与 PTD 必须填写完全相同的 UUID" persistent-hint variant="outlined"><template #append-inner><VBtn icon="mdi-shuffle-variant" size="small" variant="text" title="随机生成 UUID" @click="randomizePtdUuid" /></template></VTextField><VTextField v-model="settingsDraft.ptd_cookiecloud_password" label="CookieCloud 密码" hint="插件与 PTD 必须填写完全相同的密码" persistent-hint type="text" autocomplete="off" variant="outlined"><template #append-inner><VBtn icon="mdi-shuffle-variant" size="small" variant="text" title="随机生成密码" @click="randomizePtdPassword" /></template></VTextField><VTextarea v-model="settingsDraft.ptd_cookiecloud_headers" label="接收鉴权 Headers（可选）" placeholder="X-PTD-Token: 自定义密钥" hint="如填写，PTD 的 Headers 也要逐行填写相同内容；日志不会记录值" persistent-hint variant="outlined" rows="3" /><VTextarea v-model="settingsDraft.ptd_site_mappings" class="ptd-site-mappings" label="站点映射（可选）" placeholder="audiences=audiences.me\nmteam=kp.m-team.cc" hint="自动匹配失败时，每行填写 PTD站点ID=MP域名或站点名" persistent-hint variant="outlined" rows="3" /></div><div class="setting-hint mt-3">先保存本页，再在 PTD 中新增 CookieCloud 备份服务器：地址使用上方接收地址，UUID、密码和可选 Headers 与这里保持一致；备份项目勾选“用户信息”。收到新备份后会立即解析并覆盖上一份数据，过程可在 MoviePilot 插件日志中查看。</div></div>
-          <div class="settings-card settings-card--wide"><div class="section-heading"><div><span class="section-kicker">DATA MANAGEMENT</span><h2>数据管理</h2></div><span class="section-note">导出时可选择站点、日期和隐藏字段</span></div><div class="data-actions"><VBtn variant="tonal" color="primary" prepend-icon="mdi-file-delimited-outline" @click="exportOpen = true">数据导出</VBtn><VBtn variant="tonal" color="primary" prepend-icon="mdi-image-outline" @click="careerOpen = true">PT 生涯</VBtn></div></div>
+          <div class="settings-card settings-card--wide"><div class="section-heading"><div><span class="section-kicker">LEVEL RULES</span><h2>等级规则</h2></div><span class="section-note">自定义规则优先于同名内置规则</span></div><input ref="rulesFileInput" class="rules-file-input" type="file" accept="application/json,.json" @change="uploadRuleFile"><div class="rules-upload"><div><strong>{{ customRuleSites.length ? `已载入 ${customRuleSites.length} 个站点` : '使用内置等级规则' }}</strong><p>{{ customRuleSites.length ? customRuleSites.join('、') : '上传 JSON 后保存设置，即可补充新站点或覆盖同名站点规则。' }}</p><small v-if="rulesUploadName">文件：{{ rulesUploadName }}</small></div><div class="rules-upload__actions"><VBtn variant="tonal" color="primary" prepend-icon="mdi-upload-outline" @click="rulesFileInput?.click()">上传规则文件</VBtn><VBtn variant="text" prepend-icon="mdi-file-download-outline" @click="downloadRuleTemplate">下载模板</VBtn><VBtn v-if="customRuleSites.length" variant="text" color="error" prepend-icon="mdi-delete-outline" @click="clearUploadedRules">清空</VBtn></div></div><div class="setting-hint mt-3">支持单个或多个站点；流量门槛使用字节，等级按 levels 中的顺序展示。文件只写入插件设置，不会上传到外部服务。</div></div>
+          <div class="settings-card settings-card--wide"><div class="section-heading"><div><span class="section-kicker">DATA EXPORT</span><h2>数据导出</h2></div><span class="section-note">导出历史数据或生成高清进度图片</span></div><div class="data-actions"><VBtn variant="tonal" color="primary" prepend-icon="mdi-file-delimited-outline" @click="exportOpen = true">历史数据</VBtn><VBtn variant="tonal" color="primary" prepend-icon="mdi-image-outline" @click="careerOpen = true">PT 生涯</VBtn><VBtn variant="tonal" color="primary" prepend-icon="mdi-shield-star-outline" @click="retirementExportOpen = true">养老进度</VBtn></div></div>
           <div class="settings-card settings-card--wide settings-actions"><div><strong>数据来源</strong><p>上传、下载、分享率等仍仅来自 MoviePilot；PTD 只补充最新时魔和做种积分。</p></div><VBtn color="primary" size="large" variant="flat" prepend-icon="mdi-content-save-outline" :loading="saving" @click="saveSettings">保存设置</VBtn></div>
         </section>
       </VWindowItem>
     </VWindow>
     <ExportDialog v-model="exportOpen" :api="api" :plugin-base="pluginBase" :sites="historySites" :fields="exportFields" :first-day="overview.first_history_day" :last-day="overview.last_history_day" />
     <CareerExportDialog v-model="careerOpen" :api="api" :overview="overview" />
+    <RetirementExportDialog v-model="retirementExportOpen" :api="api" :overview="overview" />
   </div>
 </template>
 
@@ -1145,6 +1243,7 @@ onBeforeUnmount(() => historyChart?.destroy())
 .retirement-level-row__detail{display:flex;flex-wrap:wrap;justify-content:space-between;gap:10px;padding:0 15px 10px 15px;color:rgba(var(--v-theme-on-surface),.6);font-size:.64rem}
 .retirement-level-row__detail strong{max-width:100%;margin-left:auto;color:rgb(var(--v-theme-warning));overflow-wrap:anywhere;text-align:right}
 .pt-workbench{--pt-border:rgba(var(--v-border-color),var(--v-border-opacity));min-width:0;padding:4px}.data-actions,.retirement-summary{display:flex;flex-wrap:wrap;gap:9px}.section-block{margin-top:16px;padding:20px;border:1px solid var(--pt-border);border-radius:20px;background:rgba(var(--v-theme-surface),.7)}.section-heading{display:flex;align-items:center;justify-content:space-between;gap:16px;margin-bottom:18px}.section-heading h2{margin:2px 0 0;font-size:1.18rem}.section-kicker{color:rgb(var(--v-theme-primary));font-size:.72rem;font-weight:800;letter-spacing:.12em}.section-note,.setting-hint,.row-label{color:rgba(var(--v-theme-on-surface),.56);font-size:.76rem}.metric-grid{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:12px}.distribution-panel,.twelve-panel{background:linear-gradient(135deg,rgba(var(--v-theme-primary),.07),rgba(var(--v-theme-surface),.72))}.distribution-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}.distribution-card{min-width:0;padding:18px;border:1px solid var(--pt-border);border-radius:17px;background:rgba(var(--v-theme-surface),.55)}.distribution-card__header{display:flex;align-items:center;justify-content:space-between;gap:14px;margin-bottom:14px}.distribution-card__header :deep(.v-input){max-width:190px}.pie-layout{display:grid;grid-template-columns:minmax(150px,40%) minmax(0,1fr);gap:20px;align-items:center}.pie{display:grid;place-items:center;width:min(100%,220px);margin:auto;aspect-ratio:1;border-radius:50%;box-shadow:0 12px 32px rgba(0,0,0,.15)}.pie__hole{display:flex;flex-direction:column;align-items:center;justify-content:center;width:66%;aspect-ratio:1;border-radius:50%;background:rgb(var(--v-theme-surface));text-align:center}.pie__hole span{color:rgba(var(--v-theme-on-surface),.58);font-size:.68rem}.pie__hole strong{margin-top:5px;font-size:1rem}.pie-legend{max-height:250px;overflow-y:auto}.pie-legend>div{display:grid;grid-template-columns:9px minmax(80px,1fr) auto auto;gap:8px;align-items:center;padding:6px 2px;font-size:.74rem}.pie-legend i{width:8px;height:8px;border-radius:50%}.pie-legend strong{font-size:.72rem}.pie-legend em{color:rgba(var(--v-theme-on-surface),.5);font-style:normal}.table-shell,.twelve-overflow{overflow-x:auto;border:1px solid var(--pt-border);border-radius:14px}.site-table{min-width:1450px;background:transparent}.history-detail-shell{overflow-x:auto}.history-detail-table{min-width:1050px}.site-table th{color:rgba(var(--v-theme-on-surface),.55)!important;font-size:.7rem;letter-spacing:.04em;white-space:nowrap}.site-table td{white-space:nowrap}.site-identity{display:flex;align-items:center;gap:10px}.cell-sub{display:block;max-width:220px;overflow:hidden;color:rgba(var(--v-theme-on-surface),.52);font-size:.68rem;text-overflow:ellipsis;white-space:nowrap}.metric-upload{color:rgb(var(--v-theme-success));font-weight:650}.metric-download{color:rgb(var(--v-theme-error));font-weight:650}.empty-cell{height:140px!important;text-align:center;color:rgba(var(--v-theme-on-surface),.52)}.legend{display:flex;flex:0 0 auto;align-items:center;gap:14px;color:rgba(var(--v-theme-on-surface),.62);font-size:.75rem;white-space:nowrap}.legend>span{display:inline-flex;align-items:center;gap:5px;line-height:1}.legend i{display:block;flex:0 0 9px;width:9px;height:9px;border-radius:2px}.legend__upload{background:rgb(var(--v-theme-success))}.legend__download{background:rgb(var(--v-theme-error))}.bar-chart{display:flex;align-items:stretch;gap:5px;height:250px;overflow-x:auto;padding:10px 3px 0;border-bottom:1px solid var(--pt-border)}.bar-column{display:flex;flex:1 0 28px;flex-direction:column;min-width:28px}.bar-column__bars{display:flex;flex:1;align-items:flex-end;justify-content:center;gap:2px}.bar{display:block;width:7px;border-radius:5px 5px 1px 1px}.bar--upload{background:rgb(var(--v-theme-success))}.bar--download{background:rgb(var(--v-theme-error))}.empty-state{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;min-height:180px;color:rgba(var(--v-theme-on-surface),.54)}.compact-empty{min-height:120px}.twelve-track{position:relative;display:grid;grid-template-columns:repeat(12,minmax(54px,1fr));min-width:760px;padding:20px 4px 4px}.twelve-track__line{position:absolute;z-index:0;top:38px;left:4.2%;right:4.2%;height:5px;overflow:hidden;border-radius:999px;background:rgba(var(--v-theme-on-surface),.12)}.twelve-track__line i{display:block;height:100%;border-radius:inherit;background:linear-gradient(90deg,rgb(var(--v-theme-primary)),rgb(var(--v-theme-success)))}.twelve-node{z-index:1;display:flex;flex-direction:column;align-items:center;gap:8px;min-width:0;text-align:center}.twelve-node span{max-width:100%;overflow:hidden;font-size:.72rem;text-overflow:ellipsis;white-space:nowrap}.twelve-node--missing,.twelve-node--waiting{opacity:.66}.settings-layout{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px;border:0;padding:0;background:transparent}.settings-card{padding:20px;border:1px solid var(--pt-border);border-radius:18px;background:rgba(var(--v-theme-surface),.76)}.settings-card--wide{grid-column:1/-1}.settings-actions{display:flex;align-items:center;justify-content:space-between;gap:20px}.settings-actions p{margin:4px 0 0;color:rgba(var(--v-theme-on-surface),.56)}
+.rules-file-input{display:none}.rules-upload{display:flex;align-items:center;justify-content:space-between;gap:20px}.rules-upload>div:first-child{display:grid;min-width:0;gap:5px}.rules-upload p{max-width:760px;margin:0;color:rgba(var(--v-theme-on-surface),.62);overflow-wrap:anywhere}.rules-upload small{color:rgba(var(--v-theme-on-surface),.48)}.rules-upload__actions{display:flex;flex:0 0 auto;flex-wrap:wrap;justify-content:flex-end;gap:8px}
 .twelve-panel{padding:18px 22px 14px}
 .twelve-panel__heading{align-items:flex-start;margin-bottom:0}
 .twelve-panel__heading h2{font-size:1.42rem;letter-spacing:-.025em}
@@ -1171,5 +1270,6 @@ onBeforeUnmount(() => historyChart?.destroy())
 .ptd-settings-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin-top:14px}.ptd-receiver-url,.ptd-site-mappings{grid-column:1/-1}
 @media(max-width:720px){.workbench-nav__actions{align-self:stretch}.data-refresh-btn{flex:1}.section-block{padding:14px}.metric-grid,.settings-layout,.ptd-settings-grid{grid-template-columns:1fr}.ptd-receiver-url,.ptd-site-mappings{grid-column:auto}.settings-card--wide{grid-column:auto}.settings-actions{align-items:stretch;flex-direction:column}.section-heading,.distribution-heading{align-items:flex-start;flex-direction:column}.pie-layout{grid-template-columns:1fr}.pie{width:180px}.history-detail-summary{align-items:flex-start;flex-direction:column}.history-detail-metrics{width:100%;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}.history-period-card{min-width:142px}.history-line-chart{height:220px}.history-site-panel .history-detail-shell{overflow-x:auto}.history-site-panel .history-detail-table{min-width:720px}}
 @media(max-width:720px){.site-sort-select{width:100%;flex:0 0 auto}.site-data-card{padding:12px}.site-data-card__header,.site-account-meta{align-items:flex-start;flex-direction:column}.site-stat-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.retirement-detail{padding:14px}.retirement-detail__header{align-items:flex-start;flex-direction:column}.retirement-detail__metrics{width:100%;justify-content:space-between;gap:10px}.retirement-route-rail{margin-right:-14px;margin-left:-14px;padding-right:14px;padding-left:14px}.requirement-panel__heading{grid-template-columns:1fr;align-items:flex-start}.requirement-panel__heading>div:first-child{flex-wrap:wrap}.requirement-table__head,.requirement-row{min-width:840px}.retirement-levels__heading{align-items:flex-start;flex-direction:column}}
+@media(max-width:720px){.rules-upload{align-items:flex-start;flex-direction:column}.rules-upload__actions{width:100%;justify-content:flex-start}}
 @media(max-width:960px){.retirement-site-list{position:static;max-height:none}.twelve-panel{padding:18px}.twelve-panel__heading{align-items:flex-start;flex-direction:column}.twelve-summary{width:100%;justify-content:flex-end}}
 </style>
