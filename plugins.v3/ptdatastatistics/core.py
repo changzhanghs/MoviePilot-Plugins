@@ -1173,6 +1173,7 @@ def build_retirement_progress(
             points_target = as_float(level.get("min_seeding_points"))
             points_current = base["seeding_points"]
             points_rate = base["seeding_points_hourly"]
+            points_eta_hours = None
             points_eta_days = None
             points_eta_date = ""
             if points_target and points_current is not None and points_rate and points_rate > 0:
@@ -1180,6 +1181,7 @@ def build_retirement_progress(
                     1 if bool(level.get("min_seeding_points_strict")) else 0
                 )
                 remaining_points = max(required_points - points_current, 0)
+                points_eta_hours = int(math.floor(remaining_points / points_rate))
                 points_eta_days = int(math.ceil(remaining_points / points_rate / 24))
                 try:
                     points_eta_date = (
@@ -1203,6 +1205,7 @@ def build_retirement_progress(
                     "min_bonus": as_float(level.get("min_bonus")),
                     "min_seeding_points": as_float(level.get("min_seeding_points")),
                     "min_seeding_points_strict": bool(level.get("min_seeding_points_strict")),
+                    "seeding_points_eta_hours": points_eta_hours,
                     "seeding_points_eta_days": points_eta_days,
                     "seeding_points_eta_date": points_eta_date,
                     "min_seeding": max(as_int(level.get("min_seeding")), 0),

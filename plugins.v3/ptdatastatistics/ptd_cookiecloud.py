@@ -114,19 +114,23 @@ def _extract_metrics(user_info: Any) -> list[dict[str, Any]]:
         if not records:
             continue
         day_key, record = max(records, key=lambda item: _record_score(item[1], item[0]))
+        ptd_site = str(record.get("site") or site_key)
         seeding_points = _number(record.get("seedingBonus"))
-        # PTD keeps two independent rates.  HHanClub in particular applies
-        # different rules to magic and seeding points, so never substitute one
-        # for the other.
+        # Keep PTD's dedicated rates separate whenever both are available.
         bonus_hourly = _number(record.get("bonusPerHour"))
         seeding_points_hourly = _number(record.get("seedingBonusPerHour"))
         if seeding_points_hourly is None:
             seeding_points_hourly = _latest_number(records, "seedingBonusPerHour")
+        # Match PTD's levelRequirementUnMet calculation exactly: prefer the
+        # dedicated seeding-points rate and fall back to bonusPerHour when PTD
+        # did not store seedingBonusPerHour for the site.
+        if seeding_points_hourly is None and bonus_hourly is not None:
+            seeding_points_hourly = bonus_hourly
         if seeding_points is None and bonus_hourly is None and seeding_points_hourly is None:
             continue
         output.append(
             {
-                "ptd_site": str(record.get("site") or site_key),
+                "ptd_site": ptd_site,
                 "site_name": str(record.get("siteName") or record.get("name") or ""),
                 "seeding_points": seeding_points,
                 "estimated_bonus_hourly": bonus_hourly,

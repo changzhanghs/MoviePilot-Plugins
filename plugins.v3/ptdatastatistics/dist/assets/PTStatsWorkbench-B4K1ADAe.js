@@ -16147,21 +16147,15 @@ function displayRetirementRoute(site) {
   const currentIndex = route.findIndex(level => level.is_current);
   return currentIndex >= 0 ? route.slice(currentIndex) : route
 }
-function retirementProgressPercent(site) {
-  const route = retirementRoute(site);
-  if (!route.length) return 0
-  if (route.length === 1) return route[0].reached ? 100 : 0
-  let reachedIndex = -1;
-  route.forEach((level, index) => {
-    if (level.reached) reachedIndex = index;
-  });
-  if (reachedIndex >= route.length - 1) return 100
-  const nextLevel = nextLevelRule(site) || route[Math.max(0, reachedIndex + 1)];
-  const segmentProgress = averageRequirementProgress(requirementRows(site, nextLevel));
-  const completedSegments = Math.max(0, reachedIndex) + segmentProgress / 100;
-  return Math.max(0, Math.min(100, completedSegments * 100 / (route.length - 1)))
+function nextLevelOverallProgress(site) {
+  const nextLevel = nextLevelRule(site);
+  if (!nextLevel) return site?.status === 'retired' ? 100 : 0
+  return averageRequirementProgress(requirementRows(site, nextLevel))
 }
 function routeNodeMeta(level) {
+  if (level.seeding_points_eta_hours !== null && level.seeding_points_eta_hours !== undefined) {
+    return `预计 ~${level.seeding_points_eta_hours}H${level.seeding_points_eta_date ? ` · ${level.seeding_points_eta_date}` : ''}`
+  }
   if (level.seeding_points_eta_date) return `预计 ${level.seeding_points_eta_date}`
   if (level.eligible_date && !level.reached) return `最早 ${level.eligible_date}`
   return level.reached ? '已达成' : '预计时间待补充'
@@ -16277,6 +16271,13 @@ function levelPointsRequirement(level) {
   if (level.min_bonus) return `魔力 ${formatNumber$1(level.min_bonus, 0)}`
   if (level.min_seeding) return `做种 ${formatNumber$1(level.min_seeding, 0)}`
   return '—'
+}
+
+function levelPointsEta(level) {
+  if (level?.seeding_points_eta_hours !== null && level?.seeding_points_eta_hours !== undefined) {
+    return `~${level.seeding_points_eta_hours}H${level.seeding_points_eta_date ? ` · ${level.seeding_points_eta_date}` : ''}`
+  }
+  return level?.seeding_points_eta_date || '—'
 }
 function routeMissingLabel(level) {
   return (level?.missing || []).join('；')
@@ -17168,14 +17169,14 @@ return (_ctx, _cache) => {
                               ]),
                               _createElementVNode("span", null, _toDisplayString(site.current_level || '站点未提供等级'), 1),
                               _createVNode(_component_VProgressLinear, {
-                                "model-value": retirementProgressPercent(site),
+                                "model-value": nextLevelOverallProgress(site),
                                 color: "primary",
                                 "bg-color": "surface-variant",
                                 height: "4",
                                 rounded: ""
                               }, null, 8, ["model-value"])
                             ]),
-                            _createElementVNode("small", null, _toDisplayString(Math.round(retirementProgressPercent(site))) + "%", 1)
+                            _createElementVNode("small", null, _toDisplayString(nextLevelOverallProgress(site)) + "%", 1)
                           ], 10, _hoisted_83))
                         }), 128))
                       ])
@@ -17385,7 +17386,7 @@ return (_ctx, _cache) => {
                                     _createElementVNode("span", null, _toDisplayString(levelTrafficRequirement(level)), 1),
                                     _createElementVNode("span", null, _toDisplayString(levelRatioRequirement(level)), 1),
                                     _createElementVNode("span", null, _toDisplayString(levelPointsRequirement(level).replace(/^做种积分\s*/, '')), 1),
-                                    _createElementVNode("span", null, _toDisplayString(level.seeding_points_eta_date || '—'), 1),
+                                    _createElementVNode("span", null, _toDisplayString(levelPointsEta(level)), 1),
                                     _createElementVNode("em", {
                                       class: _normalizeClass({ 'text-success': level.reached, 'text-warning': !level.reached, 'text-primary': level.is_current })
                                     }, _toDisplayString(levelStateLabel(level)), 3),
@@ -17671,6 +17672,6 @@ return (_ctx, _cache) => {
 }
 
 };
-const PTStatsWorkbench = /*#__PURE__*/_export_sfc(_sfc_main, [['__scopeId',"data-v-c41fbc1d"]]);
+const PTStatsWorkbench = /*#__PURE__*/_export_sfc(_sfc_main, [['__scopeId',"data-v-14bb33c7"]]);
 
 export { PTStatsWorkbench as P };
