@@ -34,7 +34,7 @@ const distribution = ref({ month: '', day: '', monthly: [], daily: [] })
 const distributionFilters = ref({ month: '', day: '' })
 const distributionMetric = ref('upload')
 const ruleAnchorSites = ref([])
-const siteSortKey = ref('upload')
+const siteSortKey = ref('site_priority')
 const siteSortOptions = [
   { title: '站点优先级', value: 'site_priority' },
   { title: '累计上传', value: 'upload' },
