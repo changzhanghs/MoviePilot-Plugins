@@ -24,6 +24,8 @@ const distributionLoading = ref(false)
 const error = ref('')
 const rulesFileInput = ref(null)
 const rulesUploadName = ref('')
+const wealthyPickerOpen = ref(false)
+const wealthySiteSearch = ref('')
 const overview = ref({
   server_date: '', generated_at: '', first_history_day: '', last_history_day: '',
   summary: {}, sites: [], today_sites: [], history_sites: [],
@@ -71,6 +73,7 @@ const hourlyLoading = ref(false)
 const historyChartCanvas = ref(null)
 let historyChart = null
 const selectedRetirementSiteKey = ref('')
+const springUpgradeTaskIndex = ref(0)
 
 const pluginBase = computed(() => `plugin/${props.pluginId || 'PTDataStatistics'}`)
 const ptdReceiverUrl = computed(() => {
@@ -138,6 +141,19 @@ function toggleWealthyRetirementSite(site) {
   if (selected.has(key)) selected.delete(key)
   else selected.add(key)
   settingsDraft.value.wealthy_retirement_sites = [...selected]
+}
+const selectedWealthyRetirementSites = computed(() => wealthyRetirementSiteOptions.value.filter(isWealthyRetirementSiteSelected))
+const filteredWealthyRetirementSiteOptions = computed(() => {
+  const query = normalizedSiteName(wealthySiteSearch.value)
+  return wealthyRetirementSiteOptions.value
+    .filter(site => !query || [site.site_name, site.domain, site.site_id].some(value => normalizedSiteName(value).includes(query)))
+    .sort((left, right) => (
+      Number(isWealthyRetirementSiteSelected(right)) - Number(isWealthyRetirementSiteSelected(left))
+      || compareSiteNames(left, right)
+    ))
+})
+function clearWealthyRetirementSites() {
+  settingsDraft.value.wealthy_retirement_sites = []
 }
 const selectedRetirementSite = computed(() => {
   const sites = sortedRetirementSites.value
@@ -658,7 +674,8 @@ function nextLevelOverallProgress(site) {
   if (site?.status === 'wealthy_retired') return 100
   const nextLevel = nextLevelRule(site)
   if (!nextLevel) return site?.status === 'retired' ? 100 : 0
-  return averageRequirementProgress(requirementRows(site, nextLevel))
+  const taskIndex = springUpgradeTasks(site, nextLevel).length ? 0 : null
+  return averageRequirementProgress(requirementRows(site, nextLevel, taskIndex))
 }
 function routeNodeMeta(level) {
   if (level.seeding_points_eta_date) return `预计 ${level.seeding_points_eta_date}`
@@ -699,7 +716,18 @@ function elapsedAccountDays(site) {
   if (!Number.isFinite(start) || !Number.isFinite(end)) return null
   return Math.max(0, Math.floor((end - start) / 86400000))
 }
-function requirementRows(site, level) {
+function springUpgradeTasks(site, level) {
+  const siteIdentity = normalizedSiteName(site?.site_name)
+  const levelIdentity = normalizedSiteName(level?.name)
+  const isSpring = siteIdentity === '春天' || siteIdentity === 'spring' || siteIdentity === 'springsunday'
+  const isImmortal = levelIdentity.includes('神王') || levelIdentity.includes('immortal')
+  if (!isSpring || !isImmortal || level?.alternatives?.length !== 2) return []
+  return [
+    { title: '任务一', subtitle: '保种升级', icon: 'mdi-seed-outline' },
+    { title: '任务二', subtitle: '发种升级', icon: 'mdi-cloud-upload-outline' },
+  ]
+}
+function requirementRows(site, level, alternativeIndex = null) {
   if (!site || !level) return []
   const rows = []
   const reached = Boolean(level.reached)
@@ -757,6 +785,59 @@ function requirementRows(site, level) {
   pushNumeric({ key: 'seeding-size', label: '做种体积', icon: 'mdi-database-outline', current: site.seeding_size, target: level.min_seeding_size, formatter: formatBytes, strict: level.min_seeding_size_strict })
   pushNumeric({ key: 'torrent-uploads', label: '发布数', icon: 'mdi-cloud-upload-outline', current: site.torrent_uploads, target: level.min_torrent_uploads, formatter: value => formatNumber(value, 0), strict: level.min_torrent_uploads_strict, unavailable: site.torrent_uploads === null || site.torrent_uploads === undefined })
   pushNumeric({ key: 'average-seeding-time', label: '平均做种时间', icon: 'mdi-timer-sand', current: site.average_seeding_time_days, target: level.min_average_seeding_time_days, formatter: value => `${formatNumber(value, 1)} 天`, strict: level.min_average_seeding_time_days_strict, unavailable: site.average_seeding_time_days === null || site.average_seeding_time_days === undefined })
+  const selectedAlternative = Number.isInteger(alternativeIndex) ? level.alternatives?.[alternativeIndex] : null
+  if (selectedAlternative) {
+    const taskFields = [
+      ['min_upload', '上传量', 'mdi-upload-outline', site.upload, formatBytes],
+      ['min_download', '下载量', 'mdi-download-outline', site.download, formatBytes],
+      ['min_ratio', '分享率', 'mdi-chart-donut', site.ratio, value => formatNumber(value, 2)],
+      ['min_bonus', '魔力', 'mdi-lightning-bolt-circle', site.bonus, value => formatNumber(value, 0)],
+      ['min_seeding_points', '做种积分', 'mdi-star-circle-outline', site.seeding_points, value => formatNumber(value, 0)],
+      ['min_seeding', '做种数', 'mdi-seed-outline', site.seeding, value => formatNumber(value, 0)],
+      ['min_seeding_size', '做种体积', 'mdi-database-outline', site.seeding_size, formatBytes],
+      ['min_torrent_uploads', '发布数', 'mdi-cloud-upload-outline', site.torrent_uploads, value => formatNumber(value, 0)],
+      ['min_average_seeding_time_days', '平均做种时间', 'mdi-timer-sand', site.average_seeding_time_days, value => `${formatNumber(value, 1)} 天`],
+    ]
+    for (const [key, label, icon, current, formatter] of taskFields) {
+      const target = Number(selectedAlternative[key])
+      if (!(target > 0)) continue
+      const currentNumber = Number(current)
+      const available = current !== null && current !== undefined && Number.isFinite(currentNumber)
+      const strict = Boolean(selectedAlternative[`${key}_strict`])
+      const complete = reached || (available && (strict ? currentNumber > target : currentNumber >= target))
+      const progress = complete ? 100 : available ? Math.max(0, Math.min(100, currentNumber * 100 / target)) : 0
+      const difference = available ? Math.max(target - currentNumber, 0) : null
+      rows.push({
+        key: `task-${alternativeIndex}-${key}`,
+        label,
+        icon,
+        current: available ? formatter(currentNumber) : '数据未提供',
+        target: `${strict ? '>' : '≥'} ${formatter(target)}`,
+        detail: complete ? '已达成' : difference === null ? '数据未提供' : strict && difference === 0 ? `需大于 ${formatter(target)}` : `剩余 ${formatter(difference)}`,
+        eta: '—',
+        complete,
+        unavailable: !available,
+        progress,
+      })
+    }
+    for (const requirement of selectedAlternative.unsupported_requirements || []) {
+      const key = String(requirement.key || '')
+      const icon = key.includes('seeding_bonus') ? 'mdi-star-circle-outline' : key.includes('seeding_upload') ? 'mdi-seed-outline' : key.includes('upload') ? 'mdi-cloud-upload-outline' : 'mdi-clipboard-check-outline'
+      rows.push({
+        key: `task-${alternativeIndex}-${key || rows.length}`,
+        label: requirement.label || '其他要求',
+        icon,
+        current: '数据未提供',
+        target: String(requirement.target || '需人工确认'),
+        detail: 'MoviePilot 未提供该月度数据',
+        eta: '—',
+        complete: reached,
+        unavailable: !reached,
+        progress: reached ? 100 : 0,
+      })
+    }
+    return rows
+  }
   const alternativeRows = (level.alternatives || []).map((option, optionIndex) => {
     const conditions = [
       ['min_upload', '上传', site.upload, formatBytes],
@@ -851,7 +932,9 @@ const selectedRetirementView = computed(() => {
   const route = retirementRoute(site)
   const levels = site.route || []
   const nextLevel = nextLevelRule(site)
-  const requirements = requirementRows(site, nextLevel)
+  const upgradeTasks = springUpgradeTasks(site, nextLevel)
+  const selectedTaskIndex = upgradeTasks.length ? Math.min(springUpgradeTaskIndex.value, upgradeTasks.length - 1) : null
+  const requirements = requirementRows(site, nextLevel, selectedTaskIndex)
   const overallProgress = averageRequirementProgress(requirements)
   const completedCount = requirements.filter(row => row.complete).length
   const routeCount = route.length
@@ -872,6 +955,8 @@ const selectedRetirementView = computed(() => {
       ? 100
       : Math.min(100, (completedRouteSegments + overallProgress / 100) * 100 / (routeCount - 1)),
     requirements,
+    upgradeTasks,
+    selectedTaskIndex,
     overallProgress,
     completedCount,
     pendingCount: requirements.length - completedCount,
@@ -888,6 +973,9 @@ watch(
   },
   { immediate: true },
 )
+watch(selectedRetirementSiteKey, () => {
+  springUpgradeTaskIndex.value = 0
+})
 watch(
   () => `${historyScope.value}:${historyPeriods.value.map(period => period.key).join('|')}`,
   () => {
@@ -1163,7 +1251,22 @@ onBeforeUnmount(() => historyChart?.destroy())
                 <section class="requirement-panel">
                   <div class="requirement-panel__heading">
                     <div><VIcon icon="mdi-target" color="primary" size="34" /><span>下一等级</span><strong>{{ selectedRetirementSite.next_level || '已是最高等级' }}</strong></div>
-                    <div class="requirement-panel__subtitle">完成以下要求即可升级，继续享受更多权益。</div>
+                    <div v-if="selectedRetirementView.upgradeTasks.length" class="spring-upgrade-tasks" role="tablist" aria-label="春天神王晋级任务">
+                      <button
+                        v-for="(task, index) in selectedRetirementView.upgradeTasks"
+                        :key="task.title"
+                        type="button"
+                        class="spring-upgrade-task"
+                        :class="{ 'is-selected': selectedRetirementView.selectedTaskIndex === index }"
+                        role="tab"
+                        :aria-selected="selectedRetirementView.selectedTaskIndex === index"
+                        @click="springUpgradeTaskIndex = index"
+                      >
+                        <VIcon :icon="task.icon" size="18" />
+                        <span><strong>{{ task.title }}</strong><small>{{ task.subtitle }}</small></span>
+                      </button>
+                    </div>
+                    <div v-else class="requirement-panel__subtitle">完成以下要求即可升级，继续享受更多权益。</div>
                     <VChip color="warning" size="small" variant="tonal" prepend-icon="mdi-clock-outline">{{ selectedRetirementView.eta.label }}<template v-if="selectedRetirementView.eta.days !== null"> · 约 {{ selectedRetirementView.eta.days }} 天</template></VChip>
                   </div>
                   <div v-if="selectedRetirementView.requirements.length" class="requirement-overview">
@@ -1220,7 +1323,44 @@ onBeforeUnmount(() => historyChart?.destroy())
           <div class="settings-card"><div class="section-heading"><div><span class="section-kicker">GENERAL</span><h2>基础设置</h2></div></div><VSwitch v-model="settingsDraft.enabled" color="primary" label="启用插件" hint="启用后读取 MP 已保存的站点数据，并在刷新时记录小时快照" persistent-hint /><VSwitch v-model="settingsDraft.show_sidebar" color="primary" label="在发现栏显示入口" /><VTextField v-model.number="settingsDraft.retention_days" type="number" min="0" max="36500" label="小时快照保留天数" hint="0 表示永久保留；日级历史由 MP 管理，不受此设置影响" persistent-hint variant="outlined" class="mt-3" /></div>
           <div class="settings-card"><div class="section-heading"><div><span class="section-kicker">NOTIFICATION</span><h2>每日通知</h2></div></div><VSwitch v-model="settingsDraft.notification_enabled" color="primary" label="启用汇总通知" /><VTextField v-model="settingsDraft.notification_cron" label="通知 Cron（五段式）" placeholder="0 9 * * *" hint="分 时 日 月 星期；按服务器时区执行，每个自然日最多通知一次" persistent-hint variant="outlined" /><VCheckbox v-model="settingsDraft.notification_modes" value="today" label="今日数据：仅上传和下载增量" hide-details /><VCheckbox v-model="settingsDraft.notification_modes" value="all" label="所有数据：仅累计上传和累计下载" hide-details /><div class="setting-hint mt-2">Cron 错过后不补发；无数据站点不会通知。</div></div>
           <div class="settings-card settings-card--wide"><div class="section-heading"><div><span class="section-kicker">PTD RECEIVER</span><h2>PTD 数据补充</h2></div><span class="section-note">仅导入时魔和做种积分</span></div><VSwitch v-model="settingsDraft.ptd_cookiecloud_enabled" color="primary" label="启用 PTD 兼容接收端" hint="PTD 直接把最新备份发送给本插件；不需要启用 MoviePilot 内置 CookieCloud" persistent-hint /><div v-if="settingsDraft.ptd_cookiecloud_enabled" class="ptd-settings-grid"><VTextField :model-value="ptdReceiverUrl" class="ptd-receiver-url" label="PTD CookieCloud 地址" hint="同机使用 localhost；其它局域网设备请替换为 MoviePilot 主机 IP" persistent-hint readonly variant="outlined" /><VTextField v-model="settingsDraft.ptd_cookiecloud_uuid" label="PTD 专用 UUID" hint="插件与 PTD 必须填写完全相同的 UUID" persistent-hint variant="outlined"><template #append-inner><VBtn icon="mdi-shuffle-variant" size="small" variant="text" title="随机生成 UUID" @click="randomizePtdUuid" /></template></VTextField><VTextField v-model="settingsDraft.ptd_cookiecloud_password" label="CookieCloud 密码" hint="插件与 PTD 必须填写完全相同的密码" persistent-hint type="text" autocomplete="off" variant="outlined"><template #append-inner><VBtn icon="mdi-shuffle-variant" size="small" variant="text" title="随机生成密码" @click="randomizePtdPassword" /></template></VTextField><VTextarea v-model="settingsDraft.ptd_cookiecloud_headers" label="接收鉴权 Headers（可选）" placeholder="X-PTD-Token: 自定义密钥" hint="如填写，PTD 的 Headers 也要逐行填写相同内容；日志不会记录值" persistent-hint variant="outlined" rows="3" /><VTextarea v-model="settingsDraft.ptd_site_mappings" class="ptd-site-mappings" label="站点映射（可选）" placeholder="audiences=audiences.me\nmteam=kp.m-team.cc" hint="自动匹配失败时，每行填写 PTD站点ID=MP域名或站点名" persistent-hint variant="outlined" rows="3" /></div><div class="setting-hint mt-3">先保存本页，再在 PTD 中新增 CookieCloud 备份服务器：PTD 与 MoviePilot 同机时使用上方 localhost 地址；其它局域网设备将 localhost 替换为 MoviePilot 主机 IP。UUID、密码和可选 Headers 与这里保持一致；备份项目勾选“用户信息”。收到新备份后会立即解析并覆盖上一份数据，过程可在 MoviePilot 插件日志中查看。</div></div>
-          <div class="settings-card settings-card--wide wealthy-site-settings"><div class="section-heading"><div><span class="section-kicker">WEALTHY RETIREMENT</span><h2>富贵养老</h2></div><VChip class="wealthy-summary-chip" prepend-icon="mdi-crown" variant="flat">已选择 {{ settingsDraft.wealthy_retirement_sites?.length || 0 }}</VChip></div><div class="setting-hint">选择当前拥有 VIP、捐赠者或其它特殊会员身份的站点；保存后该站养老进度显示为“富贵养老”。选择结果按 MoviePilot 站点 ID 保存。</div><div v-if="wealthyRetirementSiteOptions.length" class="wealthy-site-picker"><button v-for="site in wealthyRetirementSiteOptions" :key="wealthyRetirementSiteKey(site)" type="button" class="wealthy-site-card" :class="{ 'is-selected': isWealthyRetirementSiteSelected(site) }" :aria-pressed="isWealthyRetirementSiteSelected(site)" @click="toggleWealthyRetirementSite(site)"><SiteAvatar :api="api" :site="site" :size="38" /><span><strong>{{ site.site_name }}</strong><small>站点 ID {{ site.site_id }}</small></span><VIcon :icon="isWealthyRetirementSiteSelected(site) ? 'mdi-check-circle' : 'mdi-circle-outline'" size="22" /></button></div><div v-else class="empty-state compact-empty">MoviePilot 暂无可选择的站点</div></div>
+          <div class="settings-card settings-card--wide wealthy-site-settings">
+            <div class="section-heading"><div><span class="section-kicker">WEALTHY RETIREMENT</span><h2>富贵养老</h2></div><VChip class="wealthy-summary-chip" prepend-icon="mdi-crown" variant="flat">已选择 {{ settingsDraft.wealthy_retirement_sites?.length || 0 }}</VChip></div>
+            <div class="setting-hint">选择当前拥有 VIP、捐赠者或其它特殊会员身份的站点；保存后该站养老进度显示为“富贵养老”。选择结果按 MoviePilot 站点 ID 保存。</div>
+            <div v-if="wealthyRetirementSiteOptions.length" class="wealthy-selection-summary">
+              <div class="wealthy-selection-summary__sites">
+                <div v-if="selectedWealthyRetirementSites.length" class="wealthy-selection-avatars" aria-hidden="true">
+                  <SiteAvatar v-for="site in selectedWealthyRetirementSites.slice(0, 5)" :key="wealthyRetirementSiteKey(site)" :api="api" :site="site" :size="34" />
+                </div>
+                <div class="wealthy-selection-summary__copy">
+                  <strong>{{ selectedWealthyRetirementSites.length ? selectedWealthyRetirementSites.map(site => site.site_name).join('、') : '尚未选择站点' }}</strong>
+                  <small>{{ selectedWealthyRetirementSites.length ? `已标记 ${selectedWealthyRetirementSites.length} 个特殊会员站点` : '需要时打开选择器，不会占用设置页空间' }}</small>
+                </div>
+              </div>
+              <VBtn color="warning" variant="tonal" prepend-icon="mdi-tune-variant" @click="wealthyPickerOpen = true">选择站点</VBtn>
+            </div>
+            <div v-else class="empty-state compact-empty">MoviePilot 暂无可选择的站点</div>
+
+            <VDialog v-model="wealthyPickerOpen" max-width="720" scrollable transition="dialog-bottom-transition">
+              <VCard class="wealthy-picker-dialog-card">
+                <VCardTitle class="wealthy-picker-dialog__header">
+                  <div><span class="section-kicker">VIP SITES</span><strong>选择富贵养老站点</strong></div>
+                  <VBtn icon="mdi-close" variant="text" aria-label="关闭站点选择器" @click="wealthyPickerOpen = false" />
+                </VCardTitle>
+                <VCardText class="wealthy-picker-dialog__body">
+                  <div class="wealthy-picker-toolbar">
+                    <VTextField v-model="wealthySiteSearch" autofocus clearable hide-details density="comfortable" variant="outlined" prepend-inner-icon="mdi-magnify" label="搜索站点名称或 ID" />
+                    <VBtn variant="text" color="error" :disabled="!settingsDraft.wealthy_retirement_sites?.length" @click="clearWealthyRetirementSites">清空已选</VBtn>
+                  </div>
+                  <div class="wealthy-picker-status"><span>已选 {{ settingsDraft.wealthy_retirement_sites?.length || 0 }} 个</span><small>已选站点优先显示</small></div>
+                  <div v-if="filteredWealthyRetirementSiteOptions.length" class="wealthy-site-picker">
+                    <button v-for="site in filteredWealthyRetirementSiteOptions" :key="wealthyRetirementSiteKey(site)" type="button" class="wealthy-site-card" :class="{ 'is-selected': isWealthyRetirementSiteSelected(site) }" :aria-pressed="isWealthyRetirementSiteSelected(site)" @click="toggleWealthyRetirementSite(site)"><SiteAvatar :api="api" :site="site" :size="38" /><span><strong>{{ site.site_name }}</strong><small>站点 ID {{ site.site_id }}</small></span><VIcon :icon="isWealthyRetirementSiteSelected(site) ? 'mdi-check-circle' : 'mdi-circle-outline'" size="22" /></button>
+                  </div>
+                  <div v-else class="empty-state compact-empty"><VIcon icon="mdi-magnify-close" size="34" /><span>没有匹配的站点</span></div>
+                </VCardText>
+                <VCardActions class="wealthy-picker-dialog__actions"><span>修改将在保存设置后生效</span><VBtn color="primary" variant="flat" @click="wealthyPickerOpen = false">完成</VBtn></VCardActions>
+              </VCard>
+            </VDialog>
+          </div>
           <div class="settings-card settings-card--wide"><div class="section-heading"><div><span class="section-kicker">LEVEL RULES</span><h2>等级规则</h2></div><div class="rules-upload__actions"><VBtn variant="tonal" color="primary" prepend-icon="mdi-upload-outline" @click="rulesFileInput?.click()">上传规则文件</VBtn><VBtn variant="text" prepend-icon="mdi-file-download-outline" @click="downloadRuleTemplate">下载模板</VBtn><VBtn v-if="customRuleSites.length" variant="text" color="error" prepend-icon="mdi-delete-outline" @click="clearUploadedRules">清空</VBtn></div></div><input ref="rulesFileInput" class="rules-file-input" type="file" accept="application/json,.json" @change="uploadRuleFile"><div v-if="customRuleSites.length" class="rules-upload"><div><strong>已载入 {{ customRuleSites.length }} 个站点</strong><p>{{ customRuleSites.join('、') }}</p><small v-if="rulesUploadName">文件：{{ rulesUploadName }}</small></div></div><div class="setting-hint mt-3">支持 site、aliases、domains、VIP 等级、任选条件、做种体积、发布数和平均做种时间；流量门槛使用字节，等级按 levels 中的顺序展示。模板中的 _comment 仅用于说明，导入时忽略；文件只写入插件设置，不会上传到外部服务。</div></div>
           <div class="settings-card settings-card--wide settings-actions"><div><strong>数据来源</strong><p>上传、下载、分享率等仍仅来自 MoviePilot；PTD 只补充最新时魔和做种积分。</p></div><VBtn color="primary" size="large" variant="flat" prepend-icon="mdi-content-save-outline" :loading="saving" @click="saveSettings">保存设置</VBtn></div>
         </section>
@@ -1302,7 +1442,7 @@ onBeforeUnmount(() => historyChart?.destroy())
 .retirement-detail__identity span strong{color:rgba(var(--v-theme-on-surface),.86)}
 .retirement-detail__identity .target-level{color:rgb(var(--v-theme-success))}
 .retirement-detail__right{display:flex;flex-direction:column;align-items:flex-end;gap:10px}.wealthy-summary-chip,.wealthy-retirement-badge{background:linear-gradient(135deg,#744800,#e0a91f)!important;color:#fff5cb!important;font-weight:800;letter-spacing:.05em;box-shadow:0 7px 20px rgba(224,169,31,.2)}
-.wealthy-site-picker{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:10px;margin-top:16px}.wealthy-site-card{appearance:none;display:grid;grid-template-columns:auto minmax(0,1fr) auto;align-items:center;gap:11px;min-width:0;padding:12px 14px;border:1px solid var(--pt-border);border-radius:14px;background:rgba(var(--v-theme-surface-variant),.12);color:inherit;font:inherit;text-align:left;cursor:pointer;transition:border-color .16s ease,background-color .16s ease,box-shadow .16s ease}.wealthy-site-card:hover,.wealthy-site-card:focus-visible{border-color:rgba(224,169,31,.5);outline:none}.wealthy-site-card.is-selected{border-color:#d9a11c;background:linear-gradient(135deg,rgba(117,72,0,.24),rgba(224,169,31,.08));box-shadow:inset 3px 0 #d9a11c}.wealthy-site-card>span{display:grid;min-width:0;gap:3px}.wealthy-site-card strong,.wealthy-site-card small{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.wealthy-site-card strong{font-size:.78rem}.wealthy-site-card small{color:rgba(var(--v-theme-on-surface),.54);font-size:.64rem}.wealthy-site-card>.v-icon{color:rgba(var(--v-theme-on-surface),.32)}.wealthy-site-card.is-selected>.v-icon{color:#e0a91f}
+.wealthy-selection-summary{display:flex;align-items:center;justify-content:space-between;gap:16px;margin-top:16px;padding:12px 14px;border:1px solid var(--pt-border);border-radius:14px;background:rgba(var(--v-theme-surface-variant),.1)}.wealthy-selection-summary__sites{display:flex;min-width:0;align-items:center;gap:13px}.wealthy-selection-avatars{display:flex;flex:0 0 auto;padding-left:4px}.wealthy-selection-avatars :deep(.v-avatar){margin-left:-8px;border:2px solid rgb(var(--v-theme-surface));box-shadow:0 3px 10px rgba(0,0,0,.22)}.wealthy-selection-avatars :deep(.v-avatar:first-child){margin-left:0}.wealthy-selection-summary__copy{display:grid;min-width:0;gap:3px}.wealthy-selection-summary__copy strong{overflow:hidden;max-width:min(55vw,680px);font-size:.8rem;text-overflow:ellipsis;white-space:nowrap}.wealthy-selection-summary__copy small{color:rgba(var(--v-theme-on-surface),.54);font-size:.66rem}.wealthy-picker-dialog-card{max-height:min(82dvh,760px);border:1px solid var(--pt-border)!important;border-radius:20px!important}.wealthy-picker-dialog__header{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:18px 20px 14px!important;border-bottom:1px solid var(--pt-border)}.wealthy-picker-dialog__header>div{display:grid;gap:3px}.wealthy-picker-dialog__header strong{font-size:1.05rem}.wealthy-picker-dialog__body{padding:16px 20px!important}.wealthy-picker-toolbar{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;gap:10px}.wealthy-picker-status{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 2px 8px;color:rgba(var(--v-theme-on-surface),.7);font-size:.7rem}.wealthy-picker-status small{color:rgba(var(--v-theme-on-surface),.48)}.wealthy-site-picker{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}.wealthy-site-card{appearance:none;display:grid;grid-template-columns:auto minmax(0,1fr) auto;align-items:center;gap:11px;min-width:0;padding:11px 12px;border:1px solid var(--pt-border);border-radius:13px;background:rgba(var(--v-theme-surface-variant),.12);color:inherit;font:inherit;text-align:left;cursor:pointer;transition:border-color .16s ease,background-color .16s ease,box-shadow .16s ease}.wealthy-site-card:hover,.wealthy-site-card:focus-visible{border-color:rgba(224,169,31,.5);outline:none}.wealthy-site-card.is-selected{border-color:#d9a11c;background:linear-gradient(135deg,rgba(117,72,0,.24),rgba(224,169,31,.08));box-shadow:inset 3px 0 #d9a11c}.wealthy-site-card>span{display:grid;min-width:0;gap:3px}.wealthy-site-card strong,.wealthy-site-card small{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.wealthy-site-card strong{font-size:.78rem}.wealthy-site-card small{color:rgba(var(--v-theme-on-surface),.54);font-size:.64rem}.wealthy-site-card>.v-icon{color:rgba(var(--v-theme-on-surface),.32)}.wealthy-site-card.is-selected>.v-icon{color:#e0a91f}.wealthy-picker-dialog__actions{display:flex;justify-content:space-between!important;gap:14px;padding:12px 20px 18px!important;border-top:1px solid var(--pt-border)}.wealthy-picker-dialog__actions span{color:rgba(var(--v-theme-on-surface),.52);font-size:.68rem}
 .retirement-site-option--wealthy{border-color:rgba(224,169,31,.34)}.retirement-site-option--wealthy.retirement-site-option--selected{border-color:#d9a11c;background:linear-gradient(135deg,rgba(117,72,0,.26),rgba(var(--v-theme-primary),.11))}.wealthy-retirement-state{display:flex;align-items:center;gap:15px;margin-top:24px;padding:18px 20px;border:1px solid rgba(224,169,31,.34);border-radius:16px;background:linear-gradient(135deg,rgba(117,72,0,.2),rgba(var(--v-theme-surface),.58))}.wealthy-retirement-state__icon{display:grid;flex:0 0 48px;place-items:center;width:48px;height:48px;border-radius:50%;background:linear-gradient(135deg,#744800,#e0a91f);color:#fff5cb;box-shadow:0 8px 24px rgba(224,169,31,.2)}.wealthy-retirement-state>div:last-child{display:flex;min-width:0;flex-direction:column;gap:3px}.wealthy-retirement-state span{color:#d7b55d;font-size:.7rem;font-weight:700;letter-spacing:.08em}.wealthy-retirement-state strong{color:#fff1b5;font-size:1.08rem}.wealthy-retirement-state small{color:rgba(var(--v-theme-on-surface),.58);font-size:.72rem}
 .retirement-detail__metrics{display:flex;flex:0 0 auto;align-items:center;gap:22px}
 .retirement-detail__metrics span{display:flex;flex-direction:column;gap:3px;color:rgba(var(--v-theme-on-surface),.52);font-size:.68rem}
@@ -1333,6 +1473,7 @@ onBeforeUnmount(() => historyChart?.destroy())
 .requirement-panel__heading span{color:rgba(var(--v-theme-on-surface),.56);font-size:.72rem}
 .requirement-panel__heading strong{margin-left:3px;font-size:1.22rem}
 .requirement-panel__subtitle{color:rgba(var(--v-theme-on-surface),.56);font-size:.7rem}
+.spring-upgrade-tasks{display:grid;grid-template-columns:repeat(2,minmax(112px,1fr));justify-self:center;gap:8px}.spring-upgrade-task{appearance:none;display:flex;align-items:center;justify-content:center;gap:8px;min-width:112px;padding:8px 12px;border:1px solid var(--pt-border);border-radius:12px;background:rgba(var(--v-theme-surface-variant),.12);color:rgba(var(--v-theme-on-surface),.62);font:inherit;text-align:left;cursor:pointer;transition:border-color .16s ease,background-color .16s ease,color .16s ease,box-shadow .16s ease}.spring-upgrade-task:hover,.spring-upgrade-task:focus-visible{border-color:rgba(var(--v-theme-primary),.48);outline:none}.spring-upgrade-task.is-selected{border-color:rgb(var(--v-theme-primary));background:rgba(var(--v-theme-primary),.14);color:rgb(var(--v-theme-primary));box-shadow:0 5px 16px rgba(var(--v-theme-primary),.12)}.spring-upgrade-task>span{display:grid;gap:1px;color:inherit}.requirement-panel__heading .spring-upgrade-task strong{margin:0;color:inherit;font-size:.72rem;line-height:1.1}.spring-upgrade-task small{color:rgba(var(--v-theme-on-surface),.58);font-size:.61rem;white-space:nowrap}.spring-upgrade-task.is-selected small{color:rgba(var(--v-theme-primary),.82)}
 .requirement-overview{display:grid;grid-template-columns:190px minmax(0,1fr);gap:20px;padding-top:14px}
 .requirement-overview__score{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:5px;border-right:1px solid var(--pt-border)}
 .requirement-overview__score :deep(.v-progress-circular__content)>strong{font-size:1.35rem}
@@ -1398,8 +1539,9 @@ onBeforeUnmount(() => historyChart?.destroy())
 @media(max-width:960px){.workbench-nav{align-items:stretch;flex-direction:column;gap:5px}.workbench-nav__actions{align-self:flex-end;padding-bottom:10px}.history-workspace{grid-template-columns:1fr;height:auto;overflow:visible}.history-site-sidebar{overflow:visible;border-right:0;border-bottom:1px solid var(--pt-border)}.history-site-sidebar__items{display:flex;max-height:none;overflow-x:auto;overflow-y:hidden;scrollbar-gutter:auto}.history-site-option{width:210px;flex:0 0 210px}.history-workspace__main{overflow:visible;scrollbar-gutter:auto}.history-record-shell{overflow-x:auto}.history-record-table{min-width:900px;table-layout:auto}.distribution-grid{grid-template-columns:1fr}.retirement-explorer{grid-template-columns:1fr;height:auto;min-height:0;overflow:visible}.retirement-site-list{overflow:visible;border-right:0;border-bottom:1px solid var(--pt-border)}.retirement-site-list__items{display:flex;max-height:none;overflow-x:auto;overflow-y:hidden;scrollbar-gutter:auto}.retirement-site-option{width:245px;flex:0 0 245px}.retirement-detail{overflow:visible;scrollbar-gutter:auto}.requirement-overview{grid-template-columns:1fr}.requirement-overview__score{border-right:0;border-bottom:1px solid var(--pt-border);padding-bottom:14px}.requirement-table,.retirement-levels{overflow-x:auto}}
 .ptd-settings-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin-top:14px}.ptd-receiver-url,.ptd-site-mappings{grid-column:1/-1}
 @media(max-width:720px){.workbench-nav__actions{align-self:stretch}.section-block{padding:14px}.metric-grid,.settings-layout,.ptd-settings-grid{grid-template-columns:1fr}.ptd-receiver-url,.ptd-site-mappings{grid-column:auto}.settings-card--wide{grid-column:auto}.settings-actions{align-items:stretch;flex-direction:column}.section-heading,.distribution-heading{align-items:flex-start;flex-direction:column}.pie-layout{grid-template-columns:1fr}.pie{width:180px}.history-detail-summary{align-items:flex-start;flex-direction:column}.history-detail-metrics{width:100%;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}.history-period-card{min-width:142px}.history-line-chart{height:220px}.history-site-panel .history-detail-shell{overflow-x:auto}.history-site-panel .history-detail-table{min-width:720px}}
-@media(max-width:720px){.site-sort-select{width:100%;flex:0 0 auto}.site-data-card{padding:12px}.site-data-card__header,.site-account-meta{align-items:flex-start;flex-direction:column}.site-stat-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.retirement-detail{padding:14px}.retirement-detail__header{align-items:flex-start;flex-direction:column}.retirement-detail__metrics{width:100%;justify-content:space-between;gap:10px}.retirement-route-rail{margin-right:-14px;margin-left:-14px;padding-right:14px;padding-left:14px}.requirement-panel__heading{grid-template-columns:1fr;align-items:flex-start}.requirement-panel__heading>div:first-child{flex-wrap:wrap}.requirement-table__head,.requirement-row{min-width:840px}.retirement-levels__heading{align-items:flex-start;flex-direction:column}}
+@media(max-width:720px){.site-sort-select{width:100%;flex:0 0 auto}.site-data-card{padding:12px}.site-data-card__header,.site-account-meta{align-items:flex-start;flex-direction:column}.site-stat-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.retirement-detail{padding:14px}.retirement-detail__header{align-items:flex-start;flex-direction:column}.retirement-detail__metrics{width:100%;justify-content:space-between;gap:10px}.retirement-route-rail{margin-right:-14px;margin-left:-14px;padding-right:14px;padding-left:14px}.requirement-panel__heading{grid-template-columns:1fr;align-items:flex-start}.requirement-panel__heading>div:first-child{flex-wrap:wrap}.spring-upgrade-tasks{width:100%;justify-self:stretch}.spring-upgrade-task{min-width:0}.requirement-table__head,.requirement-row{min-width:840px}.retirement-levels__heading{align-items:flex-start;flex-direction:column}}
 @media(max-width:720px){.retirement-detail__right{width:100%;align-items:flex-start}}
+@media(max-width:720px){.wealthy-selection-summary{align-items:stretch;flex-direction:column}.wealthy-selection-summary>.v-btn{width:100%}.wealthy-selection-summary__copy strong{max-width:calc(100vw - 150px)}.wealthy-picker-dialog-card{max-height:88dvh;border-radius:20px 20px 0 0!important}.wealthy-picker-toolbar{grid-template-columns:1fr}.wealthy-picker-toolbar>.v-btn{justify-self:end}.wealthy-site-picker{grid-template-columns:1fr}.wealthy-picker-dialog__header,.wealthy-picker-dialog__body{padding-right:14px!important;padding-left:14px!important}.wealthy-picker-dialog__actions{align-items:stretch;flex-direction:column;padding-right:14px!important;padding-left:14px!important}.wealthy-picker-dialog__actions>.v-btn{width:100%}}
 @media(max-width:720px){.rules-upload{align-items:flex-start;flex-direction:column}.rules-upload__actions{width:100%;justify-content:flex-start}}
 @media(max-width:960px){.retirement-site-list{position:static;max-height:none}.twelve-panel{padding:18px}.twelve-panel__heading{align-items:flex-start;flex-direction:column}.twelve-summary{width:100%;justify-content:flex-end}}
 </style>
