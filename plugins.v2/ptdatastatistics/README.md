@@ -1,6 +1,7 @@
 # PT数据统计
 
-这是 MoviePilot V3 专用实现，使用 MoviePilot 提供的插件独立数据库。
+这是 MoviePilot V2 专用实现。运行历史保存在插件数据目录中的独立 SQLite 文件，
+不向 MoviePilot 主数据库增加插件表；业务口径和 Vue 页面与 V3 专用实现保持一致。
 
 ## 数据口径
 

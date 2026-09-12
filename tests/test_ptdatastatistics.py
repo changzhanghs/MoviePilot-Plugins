@@ -804,8 +804,11 @@ class PackagingTests(unittest.TestCase):
         manifest = json.loads((ROOT / "package.v3.json").read_text(encoding="utf-8"))
         meta = manifest["PTDataStatistics"]
         source = (PLUGIN / "__init__.py").read_text(encoding="utf-8")
-        self.assertEqual(meta["version"], "1.2.4")
-        self.assertEqual(meta["history"]["v1.2.4"], "不值一提")
+        self.assertEqual(meta["version"], "2.0.0")
+        self.assertEqual(
+            meta["history"]["v2.0.0"],
+            "兼容v2及v3",
+        )
         self.assertEqual(meta["history"]["v1.2.3"], "不值一提")
         self.assertEqual(meta["history"]["v1.2.2"], "不值一提。")
         self.assertEqual(meta["history"]["v1.2.1"], "不值一提")
@@ -829,8 +832,8 @@ class PackagingTests(unittest.TestCase):
         self.assertEqual(meta["history"]["v1.0.2"], "更新了一些东西")
         self.assertEqual(meta["history"]["v1.0.1"], "更新了一些东西")
         self.assertEqual(meta["history"]["v1.0.0"], "更新了一些东西")
-        self.assertEqual(list(meta["history"]), ["v1.2.4", "v1.2.3", "v1.2.2", "v1.2.1", "v1.2.0", "v1.1.9", "v1.1.8", "v1.1.7", "v1.1.6", "v1.1.5", "v1.1.4", "v1.1.3", "v1.1.2", "v1.1.1", "v1.1.0", "v1.0.10", "v1.0.9", "v1.0.8", "v1.0.7", "v1.0.6", "v1.0.5", "v1.0.4", "v1.0.3", "v1.0.2", "v1.0.1", "v1.0.0"])
-        self.assertIn('plugin_version = "1.2.4"', source)
+        self.assertEqual(list(meta["history"]), ["v2.0.0", "v1.2.4", "v1.2.3", "v1.2.2", "v1.2.1", "v1.2.0", "v1.1.9", "v1.1.8", "v1.1.7", "v1.1.6", "v1.1.5", "v1.1.4", "v1.1.3", "v1.1.2", "v1.1.1", "v1.1.0", "v1.0.10", "v1.0.9", "v1.0.8", "v1.0.7", "v1.0.6", "v1.0.5", "v1.0.4", "v1.0.3", "v1.0.2", "v1.0.1", "v1.0.0"])
+        self.assertIn('plugin_version = "2.0.0"', source)
         self.assertEqual(meta["system_version"], ">=3.0.0")
         self.assertNotIn("release", meta)
 

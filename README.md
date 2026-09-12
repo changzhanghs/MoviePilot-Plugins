@@ -1,5 +1,9 @@
-# MoviePilot V3 · 插件
-1.PT数据统计
+# MoviePilot V2/V3 · 插件
+
+1. PT数据统计
+
+- MoviePilot V2：`>=2.12.0,<3.0.0`
+- MoviePilot V3：`>=3.0.0`
 
 ## 安装
 

@@ -1,4 +1,4 @@
-"""MoviePilot V3 PT 数据统计插件。"""
+"""MoviePilot V2 PT 数据统计插件。"""
 
 from __future__ import annotations
 
@@ -8,14 +8,14 @@ from datetime import date, datetime, timedelta
 from typing import Any, ClassVar
 from zoneinfo import ZoneInfo
 
-from app.db.oper.site import SiteOper
+from app.core.config import settings
+from app.core.event import Event, eventmanager
+from app.db.site_oper import SiteOper
+from app.log import logger
 from app.plugins import _PluginBase
 from app.scheduler import Scheduler
 from app.schemas import NotificationType
 from app.schemas.types import EventType
-from app.sdk.config import settings
-from app.sdk.events import Event, eventmanager
-from app.sdk.logging import logger
 from apscheduler.triggers.cron import CronTrigger
 from fastapi import HTTPException, Query, Request
 from fastapi.responses import PlainTextResponse
@@ -53,6 +53,7 @@ from .core import (
     format_bytes,
     overall_ratio,
 )
+from .database import LocalDatabaseHandle
 from .models import PTSiteHourlySnapshot, PTSiteSnapshot
 from .ptd_cookiecloud import PTDCookieCloudError, match_metrics, parse_backup_response
 from .repository import SnapshotRepository
@@ -64,7 +65,7 @@ class PTDataStatistics(_PluginBase):
     plugin_name = "PT数据统计"
     plugin_desc = "统计 PT 站点累计与每日上传下载，提供历史、养老进度和通知。"
     plugin_icon = "ptdatastatistics.svg"
-    plugin_version = "2.0.0"
+    plugin_version = "1.2.4"
     plugin_author = "cz"
     author_url = "https://github.com/changzhanghs"
     plugin_config_prefix = "ptdatastatistics_"
@@ -85,7 +86,7 @@ class PTDataStatistics(_PluginBase):
     _custom_retirement_rules: ClassVar[list[dict[str, Any]]] = []
 
     def init_plugin(self, config: dict | None = None) -> None:
-        """读取配置；数据库建表由 V3 插件生命周期在本方法之后完成。"""
+        """读取配置并准备位于插件数据目录中的 V2 独立历史库。"""
 
         raw = dict(config or {})
         # 兼容 0.0.1 的 HH:mm 配置；保存后统一转成标准五段式 Cron。
@@ -103,6 +104,17 @@ class PTDataStatistics(_PluginBase):
         self._apply_settings(normalized)
         self._log_custom_rule_state("已加载")
         self._sync_lock = threading.RLock()
+        self._reset_database_handle()
+
+    def _reset_database_handle(self) -> None:
+        """重复初始化时关闭旧连接，并按当前运行实例重新打开历史库。"""
+
+        existing = getattr(self, "_database_handle", None)
+        if existing is not None:
+            existing.close()
+        self._database_handle = LocalDatabaseHandle(
+            self.get_data_path() / "ptdatastatistics.db"
+        )
 
     def _apply_settings(self, value: SettingsData) -> None:
         """把已校验设置投影为插件运行属性。"""
@@ -188,11 +200,6 @@ class PTDataStatistics(_PluginBase):
                 "order": 25,
             }
         ]
-
-    def get_database_models(self) -> list[type]:
-        """声明插件专属数据库模型。"""
-
-        return [PTSiteSnapshot, PTSiteHourlySnapshot]
 
     @staticmethod
     def get_command() -> list[dict[str, Any]]:
@@ -366,9 +373,13 @@ class PTDataStatistics(_PluginBase):
         return datetime.now(ZoneInfo(settings.TZ))
 
     def _repository(self) -> SnapshotRepository:
-        """为当前调用创建插件数据库仓储。"""
+        """为当前调用创建 V2 插件本地历史仓储。"""
 
-        return SnapshotRepository(self.get_database())
+        database_handle = getattr(self, "_database_handle", None)
+        if database_handle is None:
+            self._reset_database_handle()
+            database_handle = self._database_handle
+        return SnapshotRepository(database_handle)
 
     @staticmethod
     def _site_dict(site: Any) -> dict[str, Any]:
@@ -1150,6 +1161,10 @@ class PTDataStatistics(_PluginBase):
             logger.error(f"发送 PT 数据统计每日通知失败：{error}")
 
     def stop_service(self) -> None:
-        """插件未持有独立调度器或网络资源，仅关闭运行开关。"""
+        """关闭运行开关并释放 V2 本地历史库连接。"""
 
         self._enabled = False
+        database_handle = getattr(self, "_database_handle", None)
+        if database_handle is not None:
+            database_handle.close()
+            self._database_handle = None
