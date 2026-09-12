@@ -1,4 +1,4 @@
-# MoviePilot V2/V3 · 插件
+# MoviePilot-Plugins
 
 1. PT数据统计
 
