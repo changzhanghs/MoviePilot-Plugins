@@ -175,6 +175,7 @@ class HostContractTests(unittest.TestCase):
             retention_days=999999,
             notification_cron="30 8 * * *",
             notification_modes=["today", "invalid", "all", "today"],
+            wealthy_retirement_sites=["KP.M-Team.CC", "kp.m-team.cc", " 7 "],
         )
         self.assertEqual(value.retention_days, 36500)
         self.assertNotIn("sync_interval_minutes", value.model_dump())
@@ -184,15 +185,27 @@ class HostContractTests(unittest.TestCase):
         self.assertNotIn("ptd_cookiecloud_verify_ssl", value.model_dump())
         self.assertEqual(value.notification_cron, "30 8 * * *")
         self.assertEqual(value.notification_modes, ["today", "all"])
+        self.assertEqual(value.wealthy_retirement_sites, ["kp.m-team.cc", "7"])
 
     def test_uploaded_level_rules_are_validated_and_override_builtins(self):
         value = SettingsData(custom_retirement_rules=[{
             "site": "红豆饭",
+            "aliases": ["HDFans"],
+            "domains": ["hdfans.org"],
             "retirement_level": "Keeper",
             "levels": [
                 {"name": "User"},
-                {"name": "Keeper", "min_join_days": 30, "min_upload": 1024},
+                {
+                    "name": "Keeper",
+                    "min_join_days": 30,
+                    "min_upload": 1024,
+                    "min_seeding_size": 2048,
+                    "min_torrent_uploads": 3,
+                    "min_average_seeding_time_days": 7,
+                    "alternatives": [{"min_download": 4096}, {"min_ratio": 2}],
+                },
             ],
+            "vip_levels": [{"name": "VIP", "aliases": ["Donor"]}],
         }])
         plugin = PTDataStatistics.__new__(PTDataStatistics)
         with patch.object(plugin_module.logger, "info") as log_info:
@@ -207,6 +220,10 @@ class HostContractTests(unittest.TestCase):
 
         self.assertEqual(rules["红豆饭"]["retirement_level"], "Keeper")
         self.assertEqual(rules["红豆饭"]["levels"][1]["min_upload"], 1024)
+        self.assertEqual(rules["红豆饭"]["levels"][1]["min_seeding_size"], 2048)
+        self.assertEqual(rules["红豆饭"]["levels"][1]["alternatives"][1]["min_ratio"], 2)
+        self.assertEqual(rules["红豆饭"]["domains"], ["hdfans.org"])
+        self.assertEqual(rules["红豆饭"]["vip_levels"][0]["aliases"], ["Donor"])
         self.assertIn("观众", rules)
         progress = importlib.import_module("ptdatastatistics.core").build_retirement_progress(
             [{"site_name": "红豆饭", "user_level": "User", "updated_day": "2026-09-12"}],
@@ -219,7 +236,7 @@ class HostContractTests(unittest.TestCase):
             [{"site_name": "红豆饭 HDFans", "user_level": "User", "updated_day": "2026-09-12"}],
             rules,
         )
-        self.assertNotEqual(decorated["sites"][0]["retirement_level"], "Keeper")
+        self.assertEqual(decorated["sites"][0]["retirement_level"], "Keeper")
 
     def test_uploaded_level_rule_requires_retirement_level_in_route(self):
         with self.assertRaisesRegex(ValueError, "保号等级不在等级路线中"):
@@ -549,8 +566,8 @@ class HostContractTests(unittest.TestCase):
             [
                 {
                     "site_id": 7,
-                    "domain": "inactive.test",
-                    "site_name": "U2",
+                    "domain": "open.cd",
+                    "site_name": "皇后",
                     "updated_day": "2026-09-05",
                     "upload": 170,
                     "download": 80,
@@ -562,7 +579,7 @@ class HostContractTests(unittest.TestCase):
         plugin._ensure_history = lambda: None
         plugin._repository = lambda: repository
         plugin._configured_sites = lambda: [
-            {"id": 7, "name": "U2", "domain": "inactive.test", "is_active": False, "site_priority": 6}
+            {"id": 7, "name": "皇后", "domain": "open.cd", "is_active": False, "site_priority": 6}
         ]
         plugin._now = lambda: datetime(2026, 9, 5, 12, 0, tzinfo=ZoneInfo("Asia/Shanghai"))
 
@@ -571,8 +588,8 @@ class HostContractTests(unittest.TestCase):
         self.assertEqual(result.sites, [])
         self.assertEqual(result.retirement.total, 1)
         self.assertEqual(result.retirement.sites[0].site_priority, 6)
-        u2 = next(item for item in result.twelve.items if item.key == "u2")
-        self.assertEqual(u2.state, "joined")
+        queen = next(item for item in result.twelve.items if item.key == "queen")
+        self.assertEqual(queen.state, "joined")
 
     def test_overview_today_sites_only_contains_positive_valid_deltas(self):
         repository = SnapshotRepository(DatabaseHandle())

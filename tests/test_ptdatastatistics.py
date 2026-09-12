@@ -27,6 +27,7 @@ package.__path__ = [str(PLUGIN)]
 sys.modules.setdefault("ptdatastatistics", package)
 core = load_module("ptdatastatistics.core", PLUGIN / "core.py")
 ptd_cookiecloud = load_module("ptdatastatistics.ptd_cookiecloud", PLUGIN / "ptd_cookiecloud.py")
+site_rules_builtin = sys.modules["ptdatastatistics.site_rules_builtin"]
 
 
 class PTDCookieCloudTests(unittest.TestCase):
@@ -167,6 +168,10 @@ class PTDCookieCloudTests(unittest.TestCase):
         self.assertEqual(backup.metrics[0]["seeding_points_hourly"], 3.5)
 
 class DeltaTests(unittest.TestCase):
+    def test_formats_capacity_with_decimal_units(self):
+        self.assertEqual(core.format_bytes(1_000_000_000), "1.00 GB")
+        self.assertEqual(core.format_bytes(120_000_000_000), "120.0 GB")
+
     def test_requires_exact_previous_server_day(self):
         current = {"updated_day": "2026-09-05", "upload": 500, "download": 200}
         result = core.compute_daily_delta(
@@ -313,18 +318,37 @@ class TwelveAndExportTests(unittest.TestCase):
 
     def test_waiting_and_missing_states_are_distinct(self):
         progress = core.build_twelve_progress(
-            [{"id": 1, "name": "U2"}],
+            [{"id": 1, "name": "皇后"}],
             {},
         )
         states = {item["key"]: item["state"] for item in progress["items"]}
-        self.assertEqual(states["u2"], "waiting")
+        self.assertEqual(states["queen"], "waiting")
         self.assertEqual(states["ttg"], "missing")
+
+    def test_chinese_ttg_name_is_recognized(self):
+        progress = core.build_twelve_progress(
+            [{"id": 1, "name": "听听歌"}],
+            {1: {"err_msg": "", "join_at": "2025-01-02"}},
+        )
+
+        target = next(item for item in progress["items"] if item["key"] == "ttg")
+        self.assertEqual(target["name"], "听听歌")
+        self.assertEqual(target["state"], "joined")
+
+    def test_u2_is_not_part_of_twelve_sites(self):
+        progress = core.build_twelve_progress(
+            [{"id": 1, "name": "U2"}],
+            {1: {"err_msg": "", "join_at": "2025-01-02"}},
+        )
+
+        self.assertNotIn("u2", {item["key"] for item in progress["items"]})
+        self.assertEqual(progress["joined"], 0)
 
     def test_joined_twelve_sites_are_sorted_by_join_date(self):
         progress = core.build_twelve_progress(
             [
                 {"id": 1, "name": "TTG"},
-                {"id": 2, "name": "U2"},
+                {"id": 2, "name": "皇后"},
                 {"id": 3, "name": "M-Team"},
             ],
             {
@@ -334,13 +358,13 @@ class TwelveAndExportTests(unittest.TestCase):
             },
         )
         joined = [item for item in progress["items"] if item["state"] == "joined"]
-        self.assertEqual([item["key"] for item in joined], ["u2", "ttg", "mteam"])
+        self.assertEqual([item["key"] for item in joined], ["queen", "ttg", "mteam"])
 
     def test_joined_twelve_sites_use_full_join_timestamp_order(self):
         progress = core.build_twelve_progress(
             [
                 {"id": 1, "name": "TTG"},
-                {"id": 2, "name": "U2"},
+                {"id": 2, "name": "皇后"},
                 {"id": 3, "name": "M-Team"},
             ],
             {
@@ -350,7 +374,7 @@ class TwelveAndExportTests(unittest.TestCase):
             },
         )
         joined = [item for item in progress["items"] if item["state"] == "joined"]
-        self.assertEqual([item["key"] for item in joined], ["u2", "mteam", "ttg"])
+        self.assertEqual([item["key"] for item in joined], ["queen", "mteam", "ttg"])
 
     def test_retirement_progress_does_not_guess_missing_rules(self):
         progress = core.build_retirement_progress(
@@ -380,6 +404,37 @@ class TwelveAndExportTests(unittest.TestCase):
         self.assertEqual(progress["retired"], 1)
         self.assertEqual(progress["sites"][0]["status"], "retired")
 
+    def test_fixed_source_rules_include_queen_alternatives_and_ttg(self):
+        self.assertEqual(len(site_rules_builtin.SITE_LEVEL_RULES), 234)
+        self.assertEqual(
+            site_rules_builtin.SOURCE_COMMIT,
+            "7480ca57a96254680c47bed2b1f74bacb6018f42",
+        )
+        self.assertEqual(len(core.DEFAULT_RETIREMENT_RULES), 136)
+        queen = core.DEFAULT_RETIREMENT_RULES["皇后"]
+        veteran = next(level for level in queen["levels"] if level["name"] == "Veteran User")
+        self.assertEqual(queen["retirement_level"], "Veteran User")
+        self.assertEqual(
+            veteran["alternatives"],
+            [{"min_download": 600_000_000_000}, {"min_torrent_uploads": 200}],
+        )
+        self.assertEqual(core.DEFAULT_RETIREMENT_RULES["听听歌"]["retirement_level"], "BrontoByte")
+
+    def test_alternative_requirement_accepts_either_available_branch(self):
+        level = {
+            "alternatives": [
+                {"min_download": 600_000_000_000},
+                {"min_torrent_uploads": 200},
+            ]
+        }
+        self.assertEqual(
+            core._requirement_missing(level, {"download": 600_000_000_000}),
+            [],
+        )
+        missing = core._requirement_missing(level, {"download": 1})
+        self.assertTrue(any("任选条件未达成" in item for item in missing))
+        self.assertTrue(any("发布数数据未提供" in item for item in missing))
+
     def test_audiences_retirement_rules_match_published_level_route(self):
         progress = core.build_retirement_progress(
             [{
@@ -399,11 +454,11 @@ class TwelveAndExportTests(unittest.TestCase):
         self.assertEqual(site["status"], "upgrading")
         self.assertEqual(site["retirement_level"], "Extreme User")
         self.assertEqual(levels["Power User"]["eligible_date"], "2026-08-07")
-        self.assertEqual(levels["Power User"]["min_download"], 120 * core.GIB)
-        self.assertEqual(levels["Power User"]["min_upload"], 240 * core.GIB)
-        self.assertTrue(levels["Power User"]["min_upload_strict"])
+        self.assertEqual(levels["Power User"]["min_download"], 120_000_000_000)
+        self.assertEqual(levels["Power User"]["min_upload"], 240_000_000_000)
+        self.assertFalse(levels["Power User"]["min_upload_strict"])
         self.assertEqual(levels["Power User"]["min_ratio"], 2.0)
-        self.assertTrue(levels["Power User"]["min_ratio_strict"])
+        self.assertFalse(levels["Power User"]["min_ratio_strict"])
         self.assertEqual(levels["Power User"]["min_seeding_points"], 100_000.0)
         self.assertIsNone(levels["Power User"]["min_bonus"])
         self.assertIn("做种积分数据未提供", levels["Power User"]["missing"])
@@ -413,15 +468,15 @@ class TwelveAndExportTests(unittest.TestCase):
         self.assertIn("NFO", levels["Power User"]["description"])
         self.assertEqual(levels["Crazy User"]["eligible_date"], "2026-12-18")
         self.assertIn("可以查看排行榜", levels["Crazy User"]["description"])
-        self.assertEqual(levels["Insane User"]["min_ratio"], 3.4)
-        self.assertEqual(levels["Extreme User"]["min_ratio"], 4.4)
+        self.assertEqual(levels["Insane User"]["min_ratio"], 3.5)
+        self.assertEqual(levels["Extreme User"]["min_ratio"], 4.5)
         self.assertEqual(levels["Extreme User"]["eligible_date"], "2028-01-14")
         self.assertTrue(levels["Extreme User"]["is_retirement"])
-        self.assertIn("永久保留账号", levels["Extreme User"]["description"])
+        self.assertIn("永远保留账号", levels["Extreme User"]["description"])
         self.assertEqual(levels["Rainbow"]["eligible_date"], "2028-12-15")
-        self.assertIn("彩虹 ID", levels["Rainbow"]["description"])
+        self.assertIn("彩虹ID", levels["Rainbow"]["description"])
 
-    def test_audiences_ratio_threshold_is_strict(self):
+    def test_audiences_ratio_threshold_uses_bundled_rule_value(self):
         progress = core.build_retirement_progress(
             [{
                 "site_id": 1,
@@ -439,7 +494,7 @@ class TwelveAndExportTests(unittest.TestCase):
             for level in progress["sites"][0]["route"]
             if level["name"] == "Power User"
         )
-        self.assertIn("分享率需大于 2", power["missing"])
+        self.assertFalse(any("分享率" in item for item in power["missing"]))
 
     def test_audiences_points_eta_matches_ptd_remaining_hours(self):
         progress = core.build_retirement_progress(
@@ -504,23 +559,23 @@ class TwelveAndExportTests(unittest.TestCase):
         self.assertEqual(site["status"], "upgrading")
         self.assertEqual(site["retirement_level"], "Extreme User")
         self.assertEqual(site["next_level"], "Power User")
-        self.assertEqual(levels["Power User"]["eligible_date"], "2026-01-30")
-        self.assertEqual(levels["Power User"]["min_download"], 200 * core.GIB)
-        self.assertEqual(levels["Power User"]["min_upload"], 400 * core.GIB)
-        self.assertTrue(levels["Power User"]["min_join_days_strict"])
-        self.assertTrue(levels["Power User"]["min_upload_strict"])
-        self.assertTrue(levels["Power User"]["min_download_strict"])
-        self.assertTrue(levels["Power User"]["min_ratio_strict"])
-        self.assertIn("账号时间剩余 1 天", levels["Power User"]["missing"])
-        self.assertIn("下载需大于 200.0 GB", levels["Power User"]["missing"])
-        self.assertIn("上传剩余 400.0 GB", levels["Power User"]["missing"])
-        self.assertIn("分享率需大于 2", levels["Power User"]["missing"])
+        self.assertEqual(levels["Power User"]["eligible_date"], "2026-01-29")
+        self.assertEqual(levels["Power User"]["min_download"], 200_000_000_000)
+        self.assertEqual(levels["Power User"]["min_upload"], 400_000_000_000)
+        self.assertFalse(levels["Power User"]["min_join_days_strict"])
+        self.assertFalse(levels["Power User"]["min_upload_strict"])
+        self.assertFalse(levels["Power User"]["min_download_strict"])
+        self.assertFalse(levels["Power User"]["min_ratio_strict"])
+        self.assertFalse(any("账号时间" in item for item in levels["Power User"]["missing"]))
+        self.assertFalse(any("下载" in item for item in levels["Power User"]["missing"]))
+        self.assertTrue(any(item.startswith("上传剩余 ") for item in levels["Power User"]["missing"]))
+        self.assertFalse(any("分享率" in item for item in levels["Power User"]["missing"]))
         self.assertTrue(levels["Extreme User"]["is_retirement"])
-        self.assertIn("永久保号", levels["Extreme User"]["description"])
+        self.assertIn("+6%", levels["Extreme User"]["description"])
         self.assertEqual(levels["mTorrent Master"]["min_join_days"], 224)
-        self.assertEqual(levels["mTorrent Master"]["min_download"], 3000 * core.GIB)
+        self.assertEqual(levels["mTorrent Master"]["min_download"], 3_000_000_000_000)
 
-    def test_mteam_rule_matches_chinese_official_level_name(self):
+    def test_bundled_mteam_rule_matches_legacy_site_and_level_aliases(self):
         progress = core.build_retirement_progress(
             [{
                 "site_id": 1,
@@ -535,6 +590,40 @@ class TwelveAndExportTests(unittest.TestCase):
         self.assertEqual(site["status"], "retired")
         self.assertEqual(site["current_level"], "府尹")
         self.assertTrue(next(level for level in site["route"] if level["name"] == "Extreme User")["is_current"])
+
+    def test_vip_level_is_shown_as_wealthy_retirement(self):
+        progress = core.build_retirement_progress(
+            [{
+                "site_id": 1,
+                "site_name": "馒头",
+                "user_level": "VIP",
+                "updated_day": "2026-09-12",
+            }],
+        )
+
+        site = progress["sites"][0]
+        self.assertEqual(progress["retired"], 0)
+        self.assertEqual(progress["wealthy_retired"], 1)
+        self.assertEqual(progress["rule_missing"], 0)
+        self.assertEqual(site["status"], "wealthy_retired")
+        self.assertTrue(site["is_vip"])
+        self.assertEqual(site["current_level"], "VIP")
+
+    def test_level_above_retirement_keeps_next_level_progress(self):
+        progress = core.build_retirement_progress(
+            [{
+                "site_id": 1,
+                "site_name": "馒头",
+                "user_level": "Ultimate User",
+                "join_at": "2025-01-01",
+                "updated_day": "2026-09-12",
+            }],
+        )
+
+        site = progress["sites"][0]
+        self.assertEqual(site["status"], "retired")
+        self.assertEqual(site["next_level"], "mTorrent Master")
+        self.assertTrue(any(level["name"] == "mTorrent Master" for level in site["route"]))
 
     def test_hhan_retirement_rules_keep_seeding_points_distinct_from_bonus(self):
         progress = core.build_retirement_progress(
@@ -554,33 +643,34 @@ class TwelveAndExportTests(unittest.TestCase):
         )
         site = progress["sites"][0]
         levels = {level["name"]: level for level in site["route"]}
+        named = lambda suffix: next(level for name, level in levels.items() if name.endswith(suffix))
 
-        self.assertEqual(site["next_level"], "Power User")
-        self.assertEqual(site["retirement_level"], "Ultimate User")
-        self.assertEqual(levels["Power User"]["min_seeding_points"], 80_000)
-        self.assertTrue(levels["Power User"]["min_seeding_points_strict"])
-        self.assertIsNone(levels["Power User"]["min_bonus"])
-        self.assertIn("做种积分剩余 1", levels["Power User"]["missing"])
-        self.assertFalse(any("魔力" in item for item in levels["Power User"]["missing"]))
-        self.assertEqual(levels["Power User"]["min_upload"], 63 * core.GIB)
+        self.assertTrue(site["next_level"].endswith("Power User"))
+        self.assertTrue(site["retirement_level"].endswith("Ultimate User"))
+        self.assertEqual(named("Power User")["min_seeding_points"], 80_000)
+        self.assertFalse(named("Power User")["min_seeding_points_strict"])
+        self.assertIsNone(named("Power User")["min_bonus"])
+        self.assertIn("做种积分剩余 1", named("Power User")["missing"])
+        self.assertFalse(any("魔力" in item for item in named("Power User")["missing"]))
+        self.assertEqual(named("Power User")["min_upload"], 52_500_000_000)
         self.assertEqual(
-            [levels[name]["min_seeding_points"] for name in (
+            [named(name)["min_seeding_points"] for name in (
                 "Power User", "Elite User", "Crazy User", "Insane User",
                 "Veteran User", "Extreme User", "Ultimate User", "Nexus Master",
             )],
             [80_000, 150_000, 300_000, 500_000, 900_000, 1_100_000, 1_300_000, 1_500_000],
         )
         self.assertTrue(all(
-            levels[name]["min_bonus"] is None
+            named(name)["min_bonus"] is None
             for name in (
                 "Power User", "Elite User", "Crazy User", "Insane User",
                 "Veteran User", "Extreme User", "Ultimate User", "Nexus Master",
             )
         ))
-        self.assertTrue(levels["Ultimate User"]["is_retirement"])
-        self.assertEqual(levels["Power User"]["seeding_points_eta_days"], 1)
-        self.assertEqual(levels["Power User"]["seeding_points_eta_date"], "2026-09-12")
-        self.assertEqual(levels["Power User"]["seeding_points_eta_hours"], 0)
+        self.assertTrue(named("Ultimate User")["is_retirement"])
+        self.assertEqual(named("Power User")["seeding_points_eta_days"], 1)
+        self.assertEqual(named("Power User")["seeding_points_eta_date"], "2026-09-12")
+        self.assertEqual(named("Power User")["seeding_points_eta_hours"], 0)
 
     def test_hhan_points_eta_never_uses_magic_rate(self):
         progress = core.build_retirement_progress(
@@ -602,10 +692,10 @@ class TwelveAndExportTests(unittest.TestCase):
 
         power = next(
             level for level in progress["sites"][0]["route"]
-            if level["name"] == "Power User"
+            if level["name"].endswith("Power User")
         )
-        self.assertEqual(power["seeding_points_eta_days"], 11)
-        self.assertEqual(power["seeding_points_eta_date"], "2026-09-22")
+        self.assertEqual(power["seeding_points_eta_days"], 10)
+        self.assertEqual(power["seeding_points_eta_date"], "2026-09-21")
 
     def test_home_retirement_rules_match_published_requirements(self):
         progress = core.build_retirement_progress(
@@ -637,8 +727,8 @@ class TwelveAndExportTests(unittest.TestCase):
         )
         self.assertEqual(
             [levels[name]["min_download"] for name in ordered],
-            [256 * core.GIB, 386 * core.GIB, 512 * core.GIB, 768 * core.GIB,
-             1024 * core.GIB, 2048 * core.GIB, 8192 * core.GIB, 10240 * core.GIB],
+            [256_000_000_000, 386_000_000_000, 512_000_000_000, 768_000_000_000,
+             1_000_000_000_000, 2_000_000_000_000, 8_000_000_000_000, 10_000_000_000_000],
         )
         self.assertEqual(
             [levels[name]["min_seeding_points"] for name in ordered],
@@ -646,8 +736,8 @@ class TwelveAndExportTests(unittest.TestCase):
              400_000, 540_000, 700_000, 1_000_000],
         )
         self.assertTrue(all(levels[name]["min_bonus"] is None for name in ordered))
-        self.assertEqual(levels["Power User"]["min_upload"], 512 * core.GIB)
-        self.assertEqual(levels["Nexus Master"]["min_upload"], 102400 * core.GIB)
+        self.assertEqual(levels["Power User"]["min_upload"], 512_000_000_000)
+        self.assertEqual(levels["Nexus Master"]["min_upload"], 100_000_000_000_000)
         self.assertTrue(levels["Nexus Master"]["is_retirement"])
 
     def test_hdfans_retirement_rules_use_seeding_points_not_bonus(self):
@@ -680,8 +770,8 @@ class TwelveAndExportTests(unittest.TestCase):
         )
         self.assertEqual(
             [levels[name]["min_download"] for name in ordered],
-            [50 * core.GIB, 120 * core.GIB, 256 * core.GIB, 512 * core.GIB,
-             1024 * core.GIB, 2048 * core.GIB, 4096 * core.GIB, 10240 * core.GIB],
+            [50_000_000_000, 120_000_000_000, 256_000_000_000, 512_000_000_000,
+             1_000_000_000_000, 2_000_000_000_000, 4_000_000_000_000, 10_000_000_000_000],
         )
         self.assertEqual(
             [levels[name]["min_seeding_points"] for name in ordered],
@@ -689,8 +779,8 @@ class TwelveAndExportTests(unittest.TestCase):
              600_000, 800_000, 1_000_000, 1_688_888],
         )
         self.assertTrue(all(levels[name]["min_bonus"] is None for name in ordered))
-        self.assertEqual(levels["Power User"]["min_upload"], 50 * core.GIB)
-        self.assertEqual(levels["Extreme User"]["min_upload"], 7168 * core.GIB)
+        self.assertEqual(levels["Power User"]["min_upload"], 50_000_000_000)
+        self.assertEqual(levels["Extreme User"]["min_upload"], 7_000_000_000_000)
         self.assertTrue(levels["Extreme User"]["is_retirement"])
 
     def test_kylin_retirement_rules_match_published_requirements(self):
@@ -772,7 +862,7 @@ class TwelveAndExportTests(unittest.TestCase):
         self.assertEqual(site["retirement_level"], "Extreme User")
         self.assertEqual(len(site["route"]), 10)
 
-    def test_uploaded_rule_does_not_match_site_domain_when_display_name_differs(self):
+    def test_uploaded_rule_matches_site_domain_when_display_name_differs(self):
         rule = {
             "_custom_rule": True,
             "retirement_level": "Nexus Master",
@@ -794,9 +884,42 @@ class TwelveAndExportTests(unittest.TestCase):
         )
         site = progress["sites"][0]
 
-        self.assertEqual(site["status"], "rule_missing")
-        self.assertEqual(site["next_level"], "")
-        self.assertEqual(len(site["route"]), 0)
+        self.assertEqual(site["status"], "upgrading")
+        self.assertEqual(site["next_level"], "Nexus Master")
+        self.assertEqual(len(site["route"]), 3)
+
+    def test_manual_wealthy_retirement_matches_domain_without_level_rule(self):
+        progress = core.build_retirement_progress(
+            [{
+                "site_id": 9,
+                "site_name": "自定义会员站",
+                "domain": "vip.example",
+                "user_level": "Donor",
+                "updated_day": "2026-09-12",
+            }],
+            {},
+            ["vip.example"],
+        )
+
+        site = progress["sites"][0]
+        self.assertEqual(progress["wealthy_retired"], 1)
+        self.assertEqual(progress["rule_missing"], 0)
+        self.assertEqual(site["status"], "wealthy_retired")
+        self.assertTrue(site["wealthy_retirement_manual"])
+        self.assertFalse(site["is_vip"])
+
+    def test_vip_only_rule_uses_domain_alias_for_wealthy_retirement(self):
+        progress = core.build_retirement_progress(
+            [{
+                "site_name": "IPT",
+                "domain": "iptorrents.com",
+                "user_level": "VIP",
+                "updated_day": "2026-09-12",
+            }],
+        )
+
+        self.assertEqual(progress["wealthy_retired"], 1)
+        self.assertEqual(progress["sites"][0]["status"], "wealthy_retired")
 
 
 class PackagingTests(unittest.TestCase):
@@ -804,12 +927,13 @@ class PackagingTests(unittest.TestCase):
         manifest = json.loads((ROOT / "package.v2.json").read_text(encoding="utf-8"))
         meta = manifest["PTDataStatistics"]
         source = (PLUGIN / "__init__.py").read_text(encoding="utf-8")
-        self.assertEqual(meta["version"], "2.0.1")
+        self.assertEqual(meta["version"], "2.0.2")
         self.assertEqual(meta["history"], {
+            "v2.0.2": "不值一提",
             "v2.0.1": "不值一提",
             "v2.0.0": "兼容v2及v3",
         })
-        self.assertIn('plugin_version = "2.0.1"', source)
+        self.assertIn('plugin_version = "2.0.2"', source)
         self.assertEqual(meta["system_version"], ">=2.12.0")
         self.assertIsNot(meta.get("v3"), False)
         self.assertNotIn("release", meta)
@@ -902,6 +1026,9 @@ class PackagingTests(unittest.TestCase):
         self.assertIn('class="site-data-list"', source)
         self.assertNotIn("服务器日期 {{ overview.server_date", source)
         self.assertIn('class="site-stat-grid"', source)
+        self.assertIn(".site-stat-grid{display:grid;grid-template-columns:repeat(10,minmax(0,1fr))", source)
+        self.assertIn(".site-stat-grid{grid-template-columns:repeat(5,minmax(0,1fr))}", source)
+        self.assertIn(".site-stat-grid{grid-template-columns:repeat(2,minmax(0,1fr))}", source)
         self.assertIn("<span>魔力</span>", source)
         self.assertIn("<span>预估时魔</span>", source)
         self.assertNotIn("魔力（预估时魔）", source)
@@ -961,7 +1088,9 @@ class PackagingTests(unittest.TestCase):
         self.assertIn("async function uploadRuleFile(event)", source)
         self.assertIn("settingsDraft.value.custom_retirement_rules = rules", source)
         self.assertIn("alignRulesToMoviePilotSites(normalizeUploadedRules(payload))", source)
-        self.assertIn("return { ...rule, site: matchedName, aliases: [] }", source)
+        self.assertIn("return { ...rule, site: matchedName, aliases, domains }", source)
+        self.assertIn('class="wealthy-site-picker"', source)
+        self.assertIn("settingsDraft.value.wealthy_retirement_sites", source)
         self.assertIn("await props.api.post(`${pluginBase.value}/settings`, payload)", source)
         self.assertIn("`${pluginBase.value}/rules/template`", source)
         self.assertIn("mteam-level-rules-template.json", source)
@@ -973,6 +1102,13 @@ class PackagingTests(unittest.TestCase):
         self.assertNotIn("待同步积分时速", source)
         self.assertIn("nextLevelOverallProgress(site)", source)
         self.assertIn("return averageRequirementProgress(requirementRows(site, nextLevel))", source)
+        self.assertIn("status === 'wealthy_retired'", source)
+        self.assertIn("富贵养老", source)
+        self.assertIn("wealthyRetiredCount", source)
+        self.assertIn('class="wealthy-retirement-state"', source)
+        self.assertLess(source.index("规则缺失 {{ retirement.rule_missing"), source.index("升级中 {{ retirement.upgrading"))
+        self.assertLess(source.index("升级中 {{ retirement.upgrading"), source.index("养老中 {{ ordinaryRetiredCount"))
+        self.assertLess(source.index("养老中 {{ ordinaryRetiredCount"), source.index("富贵养老 {{ wealthyRetiredCount"))
         self.assertNotIn("retirementProgressPercent(site)", source)
         self.assertIn("const overallProgress = averageRequirementProgress(requirements)", source)
         self.assertNotIn("retirement-preview-grid", source)

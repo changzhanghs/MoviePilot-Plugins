@@ -32,6 +32,8 @@ class SiteSnapshotData(BaseModel):
     seeding_points_hourly: float | None = None
     seeding: int = 0
     seeding_size: int = 0
+    torrent_uploads: float | None = None
+    average_seeding_time_days: float | None = None
     updated_day: str = ""
     contribution: float = 0
 
@@ -107,12 +109,22 @@ class LevelRequirementData(BaseModel):
     min_ratio: float | None = None
     min_ratio_strict: bool = False
     min_bonus: float | None = None
+    min_bonus_strict: bool = False
     min_seeding_points: float | None = None
     min_seeding_points_strict: bool = False
     seeding_points_eta_hours: int | None = None
     seeding_points_eta_days: int | None = None
     seeding_points_eta_date: str = ""
     min_seeding: int = 0
+    min_seeding_strict: bool = False
+    min_seeding_size: int = 0
+    min_seeding_size_strict: bool = False
+    min_torrent_uploads: int = 0
+    min_torrent_uploads_strict: bool = False
+    min_average_seeding_time_days: float | None = None
+    min_average_seeding_time_days_strict: bool = False
+    alternatives: list[dict[str, Any]] = Field(default_factory=list)
+    unsupported_requirements: list[dict[str, Any]] = Field(default_factory=list)
     eligible_date: str = ""
     reached: bool = False
     is_current: bool = False
@@ -130,6 +142,8 @@ class RetirementSiteData(BaseModel):
     next_level: str = ""
     retirement_level: str = ""
     status: str = "rule_missing"
+    is_vip: bool = False
+    wealthy_retirement_manual: bool = False
     join_at: str = ""
     upload: int = 0
     download: int = 0
@@ -139,6 +153,9 @@ class RetirementSiteData(BaseModel):
     estimated_bonus_hourly: float | None = None
     seeding_points_hourly: float | None = None
     seeding: int = 0
+    seeding_size: int = 0
+    torrent_uploads: float | None = None
+    average_seeding_time_days: float | None = None
     updated_day: str = ""
     levels_remaining: int | None = None
     route: list[LevelRequirementData] = Field(default_factory=list)
@@ -149,6 +166,7 @@ class RetirementProgressData(BaseModel):
 
     total: int = 0
     retired: int = 0
+    wealthy_retired: int = 0
     upgrading: int = 0
     rule_missing: int = 0
     sites: list[RetirementSiteData] = Field(default_factory=list)
@@ -199,14 +217,11 @@ class HourlyTrafficResponse(BaseModel):
     points: list[HourlyTrafficPoint] = Field(default_factory=list)
 
 
-class UploadedLevelRuleData(BaseModel):
-    """用户上传规则中的单个等级。"""
+class UploadedRequirementData(BaseModel):
+    """用户上传规则中的一组可复用等级条件。"""
 
     model_config = ConfigDict(extra="forbid")
 
-    name: str = Field(min_length=1, max_length=128)
-    aliases: list[str] = Field(default_factory=list)
-    description: str = Field(default="", max_length=2000)
     min_join_days: int = Field(default=0, ge=0)
     min_join_days_strict: bool = False
     min_upload: int = Field(default=0, ge=0)
@@ -216,9 +231,27 @@ class UploadedLevelRuleData(BaseModel):
     min_ratio: float | None = Field(default=None, ge=0)
     min_ratio_strict: bool = False
     min_bonus: float | None = Field(default=None, ge=0)
+    min_bonus_strict: bool = False
     min_seeding_points: float | None = Field(default=None, ge=0)
     min_seeding_points_strict: bool = False
     min_seeding: int = Field(default=0, ge=0)
+    min_seeding_strict: bool = False
+    min_seeding_size: int = Field(default=0, ge=0)
+    min_seeding_size_strict: bool = False
+    min_torrent_uploads: int = Field(default=0, ge=0)
+    min_torrent_uploads_strict: bool = False
+    min_average_seeding_time_days: float | None = Field(default=None, ge=0)
+    min_average_seeding_time_days_strict: bool = False
+    unsupported_requirements: list[dict[str, Any]] = Field(default_factory=list, max_length=50)
+
+
+class UploadedLevelRuleData(UploadedRequirementData):
+    """用户上传规则中的单个等级。"""
+
+    name: str = Field(min_length=1, max_length=128)
+    aliases: list[str] = Field(default_factory=list)
+    description: str = Field(default="", max_length=2000)
+    alternatives: list[UploadedRequirementData] = Field(default_factory=list, max_length=20)
 
     @field_validator("name", "description")
     @classmethod
@@ -238,15 +271,17 @@ class UploadedRetirementRuleData(BaseModel):
 
     site: str = Field(min_length=1, max_length=128)
     aliases: list[str] = Field(default_factory=list)
+    domains: list[str] = Field(default_factory=list)
     retirement_level: str = Field(min_length=1, max_length=128)
     levels: list[UploadedLevelRuleData] = Field(min_length=1, max_length=100)
+    vip_levels: list[UploadedLevelRuleData] = Field(default_factory=list, max_length=100)
 
     @field_validator("site", "retirement_level")
     @classmethod
     def strip_rule_text(cls, value: str) -> str:
         return str(value or "").strip()
 
-    @field_validator("aliases")
+    @field_validator("aliases", "domains")
     @classmethod
     def normalize_site_aliases(cls, value: list[str]) -> list[str]:
         return list(dict.fromkeys(str(item).strip() for item in value if str(item).strip()))
@@ -288,6 +323,7 @@ class SettingsData(BaseModel):
     ptd_cookiecloud_password: str = ""
     ptd_cookiecloud_headers: str = ""
     ptd_site_mappings: str = ""
+    wealthy_retirement_sites: list[str] = Field(default_factory=list, max_length=500)
     custom_retirement_rules: list[UploadedRetirementRuleData] = Field(default_factory=list, max_length=100)
 
     @field_validator("retention_days")
@@ -322,6 +358,14 @@ class SettingsData(BaseModel):
         modes = [item for item in value if item in allowed]
         return list(dict.fromkeys(modes))
 
+    @field_validator("wealthy_retirement_sites")
+    @classmethod
+    def normalize_wealthy_retirement_sites(cls, value: list[str]) -> list[str]:
+        """规范化手动富贵养老的站点 ID，并兼容旧配置中的域名或站点名。"""
+
+        normalized = [str(item).strip().casefold() for item in value if str(item).strip()]
+        return list(dict.fromkeys(normalized))
+
     @field_validator("custom_retirement_rules")
     @classmethod
     def validate_custom_rule_sites(
@@ -332,7 +376,7 @@ class SettingsData(BaseModel):
 
         identities: set[str] = set()
         for rule in value:
-            for name in (rule.site, *rule.aliases):
+            for name in (rule.site, *rule.aliases, *rule.domains):
                 identity = "".join(character for character in name.casefold() if character.isalnum())
                 if identity in identities:
                     raise ValueError(f"站点名称或别名重复：{name}")

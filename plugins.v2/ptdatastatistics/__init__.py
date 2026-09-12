@@ -64,7 +64,7 @@ class PTDataStatistics(_PluginBase):
     plugin_name = "PT数据统计"
     plugin_desc = "统计 PT 站点累计与每日上传下载，提供历史、养老进度和通知。"
     plugin_icon = "ptdatastatistics.svg"
-    plugin_version = "2.0.1"
+    plugin_version = "2.0.2"
     plugin_author = "cz"
     author_url = "https://github.com/changzhanghs"
     plugin_config_prefix = "ptdatastatistics_"
@@ -82,6 +82,7 @@ class PTDataStatistics(_PluginBase):
     _ptd_cookiecloud_password = ""
     _ptd_cookiecloud_headers = ""
     _ptd_site_mappings = ""
+    _wealthy_retirement_sites: ClassVar[list[str]] = []
     _custom_retirement_rules: ClassVar[list[dict[str, Any]]] = []
 
     def init_plugin(self, config: dict | None = None) -> None:
@@ -129,6 +130,7 @@ class PTDataStatistics(_PluginBase):
         self._ptd_cookiecloud_password = value.ptd_cookiecloud_password
         self._ptd_cookiecloud_headers = value.ptd_cookiecloud_headers
         self._ptd_site_mappings = value.ptd_site_mappings
+        self._wealthy_retirement_sites = list(value.wealthy_retirement_sites)
         self._custom_retirement_rules = [rule.model_dump() for rule in value.custom_retirement_rules]
 
     def _log_custom_rule_state(self, action: str) -> None:
@@ -155,6 +157,7 @@ class PTDataStatistics(_PluginBase):
             ptd_cookiecloud_password=self._ptd_cookiecloud_password,
             ptd_cookiecloud_headers=self._ptd_cookiecloud_headers,
             ptd_site_mappings=self._ptd_site_mappings,
+            wealthy_retirement_sites=self._wealthy_retirement_sites,
             custom_retirement_rules=self._custom_retirement_rules,
         )
 
@@ -165,11 +168,7 @@ class PTDataStatistics(_PluginBase):
             name: dict(rule) for name, rule in DEFAULT_RETIREMENT_RULES.items()
         }
         for uploaded in self._custom_retirement_rules:
-            rule = {
-                "retirement_level": uploaded["retirement_level"],
-                "levels": uploaded["levels"],
-                "_custom_rule": True,
-            }
+            rule = {**uploaded, "_custom_rule": True}
             rules[uploaded["site"]] = rule
         return rules
 
@@ -877,7 +876,11 @@ class PTDataStatistics(_PluginBase):
             for item in latest_valid_all
         ]
         retirement = RetirementProgressData.model_validate(
-            build_retirement_progress(retirement_snapshots, self._retirement_rules())
+            build_retirement_progress(
+                retirement_snapshots,
+                self._retirement_rules(),
+                self._wealthy_retirement_sites,
+            )
         )
         first_day, last_day = repository.date_bounds()
         last_mp_update = max(
@@ -1054,9 +1057,20 @@ class PTDataStatistics(_PluginBase):
     def api_rule_template() -> dict[str, Any]:
         """从内置馒头规则生成带说明、可直接上传的 JSON 模板。"""
 
+        uploadable_fields = {
+            "name", "aliases", "description", "min_join_days",
+            "min_join_days_strict", "min_upload", "min_upload_strict",
+            "min_download", "min_download_strict", "min_ratio",
+            "min_ratio_strict", "min_bonus", "min_bonus_strict",
+            "min_seeding_points", "min_seeding_points_strict", "min_seeding",
+            "min_seeding_strict", "min_seeding_size", "min_seeding_size_strict",
+            "min_torrent_uploads", "min_torrent_uploads_strict",
+            "min_average_seeding_time_days", "min_average_seeding_time_days_strict",
+            "alternatives", "unsupported_requirements",
+        }
         levels = [
             {
-                **level,
+                **{key: value for key, value in level.items() if key in uploadable_fields},
                 "aliases": list(level.get("aliases") or ()),
             }
             for level in MTEAM_RETIREMENT_RULE["levels"]
@@ -1065,15 +1079,24 @@ class PTDataStatistics(_PluginBase):
             "version": 1,
             "_comment": [
                 "这是馒头完整等级规则示例，可直接上传，也可复制后修改为其他站点。",
-                "site 必须与 MoviePilot 站点管理中的名称完全一致。",
-                "站点 ID、域名和站点 aliases 不参与匹配；levels[].aliases 仅用于匹配等级名称。",
+                "site、aliases 和 domains 均参与 MoviePilot 站点名称及域名匹配。",
+                "levels[].aliases 用于匹配 MoviePilot 返回的本地化等级名称。",
                 "流量门槛使用字节；strict 为 true 表示严格大于，否则表示大于等于。",
                 "_comment 仅用于说明，导入时不会写入插件规则。",
             ],
             "rules": [{
                 "site": "馒头",
+                "aliases": list(MTEAM_RETIREMENT_RULE.get("aliases") or ()),
+                "domains": list(MTEAM_RETIREMENT_RULE.get("domains") or ()),
                 "retirement_level": MTEAM_RETIREMENT_RULE["retirement_level"],
                 "levels": levels,
+                "vip_levels": [
+                    {
+                        **{key: value for key, value in level.items() if key in uploadable_fields},
+                        "aliases": list(level.get("aliases") or ()),
+                    }
+                    for level in MTEAM_RETIREMENT_RULE.get("vip_levels") or ()
+                ],
             }],
         }
 

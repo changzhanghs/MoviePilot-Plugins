@@ -1,5 +1,5 @@
 import { importShared } from './__federation_fn_import-JrT3xvdd.js';
-import { _ as _export_sfc, s as siteColors, f as formatBytes, a as _sfc_main$1, u as unwrapResponse } from './SiteAvatar-CTtP8HRR.js';
+import { _ as _export_sfc, s as siteColors, f as formatBytes, a as _sfc_main$1, u as unwrapResponse } from './SiteAvatar-DwA7AJDm.js';
 
 const {resolveComponent:_resolveComponent,createVNode:_createVNode,createElementVNode:_createElementVNode,toDisplayString:_toDisplayString,unref:_unref,openBlock:_openBlock,createBlock:_createBlock,createCommentVNode:_createCommentVNode,normalizeStyle:_normalizeStyle,renderList:_renderList,Fragment:_Fragment,createElementBlock:_createElementBlock,createTextVNode:_createTextVNode} = await importShared('vue');
 

@@ -28,7 +28,7 @@ const overview = ref({
   server_date: '', generated_at: '', first_history_day: '', last_history_day: '',
   summary: {}, sites: [], today_sites: [], history_sites: [],
   twelve: { joined: 0, total: 12, percent: 0, items: [] },
-  retirement: { total: 0, retired: 0, upgrading: 0, rule_missing: 0, sites: [] },
+  retirement: { total: 0, retired: 0, wealthy_retired: 0, upgrading: 0, rule_missing: 0, sites: [] },
 })
 const distribution = ref({ month: '', day: '', monthly: [], daily: [] })
 const distributionFilters = ref({ month: '', day: '' })
@@ -58,6 +58,7 @@ const settingsDraft = ref({
   ptd_cookiecloud_enabled: false, ptd_cookiecloud_uuid: '',
   ptd_cookiecloud_password: '', ptd_cookiecloud_headers: '',
   ptd_site_mappings: '',
+  wealthy_retirement_sites: [],
   custom_retirement_rules: [],
 })
 const history = ref({ start_day: '', end_day: '', count: 0, records: [] })
@@ -108,6 +109,11 @@ const twelveTrackPercent = computed(() => {
   return Math.min(100, (twelveJoinedCount.value - 1) * 100 / (twelveTotalCount.value - 1))
 })
 const retirement = computed(() => overview.value.retirement || { sites: [] })
+const wealthyRetiredCount = computed(() => Number(
+  retirement.value.wealthy_retired
+    ?? (retirement.value.sites || []).filter(site => site.status === 'wealthy_retired').length
+))
+const ordinaryRetiredCount = computed(() => Number(retirement.value.retired || 0))
 const sortedRetirementSites = computed(() => [...(retirement.value.sites || [])].sort((left, right) => {
   if (retirementSortKey.value === 'retirement_progress') {
     return nextLevelOverallProgress(right) - nextLevelOverallProgress(left) || compareSiteNames(left, right)
@@ -117,6 +123,22 @@ const sortedRetirementSites = computed(() => [...(retirement.value.sites || [])]
 const customRuleSites = computed(() => (
   settingsDraft.value.custom_retirement_rules || []
 ).map(rule => rule.site).filter(Boolean))
+function wealthyRetirementSiteKey(site) {
+  return String(site?.site_id || site?.site_name || '').trim().toLocaleLowerCase()
+}
+const wealthyRetirementSiteOptions = computed(() => sortedCurrentSites.value.filter(wealthyRetirementSiteKey))
+function isWealthyRetirementSiteSelected(site) {
+  const key = wealthyRetirementSiteKey(site)
+  return (settingsDraft.value.wealthy_retirement_sites || []).includes(key)
+}
+function toggleWealthyRetirementSite(site) {
+  const key = wealthyRetirementSiteKey(site)
+  if (!key) return
+  const selected = new Set(settingsDraft.value.wealthy_retirement_sites || [])
+  if (selected.has(key)) selected.delete(key)
+  else selected.add(key)
+  settingsDraft.value.wealthy_retirement_sites = [...selected]
+}
 const selectedRetirementSite = computed(() => {
   const sites = sortedRetirementSites.value
   return sites.find(site => retirementSiteKey(site) === selectedRetirementSiteKey.value) || sites[0] || null
@@ -368,6 +390,7 @@ function stateMeta(state) {
   return { label: '未加入', color: 'secondary', icon: 'mdi-lock-outline' }
 }
 function retirementMeta(status) {
+  if (status === 'wealthy_retired') return { label: '富贵养老', color: 'warning', icon: 'mdi-crown' }
   if (status === 'retired') return { label: '已养老', color: 'success', icon: 'mdi-shield-check-outline' }
   if (status === 'upgrading') return { label: '升级中', color: 'warning', icon: 'mdi-trending-up' }
   return { label: '规则缺失', color: 'secondary', icon: 'mdi-help-circle-outline' }
@@ -512,25 +535,31 @@ function normalizeUploadedRules(payload) {
     if (!site) throw new Error(`第 ${index + 1} 条规则缺少 site`)
     if (!retirementLevel) throw new Error(`${site} 缺少 retirement_level`)
     if (!levels.length) throw new Error(`${site} 缺少完整 levels 列表`)
-    const levelNames = new Set()
-    let retirementFound = false
-    const normalizedLevels = levels.map((level, levelIndex) => {
+    const normalizeLevels = (items, label) => {
+      const levelNames = new Set()
+      return items.map((level, levelIndex) => {
       const name = String(level?.name || '').trim()
-      if (!name) throw new Error(`${site} 的第 ${levelIndex + 1} 个等级缺少 name`)
+      if (!name) throw new Error(`${site} 的${label}第 ${levelIndex + 1} 个等级缺少 name`)
       const aliases = Array.isArray(level.aliases) ? level.aliases.map(value => String(value).trim()).filter(Boolean) : []
-      for (const identity of [name, ...aliases].map(value => value.toLocaleLowerCase())) {
+      for (const identity of [name, ...aliases].map(normalizedSiteName)) {
         if (levelNames.has(identity)) throw new Error(`${site} 的等级名称或别名重复：${name}`)
         levelNames.add(identity)
       }
-      retirementFound ||= [name, ...aliases].some(value => value.toLocaleLowerCase() === retirementLevel.toLocaleLowerCase())
       return { ...level, name, aliases }
-    })
+      })
+    }
+    const normalizedLevels = normalizeLevels(levels, '')
+    const retirementFound = normalizedLevels.some(level => (
+      [level.name, ...(level.aliases || [])].some(value => normalizedSiteName(value) === normalizedSiteName(retirementLevel))
+    ))
     if (!retirementFound) throw new Error(`${site} 的保号等级不在 levels 中：${retirementLevel}`)
     return {
       site,
       aliases: Array.isArray(rule.aliases) ? rule.aliases.map(value => String(value).trim()).filter(Boolean) : [],
+      domains: Array.isArray(rule.domains) ? rule.domains.map(value => String(value).trim()).filter(Boolean) : [],
       retirement_level: retirementLevel,
       levels: normalizedLevels,
+      vip_levels: normalizeLevels(Array.isArray(rule.vip_levels) ? rule.vip_levels : [], ' VIP '),
     }
   })
   if (!rules.length) throw new Error('规则文件中没有可用站点')
@@ -538,17 +567,28 @@ function normalizeUploadedRules(payload) {
   return rules
 }
 function normalizedSiteName(value) {
-  return String(value || '').trim().toLocaleLowerCase()
+  return String(value || '').trim().toLocaleLowerCase().replace(/[^a-z0-9\u4e00-\u9fff]+/g, '')
 }
 function alignRulesToMoviePilotSites(rules) {
-  const moviePilotNames = new Map(
-    (ruleAnchorSites.value || []).map(name => [normalizedSiteName(name), String(name).trim()]).filter(([key]) => key)
-  )
-  if (!moviePilotNames.size) throw new Error('MoviePilot 当前没有可用于匹配的站点名称')
+  const moviePilotSites = wealthyRetirementSiteOptions.value.length
+    ? wealthyRetirementSiteOptions.value
+    : (ruleAnchorSites.value || []).map(name => ({ site_name: name }))
+  if (!moviePilotSites.length) throw new Error('MoviePilot 当前没有可用于匹配的站点')
   return rules.map(rule => {
-    const matchedName = moviePilotNames.get(normalizedSiteName(rule.site))
-    if (!matchedName) throw new Error(`${rule.site} 未匹配到 MoviePilot 站点名称`)
-    return { ...rule, site: matchedName, aliases: [] }
+    const ruleIdentities = [rule.site, ...(rule.aliases || []), ...(rule.domains || [])]
+      .map(normalizedSiteName).filter(Boolean)
+    const matched = moviePilotSites.find(site => {
+      const siteIdentities = [site.site_name, site.domain].map(normalizedSiteName).filter(Boolean)
+      return siteIdentities.some(siteIdentity => ruleIdentities.some(ruleIdentity => (
+        siteIdentity === ruleIdentity
+        || (ruleIdentity.length >= 4 && (siteIdentity.includes(ruleIdentity) || ruleIdentity.includes(siteIdentity)))
+      )))
+    })
+    if (!matched) return rule
+    const matchedName = String(matched.site_name || rule.site).trim()
+    const aliases = [...new Set([rule.site, ...(rule.aliases || [])].map(value => String(value).trim()).filter(value => value && value !== matchedName))]
+    const domains = [...new Set((rule.domains || []).map(value => String(value || '').trim()).filter(Boolean))]
+    return { ...rule, site: matchedName, aliases, domains }
   })
 }
 async function uploadRuleFile(event) {
@@ -560,7 +600,7 @@ async function uploadRuleFile(event) {
     const rules = alignRulesToMoviePilotSites(normalizeUploadedRules(payload))
     settingsDraft.value.custom_retirement_rules = rules
     rulesUploadName.value = file.name
-    notify(`已按 MoviePilot 站点名称载入 ${rules.length} 个站点规则，请保存设置后生效`)
+    notify(`已载入 ${rules.length} 个站点规则；名称、域名和别名将在保存后参与匹配`)
   } catch (err) {
     notify(err instanceof SyntaxError ? '规则文件不是有效的 JSON' : err?.message || '读取规则文件失败', 'error')
   } finally {
@@ -615,6 +655,7 @@ function retirementRoute(site) {
   return userIndex >= 0 ? boundedRoute.slice(userIndex) : boundedRoute
 }
 function nextLevelOverallProgress(site) {
+  if (site?.status === 'wealthy_retired') return 100
   const nextLevel = nextLevelRule(site)
   if (!nextLevel) return site?.status === 'retired' ? 100 : 0
   return averageRequirementProgress(requirementRows(site, nextLevel))
@@ -711,8 +752,60 @@ function requirementRows(site, level) {
   pushNumeric({ key: 'ratio', label: '分享率', icon: 'mdi-chart-donut', current: site.ratio, target: level.min_ratio, formatter: value => formatNumber(value, 2), strict: level.min_ratio_strict })
   pushNumeric({ key: 'seeding-points', label: '做种积分', icon: 'mdi-star-circle-outline', current: site.seeding_points, target: level.min_seeding_points, formatter: value => formatNumber(value, 0), strict: level.min_seeding_points_strict, unavailable: site.seeding_points === null || site.seeding_points === undefined, etaDate: level.seeding_points_eta_date })
   if (joinRow) rows.push(joinRow)
-  pushNumeric({ key: 'bonus', label: '魔力', icon: 'mdi-lightning-bolt-circle', current: site.bonus, target: level.min_bonus, formatter: value => formatNumber(value, 0), unavailable: site.bonus === null || site.bonus === undefined })
-  pushNumeric({ key: 'seeding', label: '做种数', icon: 'mdi-seed-outline', current: site.seeding, target: level.min_seeding, formatter: value => formatNumber(value, 0) })
+  pushNumeric({ key: 'bonus', label: '魔力', icon: 'mdi-lightning-bolt-circle', current: site.bonus, target: level.min_bonus, formatter: value => formatNumber(value, 0), strict: level.min_bonus_strict, unavailable: site.bonus === null || site.bonus === undefined })
+  pushNumeric({ key: 'seeding', label: '做种数', icon: 'mdi-seed-outline', current: site.seeding, target: level.min_seeding, formatter: value => formatNumber(value, 0), strict: level.min_seeding_strict })
+  pushNumeric({ key: 'seeding-size', label: '做种体积', icon: 'mdi-database-outline', current: site.seeding_size, target: level.min_seeding_size, formatter: formatBytes, strict: level.min_seeding_size_strict })
+  pushNumeric({ key: 'torrent-uploads', label: '发布数', icon: 'mdi-cloud-upload-outline', current: site.torrent_uploads, target: level.min_torrent_uploads, formatter: value => formatNumber(value, 0), strict: level.min_torrent_uploads_strict, unavailable: site.torrent_uploads === null || site.torrent_uploads === undefined })
+  pushNumeric({ key: 'average-seeding-time', label: '平均做种时间', icon: 'mdi-timer-sand', current: site.average_seeding_time_days, target: level.min_average_seeding_time_days, formatter: value => `${formatNumber(value, 1)} 天`, strict: level.min_average_seeding_time_days_strict, unavailable: site.average_seeding_time_days === null || site.average_seeding_time_days === undefined })
+  const alternativeRows = (level.alternatives || []).map((option, optionIndex) => {
+    const conditions = [
+      ['min_upload', '上传', site.upload, formatBytes],
+      ['min_download', '下载', site.download, formatBytes],
+      ['min_ratio', '分享率', site.ratio, value => formatNumber(value, 2)],
+      ['min_bonus', '魔力', site.bonus, value => formatNumber(value, 0)],
+      ['min_seeding_points', '做种积分', site.seeding_points, value => formatNumber(value, 0)],
+      ['min_seeding', '做种数', site.seeding, value => formatNumber(value, 0)],
+      ['min_seeding_size', '做种体积', site.seeding_size, formatBytes],
+      ['min_torrent_uploads', '发布数', site.torrent_uploads, value => formatNumber(value, 0)],
+      ['min_average_seeding_time_days', '平均做种时间', site.average_seeding_time_days, value => `${formatNumber(value, 1)} 天`],
+    ].filter(([key]) => Number(option?.[key]) > 0).map(([key, label, current, formatter]) => {
+      const target = Number(option[key])
+      const currentNumber = Number(current)
+      const available = current !== null && current !== undefined && Number.isFinite(currentNumber)
+      const strict = Boolean(option[`${key}_strict`])
+      return {
+        target: `${label} ${strict ? '>' : '≥'} ${formatter(target)}`,
+        current: available ? `${label} ${formatter(currentNumber)}` : `${label}数据未提供`,
+        complete: available && (strict ? currentNumber > target : currentNumber >= target),
+        progress: available ? Math.max(0, Math.min(100, currentNumber * 100 / target)) : 0,
+      }
+    })
+    for (const requirement of option?.unsupported_requirements || []) {
+      conditions.push({ target: `${requirement.label || '其他要求'} ${requirement.target ?? ''}`.trim(), current: `${requirement.label || '其他要求'}数据未提供`, complete: false, progress: 0 })
+    }
+    return {
+      key: `alternative-${optionIndex}`,
+      target: conditions.map(item => item.target).join(' 且 '),
+      current: conditions.map(item => item.current).join('、'),
+      complete: conditions.length > 0 && conditions.every(item => item.complete),
+      progress: conditions.length ? conditions.reduce((sum, item) => sum + item.progress, 0) / conditions.length : 0,
+    }
+  }).filter(option => option.target)
+  if (alternativeRows.length) {
+    const complete = reached || alternativeRows.some(option => option.complete)
+    rows.push({
+      key: 'alternatives',
+      label: '任选条件',
+      icon: 'mdi-call-split',
+      current: complete ? '达成' : alternativeRows.map(option => option.current).join(' 或 '),
+      target: alternativeRows.map(option => option.target).join(' 或 '),
+      detail: complete ? '已达成' : '满足任一条件即可',
+      eta: '—',
+      complete,
+      unavailable: !alternativeRows.some(option => option.current && !option.current.includes('数据未提供')),
+      progress: complete ? 100 : Math.max(...alternativeRows.map(option => option.progress)),
+    })
+  }
   return rows
 }
 function averageRequirementProgress(requirements) {
@@ -995,9 +1088,10 @@ onBeforeUnmount(() => historyChart?.destroy())
           <div class="section-heading">
             <div><span class="section-kicker">RETIREMENT</span><h2>养老进度</h2></div>
             <div class="retirement-summary">
-              <VChip color="success" variant="tonal">已养老 {{ retirement.retired || 0 }}</VChip>
-              <VChip color="warning" variant="tonal">升级中 {{ retirement.upgrading || 0 }}</VChip>
               <VChip color="secondary" variant="tonal">规则缺失 {{ retirement.rule_missing || 0 }}</VChip>
+              <VChip color="warning" variant="tonal">升级中 {{ retirement.upgrading || 0 }}</VChip>
+              <VChip color="success" variant="tonal">养老中 {{ ordinaryRetiredCount }}</VChip>
+              <VChip class="wealthy-summary-chip" prepend-icon="mdi-crown" variant="flat">富贵养老 {{ wealthyRetiredCount }}</VChip>
             </div>
           </div>
           <div v-if="selectedRetirementSite" class="retirement-explorer">
@@ -1010,7 +1104,7 @@ onBeforeUnmount(() => historyChart?.destroy())
                   :key="retirementSiteKey(site)"
                   type="button"
                   class="retirement-site-option"
-                  :class="{ 'retirement-site-option--selected': retirementSiteKey(site) === retirementSiteKey(selectedRetirementSite) }"
+                  :class="{ 'retirement-site-option--selected': retirementSiteKey(site) === retirementSiteKey(selectedRetirementSite), 'retirement-site-option--wealthy': site.status === 'wealthy_retired' }"
                   :aria-pressed="retirementSiteKey(site) === retirementSiteKey(selectedRetirementSite)"
                   @click="selectRetirementSite(site)"
                 >
@@ -1018,9 +1112,9 @@ onBeforeUnmount(() => historyChart?.destroy())
                   <span class="retirement-site-option__body">
                     <span class="retirement-site-option__title"><strong>{{ site.site_name }}</strong><em :class="`status-${site.status}`">{{ retirementMeta(site.status).label }}</em></span>
                     <span>{{ site.current_level || '站点未提供等级' }}</span>
-                    <VProgressLinear :model-value="nextLevelOverallProgress(site)" color="primary" bg-color="surface-variant" height="4" rounded />
+                    <VProgressLinear :model-value="nextLevelOverallProgress(site)" :color="site.status === 'wealthy_retired' ? 'warning' : 'primary'" bg-color="surface-variant" height="4" rounded />
                   </span>
-                  <small>{{ nextLevelOverallProgress(site) }}%</small>
+                  <small>{{ site.status === 'wealthy_retired' ? '富贵养老' : `${nextLevelOverallProgress(site)}%` }}</small>
                 </button>
               </div>
             </aside>
@@ -1031,14 +1125,22 @@ onBeforeUnmount(() => historyChart?.destroy())
                   <SiteAvatar :api="api" :site="selectedRetirementSite" :size="58" />
                   <div><h3>{{ selectedRetirementSite.site_name }}</h3><span>当前等级 <strong>{{ selectedRetirementSite.current_level || '站点未提供' }}</strong></span><span>目标等级 <strong class="target-level">{{ selectedRetirementSite.retirement_level || '规则待补充' }}<template v-if="selectedRetirementSite.retirement_level">（保号）</template></strong></span></div>
                 </div>
-                <div class="retirement-detail__metrics">
-                  <span>上传<strong>{{ formatBytes(selectedRetirementSite.upload) }}</strong></span>
-                  <span>下载<strong>{{ formatBytes(selectedRetirementSite.download) }}</strong></span>
-                  <span>分享率<strong>{{ field(selectedRetirementSite.ratio, 2) }}</strong></span>
+                <div class="retirement-detail__right">
+                  <VChip v-if="selectedRetirementSite.status === 'wealthy_retired'" class="wealthy-retirement-badge" prepend-icon="mdi-crown" variant="flat">富贵养老</VChip>
+                  <div class="retirement-detail__metrics">
+                    <span>上传<strong>{{ formatBytes(selectedRetirementSite.upload) }}</strong></span>
+                    <span>下载<strong>{{ formatBytes(selectedRetirementSite.download) }}</strong></span>
+                    <span>分享率<strong>{{ field(selectedRetirementSite.ratio, 2) }}</strong></span>
+                  </div>
                 </div>
               </header>
 
-              <div v-if="selectedRetirementView.route.length" class="retirement-route-rail" aria-label="养老等级进度">
+              <div v-if="selectedRetirementSite.status === 'wealthy_retired'" class="wealthy-retirement-state" aria-label="富贵养老状态">
+                <div class="wealthy-retirement-state__icon"><VIcon icon="mdi-crown" size="28" /></div>
+                <div><span>{{ selectedRetirementSite.wealthy_retirement_manual ? '手动指定站点' : 'VIP 会员等级' }}</span><strong>富贵养老</strong><small>{{ selectedRetirementSite.wealthy_retirement_manual ? '已在设置中手动标记；完整等级路线仍可在下方查看。' : '会员等级不强行映射普通等级，完整等级路线仍可在下方查看。' }}</small></div>
+              </div>
+
+              <div v-else-if="selectedRetirementView.route.length" class="retirement-route-rail" aria-label="养老等级进度">
                 <div
                   class="retirement-route-rail__track"
                   :style="selectedRetirementView.routeStyle"
@@ -1057,7 +1159,7 @@ onBeforeUnmount(() => historyChart?.destroy())
                 </div>
               </div>
 
-              <div v-if="selectedRetirementView.route.length" class="retirement-target-grid">
+              <div v-if="selectedRetirementSite.status !== 'wealthy_retired' && selectedRetirementView.route.length" class="retirement-target-grid">
                 <section class="requirement-panel">
                   <div class="requirement-panel__heading">
                     <div><VIcon icon="mdi-target" color="primary" size="34" /><span>下一等级</span><strong>{{ selectedRetirementSite.next_level || '已是最高等级' }}</strong></div>
@@ -1118,7 +1220,8 @@ onBeforeUnmount(() => historyChart?.destroy())
           <div class="settings-card"><div class="section-heading"><div><span class="section-kicker">GENERAL</span><h2>基础设置</h2></div></div><VSwitch v-model="settingsDraft.enabled" color="primary" label="启用插件" hint="启用后读取 MP 已保存的站点数据，并在刷新时记录小时快照" persistent-hint /><VSwitch v-model="settingsDraft.show_sidebar" color="primary" label="在发现栏显示入口" /><VTextField v-model.number="settingsDraft.retention_days" type="number" min="0" max="36500" label="小时快照保留天数" hint="0 表示永久保留；日级历史由 MP 管理，不受此设置影响" persistent-hint variant="outlined" class="mt-3" /></div>
           <div class="settings-card"><div class="section-heading"><div><span class="section-kicker">NOTIFICATION</span><h2>每日通知</h2></div></div><VSwitch v-model="settingsDraft.notification_enabled" color="primary" label="启用汇总通知" /><VTextField v-model="settingsDraft.notification_cron" label="通知 Cron（五段式）" placeholder="0 9 * * *" hint="分 时 日 月 星期；按服务器时区执行，每个自然日最多通知一次" persistent-hint variant="outlined" /><VCheckbox v-model="settingsDraft.notification_modes" value="today" label="今日数据：仅上传和下载增量" hide-details /><VCheckbox v-model="settingsDraft.notification_modes" value="all" label="所有数据：仅累计上传和累计下载" hide-details /><div class="setting-hint mt-2">Cron 错过后不补发；无数据站点不会通知。</div></div>
           <div class="settings-card settings-card--wide"><div class="section-heading"><div><span class="section-kicker">PTD RECEIVER</span><h2>PTD 数据补充</h2></div><span class="section-note">仅导入时魔和做种积分</span></div><VSwitch v-model="settingsDraft.ptd_cookiecloud_enabled" color="primary" label="启用 PTD 兼容接收端" hint="PTD 直接把最新备份发送给本插件；不需要启用 MoviePilot 内置 CookieCloud" persistent-hint /><div v-if="settingsDraft.ptd_cookiecloud_enabled" class="ptd-settings-grid"><VTextField :model-value="ptdReceiverUrl" class="ptd-receiver-url" label="PTD CookieCloud 地址" hint="同机使用 localhost；其它局域网设备请替换为 MoviePilot 主机 IP" persistent-hint readonly variant="outlined" /><VTextField v-model="settingsDraft.ptd_cookiecloud_uuid" label="PTD 专用 UUID" hint="插件与 PTD 必须填写完全相同的 UUID" persistent-hint variant="outlined"><template #append-inner><VBtn icon="mdi-shuffle-variant" size="small" variant="text" title="随机生成 UUID" @click="randomizePtdUuid" /></template></VTextField><VTextField v-model="settingsDraft.ptd_cookiecloud_password" label="CookieCloud 密码" hint="插件与 PTD 必须填写完全相同的密码" persistent-hint type="text" autocomplete="off" variant="outlined"><template #append-inner><VBtn icon="mdi-shuffle-variant" size="small" variant="text" title="随机生成密码" @click="randomizePtdPassword" /></template></VTextField><VTextarea v-model="settingsDraft.ptd_cookiecloud_headers" label="接收鉴权 Headers（可选）" placeholder="X-PTD-Token: 自定义密钥" hint="如填写，PTD 的 Headers 也要逐行填写相同内容；日志不会记录值" persistent-hint variant="outlined" rows="3" /><VTextarea v-model="settingsDraft.ptd_site_mappings" class="ptd-site-mappings" label="站点映射（可选）" placeholder="audiences=audiences.me\nmteam=kp.m-team.cc" hint="自动匹配失败时，每行填写 PTD站点ID=MP域名或站点名" persistent-hint variant="outlined" rows="3" /></div><div class="setting-hint mt-3">先保存本页，再在 PTD 中新增 CookieCloud 备份服务器：PTD 与 MoviePilot 同机时使用上方 localhost 地址；其它局域网设备将 localhost 替换为 MoviePilot 主机 IP。UUID、密码和可选 Headers 与这里保持一致；备份项目勾选“用户信息”。收到新备份后会立即解析并覆盖上一份数据，过程可在 MoviePilot 插件日志中查看。</div></div>
-          <div class="settings-card settings-card--wide"><div class="section-heading"><div><span class="section-kicker">LEVEL RULES</span><h2>等级规则</h2></div><div class="rules-upload__actions"><VBtn variant="tonal" color="primary" prepend-icon="mdi-upload-outline" @click="rulesFileInput?.click()">上传规则文件</VBtn><VBtn variant="text" prepend-icon="mdi-file-download-outline" @click="downloadRuleTemplate">下载模板</VBtn><VBtn v-if="customRuleSites.length" variant="text" color="error" prepend-icon="mdi-delete-outline" @click="clearUploadedRules">清空</VBtn></div></div><input ref="rulesFileInput" class="rules-file-input" type="file" accept="application/json,.json" @change="uploadRuleFile"><div v-if="customRuleSites.length" class="rules-upload"><div><strong>已载入 {{ customRuleSites.length }} 个站点</strong><p>{{ customRuleSites.join('、') }}</p><small v-if="rulesUploadName">文件：{{ rulesUploadName }}</small></div></div><div class="setting-hint mt-3">支持单个或多个站点；流量门槛使用字节，等级按 levels 中的顺序展示。模板中的 _comment 仅用于说明，导入时忽略；文件只写入插件设置，不会上传到外部服务。</div></div>
+          <div class="settings-card settings-card--wide wealthy-site-settings"><div class="section-heading"><div><span class="section-kicker">WEALTHY RETIREMENT</span><h2>富贵养老</h2></div><VChip class="wealthy-summary-chip" prepend-icon="mdi-crown" variant="flat">已选择 {{ settingsDraft.wealthy_retirement_sites?.length || 0 }}</VChip></div><div class="setting-hint">选择当前拥有 VIP、捐赠者或其它特殊会员身份的站点；保存后该站养老进度显示为“富贵养老”。选择结果按 MoviePilot 站点 ID 保存。</div><div v-if="wealthyRetirementSiteOptions.length" class="wealthy-site-picker"><button v-for="site in wealthyRetirementSiteOptions" :key="wealthyRetirementSiteKey(site)" type="button" class="wealthy-site-card" :class="{ 'is-selected': isWealthyRetirementSiteSelected(site) }" :aria-pressed="isWealthyRetirementSiteSelected(site)" @click="toggleWealthyRetirementSite(site)"><SiteAvatar :api="api" :site="site" :size="38" /><span><strong>{{ site.site_name }}</strong><small>站点 ID {{ site.site_id }}</small></span><VIcon :icon="isWealthyRetirementSiteSelected(site) ? 'mdi-check-circle' : 'mdi-circle-outline'" size="22" /></button></div><div v-else class="empty-state compact-empty">MoviePilot 暂无可选择的站点</div></div>
+          <div class="settings-card settings-card--wide"><div class="section-heading"><div><span class="section-kicker">LEVEL RULES</span><h2>等级规则</h2></div><div class="rules-upload__actions"><VBtn variant="tonal" color="primary" prepend-icon="mdi-upload-outline" @click="rulesFileInput?.click()">上传规则文件</VBtn><VBtn variant="text" prepend-icon="mdi-file-download-outline" @click="downloadRuleTemplate">下载模板</VBtn><VBtn v-if="customRuleSites.length" variant="text" color="error" prepend-icon="mdi-delete-outline" @click="clearUploadedRules">清空</VBtn></div></div><input ref="rulesFileInput" class="rules-file-input" type="file" accept="application/json,.json" @change="uploadRuleFile"><div v-if="customRuleSites.length" class="rules-upload"><div><strong>已载入 {{ customRuleSites.length }} 个站点</strong><p>{{ customRuleSites.join('、') }}</p><small v-if="rulesUploadName">文件：{{ rulesUploadName }}</small></div></div><div class="setting-hint mt-3">支持 site、aliases、domains、VIP 等级、任选条件、做种体积、发布数和平均做种时间；流量门槛使用字节，等级按 levels 中的顺序展示。模板中的 _comment 仅用于说明，导入时忽略；文件只写入插件设置，不会上传到外部服务。</div></div>
           <div class="settings-card settings-card--wide settings-actions"><div><strong>数据来源</strong><p>上传、下载、分享率等仍仅来自 MoviePilot；PTD 只补充最新时魔和做种积分。</p></div><VBtn color="primary" size="large" variant="flat" prepend-icon="mdi-content-save-outline" :loading="saving" @click="saveSettings">保存设置</VBtn></div>
         </section>
       </VWindowItem>
@@ -1170,7 +1273,7 @@ onBeforeUnmount(() => historyChart?.destroy())
 .site-data-card__header .site-identity>div{display:flex;flex-direction:column;min-width:0}
 .site-data-card__header .site-identity span,.site-account-meta{color:rgba(var(--v-theme-on-surface),.56);font-size:.72rem}
 .site-account-meta{display:flex;flex-wrap:wrap;align-items:center;justify-content:flex-end;gap:7px}
-.site-stat-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(118px,1fr));gap:8px;margin-top:12px}
+.site-stat-grid{display:grid;grid-template-columns:repeat(10,minmax(0,1fr));gap:8px;margin-top:12px}
 .site-stat-grid>div{display:flex;min-width:0;flex-direction:column;gap:4px;padding:10px 12px;border-radius:10px;background:rgba(var(--v-theme-surface),.54)}
 .site-stat-grid span{color:rgba(var(--v-theme-on-surface),.52);font-size:.68rem}
 .site-stat-grid strong{overflow-wrap:anywhere;font-size:.82rem}
@@ -1189,7 +1292,7 @@ onBeforeUnmount(() => historyChart?.destroy())
 .retirement-site-option__title strong{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .retirement-site-option__title em{flex:0 0 auto;font-size:.66rem;font-style:normal;font-weight:700}
 .retirement-site-option>small{color:rgba(var(--v-theme-on-surface),.52);font-size:.68rem;font-weight:700}
-.status-retired{color:rgb(var(--v-theme-success))}.status-upgrading{color:rgb(var(--v-theme-primary))}.status-rule_missing{color:rgb(var(--v-theme-warning))}
+.status-wealthy_retired{color:#f5b942}.status-retired{color:rgb(var(--v-theme-success))}.status-upgrading{color:rgb(var(--v-theme-primary))}.status-rule_missing{color:rgb(var(--v-theme-warning))}
 .retirement-detail{min-width:0;min-height:0;overflow:visible;padding:20px}
 .retirement-detail__header{display:flex;align-items:center;justify-content:space-between;gap:24px;padding-bottom:18px;border-bottom:1px solid var(--pt-border)}
 .retirement-detail__identity{display:flex;min-width:0;align-items:center;gap:14px}
@@ -1198,6 +1301,9 @@ onBeforeUnmount(() => historyChart?.destroy())
 .retirement-detail__identity span{color:rgba(var(--v-theme-on-surface),.58);font-size:.72rem}
 .retirement-detail__identity span strong{color:rgba(var(--v-theme-on-surface),.86)}
 .retirement-detail__identity .target-level{color:rgb(var(--v-theme-success))}
+.retirement-detail__right{display:flex;flex-direction:column;align-items:flex-end;gap:10px}.wealthy-summary-chip,.wealthy-retirement-badge{background:linear-gradient(135deg,#744800,#e0a91f)!important;color:#fff5cb!important;font-weight:800;letter-spacing:.05em;box-shadow:0 7px 20px rgba(224,169,31,.2)}
+.wealthy-site-picker{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:10px;margin-top:16px}.wealthy-site-card{appearance:none;display:grid;grid-template-columns:auto minmax(0,1fr) auto;align-items:center;gap:11px;min-width:0;padding:12px 14px;border:1px solid var(--pt-border);border-radius:14px;background:rgba(var(--v-theme-surface-variant),.12);color:inherit;font:inherit;text-align:left;cursor:pointer;transition:border-color .16s ease,background-color .16s ease,box-shadow .16s ease}.wealthy-site-card:hover,.wealthy-site-card:focus-visible{border-color:rgba(224,169,31,.5);outline:none}.wealthy-site-card.is-selected{border-color:#d9a11c;background:linear-gradient(135deg,rgba(117,72,0,.24),rgba(224,169,31,.08));box-shadow:inset 3px 0 #d9a11c}.wealthy-site-card>span{display:grid;min-width:0;gap:3px}.wealthy-site-card strong,.wealthy-site-card small{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.wealthy-site-card strong{font-size:.78rem}.wealthy-site-card small{color:rgba(var(--v-theme-on-surface),.54);font-size:.64rem}.wealthy-site-card>.v-icon{color:rgba(var(--v-theme-on-surface),.32)}.wealthy-site-card.is-selected>.v-icon{color:#e0a91f}
+.retirement-site-option--wealthy{border-color:rgba(224,169,31,.34)}.retirement-site-option--wealthy.retirement-site-option--selected{border-color:#d9a11c;background:linear-gradient(135deg,rgba(117,72,0,.26),rgba(var(--v-theme-primary),.11))}.wealthy-retirement-state{display:flex;align-items:center;gap:15px;margin-top:24px;padding:18px 20px;border:1px solid rgba(224,169,31,.34);border-radius:16px;background:linear-gradient(135deg,rgba(117,72,0,.2),rgba(var(--v-theme-surface),.58))}.wealthy-retirement-state__icon{display:grid;flex:0 0 48px;place-items:center;width:48px;height:48px;border-radius:50%;background:linear-gradient(135deg,#744800,#e0a91f);color:#fff5cb;box-shadow:0 8px 24px rgba(224,169,31,.2)}.wealthy-retirement-state>div:last-child{display:flex;min-width:0;flex-direction:column;gap:3px}.wealthy-retirement-state span{color:#d7b55d;font-size:.7rem;font-weight:700;letter-spacing:.08em}.wealthy-retirement-state strong{color:#fff1b5;font-size:1.08rem}.wealthy-retirement-state small{color:rgba(var(--v-theme-on-surface),.58);font-size:.72rem}
 .retirement-detail__metrics{display:flex;flex:0 0 auto;align-items:center;gap:22px}
 .retirement-detail__metrics span{display:flex;flex-direction:column;gap:3px;color:rgba(var(--v-theme-on-surface),.52);font-size:.68rem}
 .retirement-detail__metrics strong{color:rgba(var(--v-theme-on-surface),.9);font-size:.86rem}
@@ -1288,11 +1394,12 @@ onBeforeUnmount(() => historyChart?.destroy())
 .pt-workbench--compact .requirement-overview__score{border-right:0;border-bottom:1px solid var(--pt-border);padding-bottom:14px}
 .pt-workbench--compact .requirement-table,.pt-workbench--compact .retirement-levels{max-width:100%;overflow-x:auto;overflow-y:hidden;overscroll-behavior-x:contain}
 .pt-workbench--compact .requirement-table__head,.pt-workbench--compact .requirement-row{min-width:840px}
-@media(max-width:1280px){.metric-grid{grid-template-columns:repeat(3,minmax(0,1fr))}.retirement-target-grid{grid-template-columns:1fr}}
+@media(max-width:1280px){.metric-grid{grid-template-columns:repeat(3,minmax(0,1fr))}.site-stat-grid{grid-template-columns:repeat(5,minmax(0,1fr))}.retirement-target-grid{grid-template-columns:1fr}}
 @media(max-width:960px){.workbench-nav{align-items:stretch;flex-direction:column;gap:5px}.workbench-nav__actions{align-self:flex-end;padding-bottom:10px}.history-workspace{grid-template-columns:1fr;height:auto;overflow:visible}.history-site-sidebar{overflow:visible;border-right:0;border-bottom:1px solid var(--pt-border)}.history-site-sidebar__items{display:flex;max-height:none;overflow-x:auto;overflow-y:hidden;scrollbar-gutter:auto}.history-site-option{width:210px;flex:0 0 210px}.history-workspace__main{overflow:visible;scrollbar-gutter:auto}.history-record-shell{overflow-x:auto}.history-record-table{min-width:900px;table-layout:auto}.distribution-grid{grid-template-columns:1fr}.retirement-explorer{grid-template-columns:1fr;height:auto;min-height:0;overflow:visible}.retirement-site-list{overflow:visible;border-right:0;border-bottom:1px solid var(--pt-border)}.retirement-site-list__items{display:flex;max-height:none;overflow-x:auto;overflow-y:hidden;scrollbar-gutter:auto}.retirement-site-option{width:245px;flex:0 0 245px}.retirement-detail{overflow:visible;scrollbar-gutter:auto}.requirement-overview{grid-template-columns:1fr}.requirement-overview__score{border-right:0;border-bottom:1px solid var(--pt-border);padding-bottom:14px}.requirement-table,.retirement-levels{overflow-x:auto}}
 .ptd-settings-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin-top:14px}.ptd-receiver-url,.ptd-site-mappings{grid-column:1/-1}
 @media(max-width:720px){.workbench-nav__actions{align-self:stretch}.section-block{padding:14px}.metric-grid,.settings-layout,.ptd-settings-grid{grid-template-columns:1fr}.ptd-receiver-url,.ptd-site-mappings{grid-column:auto}.settings-card--wide{grid-column:auto}.settings-actions{align-items:stretch;flex-direction:column}.section-heading,.distribution-heading{align-items:flex-start;flex-direction:column}.pie-layout{grid-template-columns:1fr}.pie{width:180px}.history-detail-summary{align-items:flex-start;flex-direction:column}.history-detail-metrics{width:100%;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}.history-period-card{min-width:142px}.history-line-chart{height:220px}.history-site-panel .history-detail-shell{overflow-x:auto}.history-site-panel .history-detail-table{min-width:720px}}
 @media(max-width:720px){.site-sort-select{width:100%;flex:0 0 auto}.site-data-card{padding:12px}.site-data-card__header,.site-account-meta{align-items:flex-start;flex-direction:column}.site-stat-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.retirement-detail{padding:14px}.retirement-detail__header{align-items:flex-start;flex-direction:column}.retirement-detail__metrics{width:100%;justify-content:space-between;gap:10px}.retirement-route-rail{margin-right:-14px;margin-left:-14px;padding-right:14px;padding-left:14px}.requirement-panel__heading{grid-template-columns:1fr;align-items:flex-start}.requirement-panel__heading>div:first-child{flex-wrap:wrap}.requirement-table__head,.requirement-row{min-width:840px}.retirement-levels__heading{align-items:flex-start;flex-direction:column}}
+@media(max-width:720px){.retirement-detail__right{width:100%;align-items:flex-start}}
 @media(max-width:720px){.rules-upload{align-items:flex-start;flex-direction:column}.rules-upload__actions{width:100%;justify-content:flex-start}}
 @media(max-width:960px){.retirement-site-list{position:static;max-height:none}.twelve-panel{padding:18px}.twelve-panel__heading{align-items:flex-start;flex-direction:column}.twelve-summary{width:100%;justify-content:flex-end}}
 </style>

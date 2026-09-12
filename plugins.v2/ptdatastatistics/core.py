@@ -58,14 +58,14 @@ TWELVE_SITES: tuple[dict[str, Any], ...] = (
         "aliases": ("朋友", "friend", "friends"),
     },
     {
-        "key": "u2",
-        "name": "U2",
-        "aliases": ("u2", "dmhy"),
+        "key": "queen",
+        "name": "皇后",
+        "aliases": ("皇后", "open.cd", "opencd"),
     },
     {
         "key": "ttg",
-        "name": "TTG",
-        "aliases": ("ttg", "totheglory"),
+        "name": "听听歌",
+        "aliases": ("听听歌", "ttg", "totheglory"),
     },
     {
         "key": "ourbits",
@@ -77,591 +77,11 @@ TWELVE_SITES: tuple[dict[str, Any], ...] = (
 
 GIB = 1024 ** 3
 
-AUDIENCES_RETIREMENT_RULE: dict[str, Any] = {
-    "retirement_level": "Extreme User",
-    "levels": [
-        {
-            "name": "User",
-            "description": "新用户的默认级别；可以请求续种。",
-        },
-        {
-            "name": "Power User",
-            "min_join_days": 35,
-            "min_download": 120 * GIB,
-            "min_ratio": 2,
-            "min_ratio_strict": True,
-            "min_seeding_points": 100_000,
-            "description": "可以查看 NFO 文档、用户列表及其他用户的种子历史；可以编辑自己上传的种子，发布 10 分钟后可自行删除。",
-        },
-        {
-            "name": "Elite User",
-            "min_join_days": 105,
-            "min_download": 240 * GIB,
-            "min_ratio": 2.5,
-            "min_ratio_strict": True,
-            "min_seeding_points": 200_000,
-            "description": "继承 Power User 权限；可以发送邀请。",
-        },
-        {
-            "name": "Crazy User",
-            "min_join_days": 168,
-            "min_download": 400 * GIB,
-            "min_ratio": 3,
-            "min_ratio_strict": True,
-            "min_seeding_points": 400_000,
-            "description": "继承 Elite User 权限；可以查看排行榜。",
-        },
-        {
-            "name": "Insane User",
-            "min_join_days": 280,
-            "min_download": 600 * GIB,
-            "min_ratio": 3.4,
-            "min_ratio_strict": True,
-            "min_seeding_points": 640_000,
-            "description": "继承 Crazy User 权限；可以查看其他用户的评论和帖子历史。",
-        },
-        {
-            "name": "Veteran User",
-            "min_join_days": 420,
-            "min_download": 1024 * GIB,
-            "min_ratio": 4,
-            "min_ratio_strict": True,
-            "min_seeding_points": 880_000,
-            "description": "继承 Insane User 权限；可以更新过期的外部信息。",
-        },
-        {
-            "name": "Extreme User",
-            "min_join_days": 560,
-            "min_download": 2048 * GIB,
-            "min_ratio": 4.4,
-            "min_ratio_strict": True,
-            "min_seeding_points": 1_200_000,
-            "description": "继承 Veteran User 权限；Extreme User 及以上永久保留账号。",
-        },
-        {
-            "name": "Ultimate User",
-            "min_join_days": 700,
-            "min_download": 4096 * GIB,
-            "min_ratio": 5,
-            "min_ratio_strict": True,
-            "min_seeding_points": 1_500_000,
-            "description": "继承 Extreme User 权限。",
-        },
-        {
-            "name": "Nexus Master",
-            "min_join_days": 784,
-            "min_download": 8192 * GIB,
-            "min_ratio": 6,
-            "min_ratio_strict": True,
-            "min_seeding_points": 1_800_000,
-            "description": "继承 Ultimate User 权限。",
-        },
-        {
-            "name": "Rainbow",
-            "min_join_days": 896,
-            "min_download": 10240 * GIB,
-            "min_ratio": 8,
-            "min_ratio_strict": True,
-            "min_seeding_points": 2_400_000,
-            "description": "保持等级期间显示彩虹 ID；做种积分要求逐年增加，具体数值以站点通知为准。",
-        },
-    ],
-}
+from .site_rule_adapter import bundled_retirement_rules
 
-MTEAM_RETIREMENT_RULE: dict[str, Any] = {
-    "retirement_level": "Extreme User",
-    "levels": [
-        {
-            "name": "User",
-            "aliases": ("小卒",),
-            "description": "可以发候选、发布趣味盒、兑换魔力。",
-        },
-        {
-            "name": "Power User",
-            "aliases": ("捕头",),
-            "min_join_days": 28,
-            "min_join_days_strict": True,
-            "min_download": 200 * GIB,
-            "min_download_strict": True,
-            "min_ratio": 2,
-            "min_ratio_strict": True,
-            "description": "继承小卒 / User 权限。",
-        },
-        {
-            "name": "Elite User",
-            "aliases": ("知县",),
-            "min_join_days": 56,
-            "min_join_days_strict": True,
-            "min_download": 400 * GIB,
-            "min_download_strict": True,
-            "min_ratio": 3,
-            "min_ratio_strict": True,
-            "description": "可以发送邀请。",
-        },
-        {
-            "name": "Crazy User",
-            "aliases": ("通判",),
-            "min_join_days": 84,
-            "min_join_days_strict": True,
-            "min_download": 500 * GIB,
-            "min_download_strict": True,
-            "min_ratio": 4,
-            "min_ratio_strict": True,
-            "description": "继承知县 / Elite User 权限。",
-        },
-        {
-            "name": "Insane User",
-            "aliases": ("知州",),
-            "min_join_days": 112,
-            "min_join_days_strict": True,
-            "min_download": 800 * GIB,
-            "min_download_strict": True,
-            "min_ratio": 5,
-            "min_ratio_strict": True,
-            "description": "继承知县 / Elite User 权限。",
-        },
-        {
-            "name": "Veteran User",
-            "aliases": ("府丞",),
-            "min_join_days": 140,
-            "min_join_days_strict": True,
-            "min_download": 1000 * GIB,
-            "min_download_strict": True,
-            "min_ratio": 6,
-            "min_ratio_strict": True,
-            "description": "封存账号时永久保号。",
-        },
-        {
-            "name": "Extreme User",
-            "aliases": ("府尹",),
-            "min_join_days": 168,
-            "min_join_days_strict": True,
-            "min_download": 2000 * GIB,
-            "min_download_strict": True,
-            "min_ratio": 7,
-            "min_ratio_strict": True,
-            "description": "永久保号。",
-        },
-        {
-            "name": "Ultimate User",
-            "aliases": ("总督", "總督"),
-            "min_join_days": 196,
-            "min_join_days_strict": True,
-            "min_download": 2500 * GIB,
-            "min_download_strict": True,
-            "min_ratio": 8,
-            "min_ratio_strict": True,
-            "description": "继承府尹 / Extreme User 权限。",
-        },
-        {
-            "name": "mTorrent Master",
-            "aliases": ("大臣",),
-            "min_join_days": 224,
-            "min_join_days_strict": True,
-            "min_download": 3000 * GIB,
-            "min_download_strict": True,
-            "min_ratio": 9,
-            "min_ratio_strict": True,
-            "description": "继承府尹 / Extreme User 权限。",
-        },
-    ],
-}
 
-HHAN_RETIREMENT_RULE: dict[str, Any] = {
-    "retirement_level": "Ultimate User",
-    "levels": [
-        {
-            "name": "Peasant",
-            "aliases": ("脸憨皮厚",),
-            "description": "降级用户有 7 天时间提升分享率，否则会被禁用账号；不能发表趣味盒内容、申请友情链接或上传字幕。",
-        },
-        {
-            "name": "User",
-            "aliases": ("憨头憨脑",),
-            "description": "新注册用户的默认等级。",
-        },
-        {
-            "name": "Power User",
-            "aliases": ("憨声憨气",),
-            "min_download": 60 * GIB,
-            "min_ratio": 1.05,
-            "min_ratio_strict": True,
-            "min_seeding_points": 80_000,
-            "min_seeding_points_strict": True,
-            "description": "可以访问音乐区和论坛邀请区。",
-        },
-        {
-            "name": "Elite User",
-            "aliases": ("憨态可掬",),
-            "min_join_days": 8 * 7,
-            "min_download": 120 * GIB,
-            "min_ratio": 1.55,
-            "min_ratio_strict": True,
-            "min_seeding_points": 150_000,
-            "min_seeding_points_strict": True,
-        },
-        {
-            "name": "Crazy User",
-            "aliases": ("明姿憨憨",),
-            "min_join_days": 15 * 7,
-            "min_download": 300 * GIB,
-            "min_ratio": 2.05,
-            "min_ratio_strict": True,
-            "min_seeding_points": 300_000,
-            "min_seeding_points_strict": True,
-            "description": "做种、下载和发布时可以选择匿名模式。",
-        },
-        {
-            "name": "Insane User",
-            "aliases": ("装憨打呆",),
-            "min_join_days": 25 * 7,
-            "min_download": 500 * GIB,
-            "min_ratio": 2.55,
-            "min_ratio_strict": True,
-            "min_seeding_points": 500_000,
-            "min_seeding_points_strict": True,
-        },
-        {
-            "name": "Veteran User",
-            "aliases": ("憨状可掬",),
-            "min_join_days": 40 * 7,
-            "min_download": 750 * GIB,
-            "min_ratio": 3.05,
-            "min_ratio_strict": True,
-            "min_seeding_points": 900_000,
-            "min_seeding_points_strict": True,
-            "description": "可以查看其他用户的评论和帖子历史；Veteran User 及以上用户封存账号后不会被删除。",
-        },
-        {
-            "name": "Extreme User",
-            "aliases": ("憨娇可人",),
-            "min_join_days": 60 * 7,
-            "min_download": 1024 * GIB,
-            "min_ratio": 3.55,
-            "min_ratio_strict": True,
-            "min_seeding_points": 1_100_000,
-            "min_seeding_points_strict": True,
-            "description": "可以更新过期的外部信息。",
-        },
-        {
-            "name": "Ultimate User",
-            "aliases": ("憨笑如花",),
-            "min_join_days": 80 * 7,
-            "min_download": 1536 * GIB,
-            "min_ratio": 4.05,
-            "min_ratio_strict": True,
-            "min_seeding_points": 1_300_000,
-            "min_seeding_points_strict": True,
-            "description": "获得一个邀请名额；Ultimate User 及以上用户永久保留账号。",
-        },
-        {
-            "name": "Nexus Master",
-            "aliases": ("满面娇憨",),
-            "min_join_days": 100 * 7,
-            "min_download": 3072 * GIB,
-            "min_ratio": 4.55,
-            "min_ratio_strict": True,
-            "min_seeding_points": 1_500_000,
-            "min_seeding_points_strict": True,
-            "description": "获得两个邀请名额。",
-        },
-    ],
-}
-
-HOME_RETIREMENT_RULE: dict[str, Any] = {
-    "retirement_level": "Nexus Master",
-    "levels": [
-        {
-            "name": "Peasant",
-            "description": "降级后进入 5 天倒数，倒数结束时分享率仍未达标会被封禁；不能发表趣味盒内容、申请友情链接或上传字幕。",
-        },
-        {
-            "name": "User",
-            "description": "新用户的默认级别。",
-        },
-        {
-            "name": "Power User",
-            "min_join_days": 5 * 7,
-            "min_download": 256 * GIB,
-            "min_ratio": 2,
-            "min_ratio_strict": True,
-            "min_seeding_points": 40_000,
-            "description": "新晋等级用户，权限同 User。",
-        },
-        {
-            "name": "Elite User",
-            "min_join_days": 8 * 7,
-            "min_download": 386 * GIB,
-            "min_ratio": 2.5,
-            "min_ratio_strict": True,
-            "min_seeding_points": 100_000,
-            "description": "权限同 Power User。",
-        },
-        {
-            "name": "Crazy User",
-            "min_join_days": 12 * 7,
-            "min_download": 512 * GIB,
-            "min_ratio": 3,
-            "min_ratio_strict": True,
-            "min_seeding_points": 180_000,
-            "description": "做种、下载和发布时可以选择匿名模式。",
-        },
-        {
-            "name": "Insane User",
-            "min_join_days": 16 * 7,
-            "min_download": 768 * GIB,
-            "min_ratio": 3.5,
-            "min_ratio_strict": True,
-            "min_seeding_points": 280_000,
-            "description": "权限同 Crazy User。",
-        },
-        {
-            "name": "Veteran User",
-            "min_join_days": 20 * 7,
-            "min_download": 1024 * GIB,
-            "min_ratio": 4,
-            "min_ratio_strict": True,
-            "min_seeding_points": 400_000,
-            "description": "可以查看其他用户的评论和帖子历史。",
-        },
-        {
-            "name": "Extreme User",
-            "min_join_days": 24 * 7,
-            "min_download": 2048 * GIB,
-            "min_ratio": 4.5,
-            "min_ratio_strict": True,
-            "min_seeding_points": 540_000,
-            "description": "获得 1 个邀请名额；可以更新过期的外部信息；可以查看 Extreme User 论坛。",
-        },
-        {
-            "name": "Ultimate User",
-            "min_join_days": 30 * 7,
-            "min_download": 8192 * GIB,
-            "min_ratio": 5,
-            "min_ratio_strict": True,
-            "min_seeding_points": 700_000,
-            "description": "获得 1 个邀请名额。",
-        },
-        {
-            "name": "Nexus Master",
-            "min_join_days": 36 * 7,
-            "min_download": 10240 * GIB,
-            "min_ratio": 10,
-            "min_ratio_strict": True,
-            "min_seeding_points": 1_000_000,
-            "description": "获得 1 个邀请名额；账号永久保留。",
-        },
-    ],
-}
-
-HDFANS_RETIREMENT_RULE: dict[str, Any] = {
-    "retirement_level": "Extreme User",
-    "levels": [
-        {
-            "name": "Peasant",
-            "description": "降级用户有 30 天时间提升分享率，否则会被踢；不能发表趣味盒内容、申请友情链接或上传字幕。",
-        },
-        {
-            "name": "User",
-            "description": "新用户的默认级别。",
-        },
-        {
-            "name": "Power User",
-            "min_join_days": 4 * 7,
-            "min_download": 50 * GIB,
-            "min_ratio": 1,
-            "min_ratio_strict": True,
-            "min_seeding_points": 50_000,
-            "description": "获得 1 个邀请名额；可以直接发布种子；可以删除自己上传的字幕。",
-        },
-        {
-            "name": "Elite User",
-            "min_join_days": 8 * 7,
-            "min_download": 120 * GIB,
-            "min_ratio": 1.5,
-            "min_ratio_strict": True,
-            "min_seeding_points": 100_000,
-            "description": "权限同 Power User。",
-        },
-        {
-            "name": "Crazy User",
-            "min_join_days": 15 * 7,
-            "min_download": 256 * GIB,
-            "min_ratio": 2,
-            "min_ratio_strict": True,
-            "min_seeding_points": 250_000,
-            "description": "获得 2 个邀请名额；做种、下载和发布时可以选择匿名模式。",
-        },
-        {
-            "name": "Insane User",
-            "min_join_days": 30 * 7,
-            "min_download": 512 * GIB,
-            "min_ratio": 2.5,
-            "min_ratio_strict": True,
-            "min_seeding_points": 400_000,
-            "description": "可以查看普通日志。",
-        },
-        {
-            "name": "Veteran User",
-            "min_join_days": 40 * 7,
-            "min_download": 1024 * GIB,
-            "min_ratio": 3,
-            "min_ratio_strict": True,
-            "min_seeding_points": 600_000,
-            "description": "获得 3 个邀请名额；可以查看其他用户的评论和帖子历史。",
-        },
-        {
-            "name": "Extreme User",
-            "min_join_days": 50 * 7,
-            "min_download": 2048 * GIB,
-            "min_ratio": 3.5,
-            "min_ratio_strict": True,
-            "min_seeding_points": 800_000,
-            "description": "可以更新过期的外部信息；可以查看 Extreme User 论坛；Extreme User 及以上用户永久保留账号。",
-        },
-        {
-            "name": "Ultimate User",
-            "min_join_days": 60 * 7,
-            "min_download": 4096 * GIB,
-            "min_ratio": 4,
-            "min_ratio_strict": True,
-            "min_seeding_points": 1_000_000,
-            "description": "获得 5 个邀请名额。",
-        },
-        {
-            "name": "Nexus Master",
-            "min_join_days": 100 * 7,
-            "min_download": 10240 * GIB,
-            "min_ratio": 5,
-            "min_ratio_strict": True,
-            "min_seeding_points": 1_688_888,
-            "description": "获得 10 个邀请名额。",
-        },
-    ],
-}
-
-KYLIN_RETIREMENT_RULE: dict[str, Any] = {
-    "retirement_level": "Veteran User",
-    "levels": [
-        {
-            "name": "Peasant",
-            "aliases": ("浪迹天涯",),
-            "description": "降级用户有 30 天时间提升分享率，否则会被踢；不能发表趣味盒内容、申请友情链接或上传字幕。",
-        },
-        {
-            "name": "User",
-            "aliases": ("草塘结庐",),
-            "description": "新用户的默认级别。",
-        },
-        {
-            "name": "Power User",
-            "aliases": ("池畔闲人",),
-            "min_join_days": 4 * 7,
-            "min_download": 50 * GIB,
-            "min_ratio": 2,
-            "min_ratio_strict": True,
-            "min_seeding_points": 40_000,
-            "description": "可以查看 NFO 文档和用户列表、请求续种、查看排行榜及其他用户的种子历史；可以删除自己上传的字幕。",
-        },
-        {
-            "name": "Elite User",
-            "aliases": ("五湖信步",),
-            "min_join_days": 8 * 7,
-            "min_download": 120 * GIB,
-            "min_ratio": 3,
-            "min_ratio_strict": True,
-            "min_seeding_points": 80_000,
-            "description": "Elite User 及以上用户封存账号后不会被删除。",
-        },
-        {
-            "name": "Crazy User",
-            "aliases": ("轻舟飘渺",),
-            "min_join_days": 15 * 7,
-            "min_download": 300 * GIB,
-            "min_ratio": 4,
-            "min_ratio_strict": True,
-            "min_seeding_points": 150_000,
-            "description": "获得 2 个邀请名额；做种、下载和发布时可以选择匿名模式。",
-        },
-        {
-            "name": "Insane User",
-            "aliases": ("长空啸傲",),
-            "min_join_days": 25 * 7,
-            "min_download": 500 * GIB,
-            "min_ratio": 5,
-            "min_ratio_strict": True,
-            "min_seeding_points": 250_000,
-            "description": "可以查看普通日志。",
-        },
-        {
-            "name": "Veteran User",
-            "aliases": ("江东帆影",),
-            "min_join_days": 40 * 7,
-            "min_download": 750 * GIB,
-            "min_ratio": 6,
-            "min_ratio_strict": True,
-            "min_seeding_points": 400_000,
-            "description": "获得 3 个邀请名额；可以查看其他用户的评论和帖子历史；Veteran User 及以上用户永久保留账号。",
-        },
-        {
-            "name": "Extreme User",
-            "aliases": ("碧海潮生",),
-            "min_join_days": 60 * 7,
-            "min_download": 1024 * GIB,
-            "min_ratio": 7,
-            "min_ratio_strict": True,
-            "min_seeding_points": 600_000,
-            "description": "可以更新过期的外部信息；可以查看 Extreme User 论坛。",
-        },
-        {
-            "name": "Ultimate User",
-            "aliases": ("九州雷动",),
-            "min_join_days": 80 * 7,
-            "min_download": 4096 * GIB,
-            "min_ratio": 8,
-            "min_ratio_strict": True,
-            "min_seeding_points": 800_000,
-            "description": "获得 5 个邀请名额。",
-        },
-        {
-            "name": "Nexus Master",
-            "aliases": ("一鳞半爪",),
-            "min_join_days": 100 * 7,
-            "min_download": 10240 * GIB,
-            "min_ratio": 10,
-            "min_ratio_strict": True,
-            "min_seeding_points": 1_000_000,
-            "description": "获得 10 个邀请名额。",
-        },
-    ],
-}
-
-DEFAULT_RETIREMENT_RULES: dict[str, Mapping[str, Any]] = {
-    **{
-        alias: AUDIENCES_RETIREMENT_RULE
-        for alias in ("观众", "Audiences", "Audience")
-    },
-    **{
-        alias: MTEAM_RETIREMENT_RULE
-        for alias in ("馒头", "MTeam", "M-Team")
-    },
-    **{
-        alias: HHAN_RETIREMENT_RULE
-        for alias in ("憨憨", "HHan", "HHanClub")
-    },
-    **{
-        alias: HOME_RETIREMENT_RULE
-        for alias in ("家园", "HDHome")
-    },
-    **{
-        alias: HDFANS_RETIREMENT_RULE
-        for alias in ("红豆饭", "HDFans")
-    },
-    **{
-        alias: KYLIN_RETIREMENT_RULE
-        for alias in ("麒麟", "Kylin", "KylinPT")
-    },
-}
+DEFAULT_RETIREMENT_RULES: dict[str, Mapping[str, Any]] = bundled_retirement_rules()
+MTEAM_RETIREMENT_RULE = DEFAULT_RETIREMENT_RULES["馒头"]
 
 
 def as_int(value: Any) -> int:
@@ -866,22 +286,42 @@ def normalize_identity(value: Any) -> str:
 
 
 def _match_named_rule(
-    value: Any,
+    values: Any,
     rules: Mapping[str, Mapping[str, Any]],
 ) -> Mapping[str, Any] | None:
-    """匹配 MP 展示名称，兼容名称附带英文名或其它说明。"""
+    """按站点名、域名、来源标识和别名匹配规则。"""
 
-    identity = normalize_identity(value)
-    if not identity:
+    if isinstance(values, (str, bytes)) or not isinstance(values, Iterable):
+        values = (values,)
+    identities = {
+        identity
+        for value in values
+        if (identity := normalize_identity(value))
+    }
+    if not identities:
         return None
-    exact = rules.get(identity)
-    if exact:
-        return exact
-    candidates = [
-        (len(alias), rule)
-        for alias, rule in rules.items()
-        if alias and (alias in identity or identity in alias)
-    ]
+
+    candidates: list[tuple[int, Mapping[str, Any]]] = []
+    for name, rule in rules.items():
+        aliases = (
+            name,
+            rule.get("site"),
+            *(rule.get("aliases") or ()),
+            *(rule.get("domains") or ()),
+        )
+        rule_identities = {
+            identity
+            for alias in aliases
+            if (identity := normalize_identity(alias))
+        }
+        if identities.intersection(rule_identities):
+            return rule
+        for identity in identities:
+            for alias in rule_identities:
+                # 短英文缩写容易误命中域名；中文双字站点和四位以上标识可安全模糊匹配。
+                safe_length = len(alias) >= 4 or any("\u4e00" <= character <= "\u9fff" for character in alias)
+                if safe_length and (alias in identity or identity in alias):
+                    candidates.append((len(alias), rule))
     return max(candidates, key=lambda item: item[0])[1] if candidates else None
 
 
@@ -986,7 +426,12 @@ def build_twelve_progress(
     }
 
 
-def _requirement_missing(level: Mapping[str, Any], snapshot: Mapping[str, Any]) -> list[str]:
+def _requirement_missing(
+    level: Mapping[str, Any],
+    snapshot: Mapping[str, Any],
+    *,
+    include_alternatives: bool = True,
+) -> list[str]:
     """返回当前数据距离指定等级门槛仍缺少的条件。"""
 
     missing: list[str] = []
@@ -1011,18 +456,25 @@ def _requirement_missing(level: Mapping[str, Any], snapshot: Mapping[str, Any]) 
         ("min_bonus", "bonus", "魔力"),
         ("min_seeding_points", "seeding_points", "做种积分"),
         ("min_seeding", "seeding", "做种数"),
+        ("min_seeding_size", "seeding_size", "做种体积"),
+        ("min_torrent_uploads", "torrent_uploads", "发布数"),
+        ("min_average_seeding_time_days", "average_seeding_time_days", "平均做种时间"),
     )
     for rule_key, data_key, label in numeric_fields:
         target = as_float(level.get(rule_key)) or 0
         current_value = as_float(snapshot.get(data_key))
-        if target and data_key == "seeding_points" and current_value is None:
+        if target and data_key in {
+            "seeding_points",
+            "torrent_uploads",
+            "average_seeding_time_days",
+        } and current_value is None:
             missing.append(f"{label}数据未提供")
             continue
         current = current_value or 0
         strict = bool(level.get(f"{rule_key}_strict"))
         if current <= target if strict else current < target:
             difference = target - current
-            if data_key in {"upload", "download"}:
+            if data_key in {"upload", "download", "seeding_size"}:
                 if strict and difference <= 0:
                     missing.append(f"{label}需大于 {format_bytes(target)}")
                 else:
@@ -1041,7 +493,8 @@ def _requirement_missing(level: Mapping[str, Any], snapshot: Mapping[str, Any]) 
                     if difference.is_integer()
                     else f"{difference:,.2f}".rstrip("0").rstrip(".")
                 )
-                missing.append(f"{label}剩余 {formatted_difference}")
+                suffix = " 天" if data_key == "average_seeding_time_days" else ""
+                missing.append(f"{label}剩余 {formatted_difference}{suffix}")
     target_ratio = as_float(level.get("min_ratio"))
     current_ratio = as_float(snapshot.get("ratio"))
     ratio_strict = bool(level.get("min_ratio_strict"))
@@ -1055,6 +508,18 @@ def _requirement_missing(level: Mapping[str, Any], snapshot: Mapping[str, Any]) 
     if target_ratio is not None and ratio_missing:
         comparator = "大于" if ratio_strict else "达到"
         missing.append(f"分享率需{comparator} {target_ratio:g}")
+    for requirement in level.get("unsupported_requirements") or ():
+        label = as_text(requirement.get("label")) if isinstance(requirement, Mapping) else "其他要求"
+        missing.append(f"{label}数据未提供")
+    if include_alternatives:
+        alternative_missing = [
+            _requirement_missing(option, snapshot, include_alternatives=False)
+            for option in level.get("alternatives") or ()
+            if isinstance(option, Mapping)
+        ]
+        if alternative_missing and all(option for option in alternative_missing):
+            descriptions = ["、".join(option) for option in alternative_missing]
+            missing.append(f"任选条件未达成：{'；或 '.join(descriptions)}")
     return missing
 
 
@@ -1088,6 +553,7 @@ def _eligible_date(join_at: Any, minimum_days: Any, strict: bool = False) -> str
 def build_retirement_progress(
     snapshots: Iterable[Mapping[str, Any]],
     rules_by_name: Mapping[str, Mapping[str, Any]] | None = None,
+    wealthy_retirement_sites: Iterable[Any] = (),
 ) -> dict[str, Any]:
     """构建全部站点升级与养老进度。
 
@@ -1098,18 +564,35 @@ def build_retirement_progress(
     source_rules = (
         DEFAULT_RETIREMENT_RULES if rules_by_name is None else rules_by_name
     )
-    rules = {normalize_identity(key): value for key, value in source_rules.items()}
+    manually_wealthy = {
+        identity
+        for value in wealthy_retirement_sites
+        if (identity := normalize_identity(value))
+    }
     sites: list[dict[str, Any]] = []
-    counts = {"retired": 0, "upgrading": 0, "rule_missing": 0}
+    counts = {"retired": 0, "wealthy_retired": 0, "upgrading": 0, "rule_missing": 0}
     for snapshot in snapshots:
+        manual_candidates = (
+            snapshot.get("domain"),
+            snapshot.get("site_id"),
+            snapshot.get("site_name"),
+        )
+        forced_wealthy = any(
+            normalize_identity(value) in manually_wealthy
+            for value in manual_candidates
+            if normalize_identity(value)
+        )
         base = {
             "site_id": snapshot.get("site_id"),
+            "domain": as_text(snapshot.get("domain")).casefold(),
             "site_name": as_text(snapshot.get("site_name")),
             "site_priority": snapshot.get("site_priority"),
             "current_level": as_text(snapshot.get("user_level")),
             "next_level": "",
             "retirement_level": "",
             "status": "rule_missing",
+            "is_vip": False,
+            "wealthy_retirement_manual": forced_wealthy,
             "join_at": as_text(snapshot.get("join_at")),
             "upload": as_int(snapshot.get("upload")),
             "download": as_int(snapshot.get("download")),
@@ -1123,29 +606,43 @@ def build_retirement_progress(
                 snapshot.get("seeding_points_hourly")
             ),
             "seeding": as_int(snapshot.get("seeding")),
+            "seeding_size": as_int(snapshot.get("seeding_size")),
+            "torrent_uploads": as_float(snapshot.get("torrent_uploads")),
+            "average_seeding_time_days": as_float(snapshot.get("average_seeding_time_days")),
             "updated_day": as_text(snapshot.get("updated_day")),
             "levels_remaining": None,
             "route": [],
         }
-        site_identity = normalize_identity(snapshot.get("site_name"))
-        rule = next(
-            (
-                candidate
-                for name, candidate in rules.items()
-                if candidate.get("_custom_rule") and normalize_identity(name) == site_identity
-            ),
-            None,
-        )
+        match_values = (snapshot.get("site_name"), snapshot.get("domain"))
+        custom_rules = {
+            name: candidate
+            for name, candidate in source_rules.items()
+            if candidate.get("_custom_rule")
+        }
+        rule = _match_named_rule(match_values, custom_rules)
         if not rule:
             builtin_rules = {
                 name: candidate
-                for name, candidate in rules.items()
+                for name, candidate in source_rules.items()
                 if not candidate.get("_custom_rule")
             }
-            rule = _match_named_rule(snapshot.get("site_name"), builtin_rules)
+            rule = _match_named_rule(match_values, builtin_rules)
         raw_levels = list(rule.get("levels") or []) if rule else []
+        vip_levels = list(rule.get("vip_levels") or []) if rule else []
         retirement_name = as_text(rule.get("retirement_level")) if rule else ""
+        vip_index = _match_level_index(base["current_level"], vip_levels)
         if not raw_levels or not retirement_name:
+            if forced_wealthy or vip_index >= 0:
+                counts["wealthy_retired"] += 1
+                sites.append(
+                    {
+                        **base,
+                        "status": "wealthy_retired",
+                        "is_vip": vip_index >= 0,
+                        "levels_remaining": 0,
+                    }
+                )
+                continue
             sites.append(base)
             counts["rule_missing"] += 1
             continue
@@ -1198,12 +695,22 @@ def build_retirement_progress(
                     "min_ratio": as_float(level.get("min_ratio")),
                     "min_ratio_strict": bool(level.get("min_ratio_strict")),
                     "min_bonus": as_float(level.get("min_bonus")),
+                    "min_bonus_strict": bool(level.get("min_bonus_strict")),
                     "min_seeding_points": as_float(level.get("min_seeding_points")),
                     "min_seeding_points_strict": bool(level.get("min_seeding_points_strict")),
                     "seeding_points_eta_hours": points_eta_hours,
                     "seeding_points_eta_days": points_eta_days,
                     "seeding_points_eta_date": points_eta_date,
                     "min_seeding": max(as_int(level.get("min_seeding")), 0),
+                    "min_seeding_strict": bool(level.get("min_seeding_strict")),
+                    "min_seeding_size": max(as_int(level.get("min_seeding_size")), 0),
+                    "min_seeding_size_strict": bool(level.get("min_seeding_size_strict")),
+                    "min_torrent_uploads": max(as_int(level.get("min_torrent_uploads")), 0),
+                    "min_torrent_uploads_strict": bool(level.get("min_torrent_uploads_strict")),
+                    "min_average_seeding_time_days": as_float(level.get("min_average_seeding_time_days")),
+                    "min_average_seeding_time_days_strict": bool(level.get("min_average_seeding_time_days_strict")),
+                    "alternatives": list(level.get("alternatives") or []),
+                    "unsupported_requirements": list(level.get("unsupported_requirements") or []),
                     "eligible_date": _eligible_date(
                         base["join_at"],
                         level.get("min_join_days"),
@@ -1215,6 +722,19 @@ def build_retirement_progress(
                     "missing": [] if index <= current_index else _requirement_missing(level, snapshot),
                 }
             )
+        if forced_wealthy or vip_index >= 0:
+            counts["wealthy_retired"] += 1
+            sites.append(
+                {
+                    **base,
+                    "retirement_level": retirement_name,
+                    "status": "wealthy_retired",
+                    "is_vip": vip_index >= 0,
+                    "levels_remaining": 0,
+                    "route": route,
+                }
+            )
+            continue
         if current_index < 0:
             sites.append(
                 {
@@ -1279,15 +799,15 @@ def career_days(earliest: str, server_day: str) -> int | None:
 
 
 def format_bytes(value: Any) -> str:
-    """把字节数格式化为通知和导出图片共用的容量文本。"""
+    """按十进制 1000 进位格式化通知和导出图片共用的容量文本。"""
 
     number = float(max(as_int(value), 0))
     units = ("B", "KB", "MB", "GB", "TB", "PB", "EB")
     unit = units[0]
     for unit in units:
-        if number < 1024 or unit == units[-1]:
+        if number < 1000 or unit == units[-1]:
             break
-        number /= 1024
+        number /= 1000
     if unit == "B":
         return f"{int(number)} {unit}"
     precision = 2 if number < 100 else 1
