@@ -92,7 +92,192 @@ _SITE_COMPATIBILITY_ALIASES = {
     "皇后": ("OpenCD", "open.cd"),
     "听听歌": ("TTG", "ToTheGlory"),
     "我堡": ("OurBits", "OB"),
+    "ilolicon": ("萝莉",),
 }
+
+
+def _downgrade_description(threshold: float) -> str:
+    """生成仅用于说明的降级阈值；升级计算仍只使用升级条件。"""
+
+    return f"分享率低于 {threshold:g} 时自动降级。"
+
+
+def _level_patch(
+    *,
+    alias: str,
+    ratio_strict: bool = False,
+    points_strict: bool = False,
+    downgrade_ratio: float | None = None,
+    **requirements: Any,
+) -> dict[str, Any]:
+    patch = {
+        "aliases": (alias,),
+        "min_ratio_strict": ratio_strict,
+        "min_seeding_points_strict": points_strict,
+        **requirements,
+    }
+    if downgrade_ratio is not None:
+        patch["description_suffix"] = _downgrade_description(downgrade_ratio)
+    return patch
+
+
+# 用户依据各站当前等级页校正的规则。上游生成文件保持原样，便于后续重新生成和审计。
+_SITE_RULE_PATCHES: dict[str, dict[str, Any]] = {
+    "春天": {
+        "retirement_source_id": 5,
+        "levels": {
+            2: {
+                "min_download_strict": True,
+                "min_ratio_strict": True,
+                "description_suffix": _downgrade_description(1.1),
+                "alternatives": [
+                    {"min_seeding_points": 100_000, "min_torrent_uploads": 1, "min_torrent_uploads_strict": True},
+                    {"min_seeding_points": 150_000},
+                ],
+            },
+            3: {
+                "min_download_strict": True,
+                "min_ratio_strict": True,
+                "description_suffix": _downgrade_description(1.1),
+                "alternatives": [
+                    {"min_seeding_points": 500_000, "min_torrent_uploads": 100, "min_torrent_uploads_strict": True},
+                    {"min_seeding_points": 1_000_000},
+                ],
+            },
+            4: {
+                "min_download_strict": True,
+                "min_ratio_strict": True,
+                "description_suffix": _downgrade_description(2),
+                "alternatives": [
+                    {"min_seeding_points": 1_200_000, "min_torrent_uploads": 300, "min_torrent_uploads_strict": True},
+                    {"min_seeding_points": 2_400_000},
+                ],
+            },
+            5: {
+                "description_suffix": "每月最后一天按保种或发种两条路线评选。",
+                "alternatives": [
+                    {
+                        "unsupported_requirements": [
+                            {"key": "monthly_seeding_upload", "label": "当月保种上传", "target": "不少于 300 GB"},
+                            {"key": "monthly_seeding_bonus_rank", "label": "当月做种积分排名", "target": "前 65 名"},
+                        ],
+                    },
+                    {
+                        "unsupported_requirements": [
+                            {
+                                "key": "monthly_qualified_upload_rank",
+                                "label": "当月合规非中性活种发布数排名",
+                                "target": "前 15 名",
+                            },
+                        ],
+                    },
+                ],
+            },
+        },
+    },
+    "ilolicon": {
+        "levels": {
+            3: _level_patch(alias="Power User", ratio_strict=True, downgrade_ratio=.95),
+            4: _level_patch(alias="Elite User", ratio_strict=True, downgrade_ratio=1.45),
+            5: _level_patch(alias="Crazy User", ratio_strict=True, downgrade_ratio=1.95),
+            6: _level_patch(alias="Insane User", ratio_strict=True, downgrade_ratio=2.45),
+            7: _level_patch(alias="Veteran User", ratio_strict=True, downgrade_ratio=2.95),
+            8: _level_patch(alias="Extreme User", ratio_strict=True, downgrade_ratio=3.45),
+            9: _level_patch(alias="Ultimate User", ratio_strict=True, downgrade_ratio=3.95),
+            10: _level_patch(alias="Nexus Master", ratio_strict=True, downgrade_ratio=4.45),
+        },
+    },
+    "天空": {
+        "retirement_source_id": 6,
+        "levels": {
+            2: _level_patch(alias="Power User", ratio_strict=True, downgrade_ratio=1.9),
+            3: _level_patch(alias="Elite User", ratio_strict=True, downgrade_ratio=2.4),
+            4: _level_patch(alias="Crazy User", ratio_strict=True, downgrade_ratio=2.9),
+            5: _level_patch(alias="Insane User", ratio_strict=True, downgrade_ratio=3.4),
+            6: _level_patch(alias="Veteran User", ratio_strict=True, downgrade_ratio=3.9),
+            7: _level_patch(alias="Extreme User", ratio_strict=True, downgrade_ratio=4.4),
+            8: _level_patch(alias="Ultimate User", ratio_strict=True, downgrade_ratio=4.9),
+            9: _level_patch(alias="Nexus Master", ratio_strict=True, downgrade_ratio=5.4),
+        },
+    },
+    "音乐乌托邦": {
+        "retirement_source_id": 7,
+        "levels": {
+            3: _level_patch(alias="Power User", ratio_strict=True, points_strict=True, downgrade_ratio=.95),
+            4: _level_patch(alias="Elite User", ratio_strict=True, points_strict=True, downgrade_ratio=1.45),
+            5: _level_patch(alias="Crazy User", ratio_strict=True, points_strict=True, downgrade_ratio=1.95),
+            6: _level_patch(alias="Insane User", ratio_strict=True, points_strict=True, downgrade_ratio=2.45),
+            7: _level_patch(alias="Veteran User", ratio_strict=True, points_strict=True, downgrade_ratio=2.95),
+            8: _level_patch(alias="Extreme User", ratio_strict=True, points_strict=True, downgrade_ratio=3.45),
+            9: _level_patch(alias="Ultimate User", ratio_strict=True, points_strict=True, downgrade_ratio=3.95),
+            10: _level_patch(alias="Nexus Master", ratio_strict=True, points_strict=True, downgrade_ratio=4.45),
+        },
+    },
+    "Depth Studio": {
+        "levels": {
+            3: _level_patch(alias="Power User", ratio_strict=True, points_strict=True, downgrade_ratio=1.2, min_ratio=1.2),
+            4: _level_patch(alias="Elite User", ratio_strict=True, points_strict=True, downgrade_ratio=2.55, min_ratio=2.55),
+            5: _level_patch(alias="Crazy User", ratio_strict=True, points_strict=True, downgrade_ratio=2.55, min_ratio=2.55),
+            6: _level_patch(alias="Insane User", ratio_strict=True, points_strict=True, downgrade_ratio=3.2, min_ratio=3.2),
+            7: _level_patch(alias="Veteran User", ratio_strict=True, points_strict=True, downgrade_ratio=4.05, min_ratio=4.05),
+            8: _level_patch(alias="Extreme User", ratio_strict=True, points_strict=True, downgrade_ratio=5, min_ratio=5),
+            9: _level_patch(alias="Ultimate User", ratio_strict=True, points_strict=True, downgrade_ratio=6, min_ratio=6),
+            10: _level_patch(alias="Nexus Master", ratio_strict=True, points_strict=True, downgrade_ratio=7, min_ratio=7),
+        },
+    },
+    "GGPT": {
+        "levels": {
+            1: _level_patch(alias="Power User", points_strict=True, downgrade_ratio=1.9),
+            2: _level_patch(alias="Elite User", points_strict=True, downgrade_ratio=2.4),
+            3: _level_patch(alias="Crazy User", points_strict=True, downgrade_ratio=2.9),
+            4: _level_patch(alias="Insane User", points_strict=True, downgrade_ratio=3.4),
+            5: _level_patch(alias="Veteran User", points_strict=True, downgrade_ratio=3.9),
+            6: _level_patch(alias="Extreme User", points_strict=True, downgrade_ratio=4.4),
+            7: _level_patch(alias="Ultimate User", points_strict=True, downgrade_ratio=4.9),
+            8: _level_patch(alias="Nexus Master", points_strict=True, downgrade_ratio=5.4),
+        },
+    },
+}
+
+
+_ZIMIAO_LEVELS = (
+    ("Power User", 4, 50, 1, 40_000, 1, 1),
+    ("Elite User", 8, 100, 2, 100_000, 5, .5),
+    ("Crazy User", 15, 150, 3, 300_000, 10, 1.5),
+    ("Insane User", 25, 200, 4, 500_000, 20, 2),
+    ("Veteran User", 40, 250, 5, 1_000_000, 40, 2.5),
+    ("Extreme User", 60, 300, 6, 1_500_000, 80, 3),
+    ("Ultimate User", 80, 350, 7, 2_000_000, 150, 3.5),
+    ("Nexus Master", 100, 400, 8, 5_000_000, 200, 4),
+)
+
+
+def _zimiao_rule() -> dict[str, Any]:
+    """构造用户提供的梓喵等级表；以最高固定等级作为完整路线目标。"""
+
+    levels: list[dict[str, Any]] = [{"name": "User", "aliases": (), "description": "新用户默认等级。"}]
+    for name, weeks, download_gb, ratio, points, uploads, downgrade_ratio in _ZIMIAO_LEVELS:
+        levels.append({
+            "name": name,
+            "aliases": (),
+            "description": _downgrade_description(downgrade_ratio),
+            "min_join_days": weeks * 7,
+            "min_download": download_gb * 1000**3,
+            "min_ratio": ratio,
+            "min_ratio_strict": True,
+            "min_seeding_points": points,
+            "min_seeding_points_strict": True,
+            "min_torrent_uploads": uploads,
+        })
+    return {
+        "site": "梓喵",
+        "aliases": ("Zimiao",),
+        "domains": (),
+        "retirement_level": "Nexus Master",
+        "levels": levels,
+        "vip_levels": [],
+        "source": "user-provided",
+    }
 
 
 def _unique_aliases(values: list[str], *, primary: str = "") -> tuple[str, ...]:
@@ -192,6 +377,28 @@ def _adapt_level(raw: Mapping[str, Any], *, site_name: str = "") -> dict[str, An
     return level
 
 
+def _apply_level_patches(
+    levels: list[dict[str, Any]],
+    patches: Mapping[int, Mapping[str, Any]],
+) -> None:
+    """按上游稳定的等级 ID 应用站点校正，不改写生成源文件。"""
+
+    for level in levels:
+        patch = patches.get(level.get("source_id"))
+        if not patch:
+            continue
+        aliases = [*level.get("aliases", ()), *patch.get("aliases", ())]
+        suffix = str(patch.get("description_suffix") or "").strip()
+        level.update({
+            key: value
+            for key, value in patch.items()
+            if key not in {"aliases", "description_suffix"}
+        })
+        level["aliases"] = _unique_aliases(aliases, primary=level["name"])
+        if suffix and suffix not in level["description"]:
+            level["description"] = " ".join(item for item in (level["description"], suffix) if item)
+
+
 def bundled_retirement_rules() -> dict[str, Mapping[str, Any]]:
     """Return live-site keep-account rules plus VIP-only rules for wealthy retirement."""
 
@@ -208,6 +415,8 @@ def bundled_retirement_rules() -> dict[str, Mapping[str, Any]]:
         kept = next((level for level in normal_levels if level.get("isKept") is True), None)
         levels = [_adapt_level(level, site_name=site_name) for level in normal_levels]
         levels = [level for level in levels if level["name"]]
+        rule_patch = _SITE_RULE_PATCHES.get(site_name, {})
+        _apply_level_patches(levels, rule_patch.get("levels", {}))
         vip_levels = [
             _adapt_level(level, site_name=site_name)
             for level in raw_rule.get("levels") or ()
@@ -215,6 +424,16 @@ def bundled_retirement_rules() -> dict[str, Mapping[str, Any]]:
         ]
         vip_levels = [level for level in vip_levels if level["name"]]
         retirement_name = str(kept.get("name") or "").strip() if kept else ""
+        retirement_source_id = rule_patch.get("retirement_source_id")
+        if retirement_source_id is not None:
+            retirement_name = next(
+                (
+                    level["name"]
+                    for level in levels
+                    if level.get("source_id") == retirement_source_id
+                ),
+                retirement_name,
+            )
         if not vip_levels and (not levels or not retirement_name):
             continue
         aliases = [str(raw_rule.get("source_key") or "").strip()]
@@ -233,4 +452,5 @@ def bundled_retirement_rules() -> dict[str, Mapping[str, Any]]:
             "vip_levels": vip_levels,
             "source": "PTDepilerMp",
         }
+    result["梓喵"] = _zimiao_rule()
     return result

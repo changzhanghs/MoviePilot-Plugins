@@ -410,7 +410,7 @@ class TwelveAndExportTests(unittest.TestCase):
             site_rules_builtin.SOURCE_COMMIT,
             "7480ca57a96254680c47bed2b1f74bacb6018f42",
         )
-        self.assertEqual(len(core.DEFAULT_RETIREMENT_RULES), 136)
+        self.assertEqual(len(core.DEFAULT_RETIREMENT_RULES), 138)
         queen = core.DEFAULT_RETIREMENT_RULES["皇后"]
         veteran = next(level for level in queen["levels"] if level["name"] == "Veteran User")
         self.assertEqual(queen["retirement_level"], "Veteran User")
@@ -419,6 +419,80 @@ class TwelveAndExportTests(unittest.TestCase):
             [{"min_download": 600_000_000_000}, {"min_torrent_uploads": 200}],
         )
         self.assertEqual(core.DEFAULT_RETIREMENT_RULES["听听歌"]["retirement_level"], "BrontoByte")
+
+    def test_user_supplied_rules_update_eight_site_names(self):
+        rules = core.DEFAULT_RETIREMENT_RULES
+        spring = rules["春天"]
+        self.assertNotIn("不可说", spring["aliases"])
+        self.assertEqual(spring["retirement_level"], "神王(Immortal)")
+        spring_elite = next(level for level in spring["levels"] if level["source_id"] == 2)
+        self.assertTrue(spring_elite["min_download_strict"])
+        self.assertTrue(spring_elite["min_ratio_strict"])
+        self.assertTrue(spring_elite["alternatives"][0]["min_torrent_uploads_strict"])
+        spring_immortal = next(level for level in spring["levels"] if level["source_id"] == 5)
+        self.assertEqual(len(spring_immortal["alternatives"]), 2)
+        self.assertEqual(
+            [item["target"] for item in spring_immortal["alternatives"][0]["unsupported_requirements"]],
+            ["不少于 300 GB", "前 65 名"],
+        )
+        self.assertEqual(
+            spring_immortal["alternatives"][1]["unsupported_requirements"][0]["target"],
+            "前 15 名",
+        )
+        spring_progress = core.build_retirement_progress([{
+            "site_id": 1,
+            "site_name": "春天",
+            "user_level": "神仙(God)",
+            "updated_day": "2026-09-12",
+        }])
+        spring_site = spring_progress["sites"][0]
+        immortal_route = next(level for level in spring_site["route"] if level["name"] == "神王(Immortal)")
+        self.assertEqual(spring_site["status"], "upgrading")
+        self.assertEqual(spring_site["next_level"], "神王(Immortal)")
+        self.assertEqual(len(immortal_route["alternatives"]), 2)
+        self.assertTrue(any("任选条件未达成" in item for item in immortal_route["missing"]))
+
+        lolita = rules["ilolicon"]
+        self.assertIn("萝莉", lolita["aliases"])
+        lolita_power = next(level for level in lolita["levels"] if level["source_id"] == 3)
+        self.assertIn("Power User", lolita_power["aliases"])
+        self.assertTrue(lolita_power["min_ratio_strict"])
+        self.assertFalse(lolita_power["min_seeding_points_strict"])
+
+        self.assertEqual(rules["天空"]["retirement_level"], "Veteran User")
+        self.assertEqual(rules["音乐乌托邦"]["retirement_level"], "Veteran User")
+        music_power = next(level for level in rules["音乐乌托邦"]["levels"] if level["source_id"] == 3)
+        self.assertTrue(music_power["min_ratio_strict"])
+        self.assertTrue(music_power["min_seeding_points_strict"])
+
+        depth_levels = [
+            level for level in rules["Depth Studio"]["levels"]
+            if level["source_id"] in range(3, 11)
+        ]
+        self.assertEqual(
+            [level["min_ratio"] for level in depth_levels],
+            [1.2, 2.55, 2.55, 3.2, 4.05, 5, 6, 7],
+        )
+        self.assertTrue(all(level["min_ratio_strict"] for level in depth_levels))
+        self.assertTrue(all(level["min_seeding_points_strict"] for level in depth_levels))
+
+        ggpt_power = next(level for level in rules["GGPT"]["levels"] if level["source_id"] == 1)
+        self.assertFalse(ggpt_power["min_ratio_strict"])
+        self.assertTrue(ggpt_power["min_seeding_points_strict"])
+
+        zimiao = rules["梓喵"]
+        self.assertEqual(zimiao["retirement_level"], "Nexus Master")
+        self.assertEqual(len(zimiao["levels"]), 9)
+        self.assertEqual(
+            [level["min_seeding_points"] for level in zimiao["levels"][1:]],
+            [40_000, 100_000, 300_000, 500_000, 1_000_000, 1_500_000, 2_000_000, 5_000_000],
+        )
+        self.assertEqual(
+            [level["min_torrent_uploads"] for level in zimiao["levels"][1:]],
+            [1, 5, 10, 20, 40, 80, 150, 200],
+        )
+        self.assertTrue(all(level["min_ratio_strict"] for level in zimiao["levels"][1:]))
+        self.assertTrue(all(level["min_seeding_points_strict"] for level in zimiao["levels"][1:]))
 
     def test_alternative_requirement_accepts_either_available_branch(self):
         level = {
@@ -927,13 +1001,14 @@ class PackagingTests(unittest.TestCase):
         manifest = json.loads((ROOT / "package.v2.json").read_text(encoding="utf-8"))
         meta = manifest["PTDataStatistics"]
         source = (PLUGIN / "__init__.py").read_text(encoding="utf-8")
-        self.assertEqual(meta["version"], "2.0.2")
+        self.assertEqual(meta["version"], "2.0.3")
         self.assertEqual(meta["history"], {
+            "v2.0.3": "不值一提",
             "v2.0.2": "不值一提",
             "v2.0.1": "不值一提",
             "v2.0.0": "兼容v2及v3",
         })
-        self.assertIn('plugin_version = "2.0.2"', source)
+        self.assertIn('plugin_version = "2.0.3"', source)
         self.assertEqual(meta["system_version"], ">=2.12.0")
         self.assertIsNot(meta.get("v3"), False)
         self.assertNotIn("release", meta)
@@ -1064,6 +1139,13 @@ class PackagingTests(unittest.TestCase):
         self.assertNotIn("还差", source)
         self.assertNotIn("MoviePilot 不提供站点等级门槛和保号等级", source)
         self.assertIn('class="requirement-panel"', source)
+        self.assertIn("function springUpgradeTasks(site, level)", source)
+        self.assertIn("{ title: '任务一', subtitle: '保种升级'", source)
+        self.assertIn("{ title: '任务二', subtitle: '发种升级'", source)
+        self.assertIn('class="spring-upgrade-tasks"', source)
+        self.assertIn('@click="springUpgradeTaskIndex = index"', source)
+        self.assertIn("const springUpgradeTaskIndex = ref(0)", source)
+        self.assertIn("requirementRows(site, nextLevel, selectedTaskIndex)", source)
         self.assertIn('class="retirement-levels"', source)
         self.assertIn("selectedRetirementSite", source)
         self.assertIn("const selectedRetirementView = computed", source)
@@ -1089,7 +1171,12 @@ class PackagingTests(unittest.TestCase):
         self.assertIn("settingsDraft.value.custom_retirement_rules = rules", source)
         self.assertIn("alignRulesToMoviePilotSites(normalizeUploadedRules(payload))", source)
         self.assertIn("return { ...rule, site: matchedName, aliases, domains }", source)
+        self.assertIn('class="wealthy-selection-summary"', source)
+        self.assertIn('<VDialog v-model="wealthyPickerOpen"', source)
+        self.assertIn('v-model="wealthySiteSearch"', source)
         self.assertIn('class="wealthy-site-picker"', source)
+        self.assertIn("已选站点优先显示", source)
+        self.assertLess(source.index('class="wealthy-selection-summary"'), source.index('<VDialog v-model="wealthyPickerOpen"'))
         self.assertIn("settingsDraft.value.wealthy_retirement_sites", source)
         self.assertIn("await props.api.post(`${pluginBase.value}/settings`, payload)", source)
         self.assertIn("`${pluginBase.value}/rules/template`", source)
@@ -1101,7 +1188,7 @@ class PackagingTests(unittest.TestCase):
         self.assertIn(':model-value="selectedRetirementView.routeProgress"', source)
         self.assertNotIn("待同步积分时速", source)
         self.assertIn("nextLevelOverallProgress(site)", source)
-        self.assertIn("return averageRequirementProgress(requirementRows(site, nextLevel))", source)
+        self.assertIn("return averageRequirementProgress(requirementRows(site, nextLevel, taskIndex))", source)
         self.assertIn("status === 'wealthy_retired'", source)
         self.assertIn("富贵养老", source)
         self.assertIn("wealthyRetiredCount", source)
