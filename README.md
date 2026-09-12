@@ -4,7 +4,7 @@
 
 - MoviePilot：`>=2.12.0`（V2 与 V3 共用同一实现和版本）
 
-V3 通过 MoviePilot 官方提供的 V2 插件向后兼容机制加载 `plugins.v2`，仓库不再维护重复的 V3 实现。
+V3 通过 MoviePilot 官方提供的 V2 插件向后兼容机制加载 `plugins.v2`。
 
 ## 安装
 
