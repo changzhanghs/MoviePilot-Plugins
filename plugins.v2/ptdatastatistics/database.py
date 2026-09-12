@@ -11,7 +11,7 @@ from sqlalchemy import create_engine, event
 from sqlalchemy.engine import Engine
 from sqlalchemy.orm import Session, sessionmaker
 
-from .models import PluginBase
+from .models import PTSiteHourlySnapshot
 
 
 class LocalDatabaseHandle:
@@ -36,7 +36,7 @@ class LocalDatabaseHandle:
                 cursor.close()
 
         self._factory = sessionmaker(self.engine, expire_on_commit=False)
-        PluginBase.metadata.create_all(self.engine)
+        PTSiteHourlySnapshot.__table__.create(self.engine, checkfirst=True)
 
     @contextmanager
     def session(self) -> Iterator[Session]:

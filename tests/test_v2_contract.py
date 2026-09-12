@@ -10,10 +10,11 @@ from pathlib import Path
 from types import SimpleNamespace
 from typing import ClassVar
 
+from sqlalchemy import inspect
+
 
 ROOT = Path(__file__).resolve().parents[1]
 PLUGIN_V2 = ROOT / "plugins.v2" / "ptdatastatistics"
-PLUGIN_V3 = ROOT / "plugins.v3" / "ptdatastatistics"
 
 
 class DummyPluginBase:
@@ -35,8 +36,17 @@ class DummyPluginBase:
 
 
 class DummySiteOper:
+    sites: ClassVar[list] = []
+    user_data: ClassVar[list] = []
+
     def list(self):
-        return []
+        return list(self.sites)
+
+    def get_userdata(self):
+        return list(self.user_data)
+
+    def get_userdata_latest(self):
+        return list(self.user_data)
 
 
 class DummyScheduler:
@@ -100,7 +110,7 @@ class V2ContractTests(unittest.TestCase):
         plugin.init_plugin(config or {"enabled": True})
         return plugin
 
-    def test_v2_uses_its_own_index_and_excludes_v3_fallback(self):
+    def test_v2_index_is_the_single_v2_v3_release_source(self):
         meta = json.loads((ROOT / "package.v2.json").read_text(encoding="utf-8"))[
             "PTDataStatistics"
         ]
@@ -109,12 +119,17 @@ class V2ContractTests(unittest.TestCase):
             (PLUGIN_V2 / "package.json").read_text(encoding="utf-8")
         )
 
-        self.assertEqual(meta["version"], "1.2.4")
-        self.assertEqual(meta["system_version"], ">=2.12.0,<3.0.0")
-        self.assertIs(meta["v3"], False)
-        self.assertEqual(meta["history"], {"v1.2.4": "兼容v2及v3"})
-        self.assertIn('plugin_version = "1.2.4"', source)
-        self.assertEqual(frontend_meta["version"], "1.2.4")
+        self.assertEqual(meta["version"], "2.0.1")
+        self.assertEqual(meta["system_version"], ">=2.12.0")
+        self.assertIsNot(meta.get("v3"), False)
+        self.assertEqual(meta["history"], {
+            "v2.0.1": "不值一提",
+            "v2.0.0": "兼容v2及v3",
+        })
+        self.assertIn('plugin_version = "2.0.1"', source)
+        self.assertEqual(frontend_meta["version"], "2.0.1")
+        self.assertFalse((ROOT / "package.v3.json").exists())
+        self.assertFalse((ROOT / "plugins.v3" / "ptdatastatistics").exists())
         for path in PLUGIN_V2.glob("*.py"):
             self.assertNotIn("app.sdk", path.read_text(encoding="utf-8"), path.name)
 
@@ -129,51 +144,60 @@ class V2ContractTests(unittest.TestCase):
             self.assertIn(("/cookiecloud/update", ("POST",)), paths)
             plugin.stop_service()
 
-    def test_v2_sqlite_history_survives_plugin_reinitialization(self):
+    def test_sqlite_only_persists_hourly_history(self):
         with tempfile.TemporaryDirectory() as directory:
             data_path = Path(directory)
             plugin = self.create_plugin(data_path)
-            plugin._repository().upsert(
-                [
-                    {
-                        "site_id": 7,
-                        "domain": "example.test",
-                        "site_name": "示例",
-                        "updated_day": "2026-09-12",
-                        "upload": 100,
-                        "download": 50,
-                    }
-                ]
-            )
+            plugin._hourly_repository().capture_hourly([{
+                "site_id": 7,
+                "domain": "example.test",
+                "site_name": "示例",
+                "updated_day": "2026-09-12",
+                "updated_time": "09:00:00",
+                "source_updated_at": "2026-09-12 09:00:00",
+                "upload": 100,
+                "download": 50,
+            }])
             plugin.init_plugin({"enabled": True})
 
-            rows = plugin._repository().latest(active_only=False)
+            rows = plugin._hourly_repository().hourly_for_day("2026-09-12")
 
             self.assertEqual(rows[0]["domain"], "example.test")
             self.assertEqual(rows[0]["upload"], 100)
             self.assertTrue((data_path / "ptdatastatistics.db").is_file())
+            self.assertEqual(
+                inspect(plugin._database_handle.engine).get_table_names(),
+                ["site_hourly_snapshots"],
+            )
             plugin.stop_service()
 
-    def test_shared_business_and_frontend_files_do_not_drift(self):
-        shared_files = [
-            "api_models.py",
-            "core.py",
-            "ptd_cookiecloud.py",
-            "repository.py",
-            "vite.config.js",
-        ]
-        shared_files.extend(
-            path.relative_to(PLUGIN_V3).as_posix()
-            for root in (PLUGIN_V3 / "src", PLUGIN_V3 / "dist" / "assets")
-            for path in root.rglob("*")
-            if path.is_file()
-        )
-        for relative in shared_files:
-            with self.subTest(relative=relative):
-                self.assertEqual(
-                    (PLUGIN_V2 / relative).read_bytes(),
-                    (PLUGIN_V3 / relative).read_bytes(),
-                )
+    def test_daily_history_is_read_directly_from_mp(self):
+        with tempfile.TemporaryDirectory() as directory:
+            DummySiteOper.sites = [SimpleNamespace(
+                id=7,
+                name="示例",
+                domain="example.test",
+                is_active=True,
+                pri=1,
+            )]
+            DummySiteOper.user_data = [SimpleNamespace(
+                domain="example.test",
+                name="示例",
+                updated_day="2026-09-12",
+                updated_time="09:00:00",
+                upload=100,
+                download=50,
+                err_msg="",
+            )]
+            try:
+                plugin = self.create_plugin(Path(directory))
+                rows = plugin._repository().latest(active_only=True)
+                self.assertEqual(rows[0]["upload"], 100)
+                self.assertEqual(rows[0]["updated_day"], "2026-09-12")
+                plugin.stop_service()
+            finally:
+                DummySiteOper.sites = []
+                DummySiteOper.user_data = []
 
 
 if __name__ == "__main__":

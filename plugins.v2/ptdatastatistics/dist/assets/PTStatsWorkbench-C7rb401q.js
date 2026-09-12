@@ -16957,7 +16957,7 @@ return (_ctx, _cache) => {
                   "onUpdate:modelValue": _cache[9] || (_cache[9] = $event => ((settingsDraft.value.enabled) = $event)),
                   color: "primary",
                   label: "启用插件",
-                  hint: "启用后跟随 MP 的站点刷新设置同步已保存数据，并开放插件定时任务",
+                  hint: "启用后读取 MP 已保存的站点数据，并在刷新时记录小时快照",
                   "persistent-hint": ""
                 }, null, 8, ["modelValue"]),
                 _createVNode(_component_VSwitch, {
@@ -16973,8 +16973,8 @@ return (_ctx, _cache) => {
                   type: "number",
                   min: "0",
                   max: "36500",
-                  label: "历史保留天数",
-                  hint: "0 表示永久保留；仅清理插件历史副本",
+                  label: "小时快照保留天数",
+                  hint: "0 表示永久保留；日级历史由 MP 管理，不受此设置影响",
                   "persistent-hint": "",
                   variant: "outlined",
                   class: "mt-3"
@@ -17206,6 +17206,6 @@ return (_ctx, _cache) => {
 }
 
 };
-const PTStatsWorkbench = /*#__PURE__*/_export_sfc(_sfc_main, [['__scopeId',"data-v-d5ec191d"]]);
+const PTStatsWorkbench = /*#__PURE__*/_export_sfc(_sfc_main, [['__scopeId',"data-v-7e6fa7cd"]]);
 
 export { PTStatsWorkbench as P };

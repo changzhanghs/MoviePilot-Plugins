@@ -54,7 +54,6 @@ from .core import (
     overall_ratio,
 )
 from .database import LocalDatabaseHandle
-from .models import PTSiteHourlySnapshot, PTSiteSnapshot
 from .ptd_cookiecloud import PTDCookieCloudError, match_metrics, parse_backup_response
 from .repository import SnapshotRepository
 
@@ -65,7 +64,7 @@ class PTDataStatistics(_PluginBase):
     plugin_name = "PT数据统计"
     plugin_desc = "统计 PT 站点累计与每日上传下载，提供历史、养老进度和通知。"
     plugin_icon = "ptdatastatistics.svg"
-    plugin_version = "1.2.4"
+    plugin_version = "2.0.1"
     plugin_author = "cz"
     author_url = "https://github.com/changzhanghs"
     plugin_config_prefix = "ptdatastatistics_"
@@ -86,7 +85,7 @@ class PTDataStatistics(_PluginBase):
     _custom_retirement_rules: ClassVar[list[dict[str, Any]]] = []
 
     def init_plugin(self, config: dict | None = None) -> None:
-        """读取配置并准备位于插件数据目录中的 V2 独立历史库。"""
+        """读取配置并准备 V2/V3 共用的本地历史库。"""
 
         raw = dict(config or {})
         # 兼容 0.0.1 的 HH:mm 配置；保存后统一转成标准五段式 Cron。
@@ -373,13 +372,22 @@ class PTDataStatistics(_PluginBase):
         return datetime.now(ZoneInfo(settings.TZ))
 
     def _repository(self) -> SnapshotRepository:
-        """为当前调用创建 V2 插件本地历史仓储。"""
+        """从 MP 读取日级历史，并绑定插件本地小时快照库。"""
 
         database_handle = getattr(self, "_database_handle", None)
         if database_handle is None:
             self._reset_database_handle()
             database_handle = self._database_handle
-        return SnapshotRepository(database_handle)
+        return SnapshotRepository(database_handle, self._mp_daily_snapshots())
+
+    def _hourly_repository(self) -> SnapshotRepository:
+        """创建只操作插件小时快照的仓储，不读取或写入日级插件表。"""
+
+        database_handle = getattr(self, "_database_handle", None)
+        if database_handle is None:
+            self._reset_database_handle()
+            database_handle = self._database_handle
+        return SnapshotRepository(database_handle, [])
 
     @staticmethod
     def _site_dict(site: Any) -> dict[str, Any]:
@@ -396,7 +404,7 @@ class PTDataStatistics(_PluginBase):
 
     @staticmethod
     def _snapshot_dict(row: Any, sites_by_domain: dict[str, dict[str, Any]]) -> dict[str, Any]:
-        """把宿主 SiteUserData 转换为插件数据库字段。"""
+        """把宿主 SiteUserData 转换为插件业务字段。"""
 
         domain = as_text(getattr(row, "domain", "")).casefold()
         site = sites_by_domain.get(domain, {})
@@ -429,6 +437,28 @@ class PTDataStatistics(_PluginBase):
         """读取宿主当前全部站点，不返回 Cookie 等敏感字段。"""
 
         return [self._site_dict(site) for site in (SiteOper().list() or [])]
+
+    def _mp_daily_snapshots(self) -> list[dict[str, Any]]:
+        """直接读取并规范化 MP 保存的全部 SiteUserData 日级历史。"""
+
+        site_oper = SiteOper()
+        configured_sites = [self._site_dict(site) for site in (site_oper.list() or [])]
+        sites_by_domain = {
+            site["domain"]: site for site in configured_sites if site["domain"]
+        }
+        snapshots_by_day: dict[tuple[str, str], dict[str, Any]] = {}
+        for row in site_oper.get_userdata() or []:
+            item = self._snapshot_dict(row, sites_by_domain)
+            key = (item["domain"], item["updated_day"])
+            current = snapshots_by_day.get(key)
+            item_score = (not bool(item["err_msg"].strip()), item["updated_time"])
+            current_score = (
+                not bool(current["err_msg"].strip()),
+                current["updated_time"],
+            ) if current else (False, "")
+            if not current or item_score >= current_score:
+                snapshots_by_day[key] = item
+        return list(snapshots_by_day.values())
 
     @staticmethod
     def _masked_uuid(value: str) -> str:
@@ -604,7 +634,7 @@ class PTDataStatistics(_PluginBase):
         return metrics
 
     def sync_from_mp(self, *, full: bool = False, site_id: int | None = None) -> SyncResponse:
-        """只读 MoviePilot 的站点数据并复制到插件历史库。"""
+        """读取 MP 最新累计值，仅写入插件小时快照库。"""
 
         if not hasattr(self, "_sync_lock"):
             self._sync_lock = threading.RLock()
@@ -612,14 +642,9 @@ class PTDataStatistics(_PluginBase):
             site_oper = SiteOper()
             configured_sites = [self._site_dict(site) for site in (site_oper.list() or [])]
             sites_by_domain = {site["domain"]: site for site in configured_sites if site["domain"]}
-            repository = self._repository()
-            bootstrap_complete = bool(self.get_data("history_bootstrap_v1"))
-            if repository.count() == 0:
-                bootstrap_complete = False
+            repository = self._hourly_repository()
 
-            if full or not bootstrap_complete:
-                source_rows = site_oper.get_userdata() or []
-            elif site_id not in (None, 0):
+            if site_id not in (None, 0):
                 site = site_oper.get(int(site_id))
                 domain = as_text(getattr(site, "domain", "")).casefold() if site else ""
                 candidates = site_oper.get_userdata_by_domain(domain) if domain else []
@@ -650,19 +675,12 @@ class PTDataStatistics(_PluginBase):
                 if not current or item_score >= current_score:
                     snapshots_by_day[key] = item
             snapshots = list(snapshots_by_day.values())
-            imported = repository.upsert(snapshots)
             captured_at = self._now()
             server_day = captured_at.date().isoformat()
-            repository.capture_hourly(
+            imported = repository.capture_hourly(
                 (item for item in snapshots if item.get("updated_day") == server_day),
                 captured_at=captured_at.isoformat(sep=" ", timespec="seconds"),
             )
-            active_domains = {
-                site["domain"] for site in configured_sites if site["domain"] and site["is_active"]
-            }
-            repository.mark_active_domains(active_domains)
-            if full or not bootstrap_complete:
-                self.save_data("history_bootstrap_v1", True)
             deleted = repository.cleanup(
                 retention_days=self._retention_days,
                 server_day=server_day,
@@ -672,10 +690,7 @@ class PTDataStatistics(_PluginBase):
             return SyncResponse(imported=imported, deleted=deleted, completed_at=completed_at)
 
     def _ensure_history(self) -> None:
-        """首次使用时导入 MP 历史；后续更新由站点刷新事件驱动。"""
-
-        if not bool(self.get_data("history_bootstrap_v1")):
-            self.sync_from_mp(full=True)
+        """日级历史由每次查询直接读取 MP，无需插件侧初始化。"""
 
     @eventmanager.register(EventType.SiteRefreshed)
     def on_site_refreshed(self, event: Event | None = None) -> None:
@@ -687,8 +702,7 @@ class PTDataStatistics(_PluginBase):
         raw_site_id = event_data.get("site_id") if isinstance(event_data, dict) else None
         try:
             site_id = int(raw_site_id) if raw_site_id not in (None, "", "*") else None
-            # “*” 表示 MP 完成了一轮站点刷新；这里仍只读取 MP 的最新结果，
-            # 首次运行时 sync_from_mp 会自行完成一次全历史导入。
+            # “*” 表示 MP 完成了一轮站点刷新；这里只读取 MP 的最新结果。
             self.sync_from_mp(full=False, site_id=site_id)
         except Exception as error:  # noqa: BLE001 - 事件失败不得影响宿主刷新链
             logger.error(f"PT数据统计同步 MoviePilot 站点数据失败：{error}")
@@ -1066,7 +1080,6 @@ class PTDataStatistics(_PluginBase):
     def api_update_settings(self, payload: SettingsData) -> SettingsResponse:
         """保存设置并让宿主重建当前插件的定时任务。"""
 
-        old_retention = self._retention_days
         self._apply_settings(payload)
         self._log_custom_rule_state("已保存")
         self.update_config(payload.model_dump())
@@ -1082,30 +1095,19 @@ class PTDataStatistics(_PluginBase):
             Scheduler().update_plugin_job(self.__class__.__name__)
         except Exception as error:  # noqa: BLE001 - 保存设置本身仍然有效
             logger.warning(f"更新 PT 数据统计定时任务失败，将在插件重载后生效：{error}")
-        retention_expanded = (
-            (self._retention_days == 0 and old_retention != 0)
-            or (old_retention > 0 and self._retention_days > old_retention)
-        )
-        if retention_expanded:
-            try:
-                # MP 原始历史仍存在时，把此前因较短保留期删除的插件副本补回来。
-                self.sync_from_mp(full=True)
-            except Exception as error:  # noqa: BLE001 - 配置保存不因历史回填失败而回滚
-                logger.warning(f"回填 MoviePilot 历史数据失败：{error}")
-        else:
-            self.cleanup_history()
+        self.cleanup_history()
         return self.api_settings()
 
     def cleanup_history(self) -> int:
-        """按配置清理插件历史副本，不修改 MoviePilot 原始数据。"""
+        """按配置清理插件小时快照，不修改 MoviePilot 日级历史。"""
 
         try:
-            return self._repository().cleanup(
+            return self._hourly_repository().cleanup(
                 retention_days=self._retention_days,
                 server_day=self._now().date().isoformat(),
             )
         except Exception as error:  # noqa: BLE001 - 后台清理失败不影响插件主功能
-            logger.error(f"清理 PT 数据统计历史失败：{error}")
+            logger.error(f"清理 PT 数据统计小时快照失败：{error}")
             return 0
 
     def _notification_tick(self) -> None:

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import importlib
 import sys
+import tempfile
 import types
 import unittest
 from contextlib import contextmanager
@@ -14,18 +15,32 @@ from zoneinfo import ZoneInfo
 
 from fastapi import HTTPException, Request
 from sqlalchemy import create_engine
-from sqlalchemy.orm import DeclarativeBase, sessionmaker
+from sqlalchemy.orm import sessionmaker
 
 ROOT = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(ROOT / "plugins.v3"))
-
-
-class PluginModelBase(DeclarativeBase):
-    pass
+sys.path.insert(0, str(ROOT / "plugins.v2"))
 
 
 class DummyPluginBase:
-    pass
+    def get_data_path(self):
+        if not hasattr(self, "_test_data_path"):
+            self._test_data_path = Path(tempfile.mkdtemp(prefix="ptstats-contract-"))
+        return self._test_data_path
+
+    def save_data(self, key, value):
+        if not hasattr(self, "_saved_data"):
+            self._saved_data = {}
+        self._saved_data[key] = value
+
+    def get_data(self, key=None):
+        values = getattr(self, "_saved_data", {})
+        return values.get(key) if key else dict(values)
+
+    def update_config(self, _config):
+        return True
+
+    def post_message(self, **_kwargs):
+        return None
 
 
 class DummySiteOper:
@@ -62,18 +77,16 @@ def module(name: str, **attributes):
 
 
 module("app")
+module("app.core")
+module("app.core.config", settings=types.SimpleNamespace(TZ="Asia/Shanghai"))
+module("app.core.event", Event=DummyEvent, eventmanager=DummyEventManager())
 module("app.db")
-module("app.db.oper")
-module("app.db.oper.site", SiteOper=DummySiteOper)
+module("app.db.site_oper", SiteOper=DummySiteOper)
+module("app.log", logger=DummyLogger())
 module("app.plugins", _PluginBase=DummyPluginBase)
 module("app.scheduler", Scheduler=DummyScheduler)
 module("app.schemas", NotificationType=types.SimpleNamespace(SiteMessage="site"))
 module("app.schemas.types", EventType=types.SimpleNamespace(SiteRefreshed="site-refreshed"))
-module("app.sdk")
-module("app.sdk.config", settings=types.SimpleNamespace(TZ="Asia/Shanghai"))
-module("app.sdk.events", Event=DummyEvent, eventmanager=DummyEventManager())
-module("app.sdk.logging", logger=DummyLogger())
-module("app.sdk.database", plugin_declarative_base=lambda: PluginModelBase)
 
 PTDataStatistics = importlib.import_module("ptdatastatistics").PTDataStatistics
 plugin_module = importlib.import_module("ptdatastatistics")
@@ -82,7 +95,6 @@ SiteSnapshotData = importlib.import_module("ptdatastatistics.api_models").SiteSn
 CookieCloudUpdateData = importlib.import_module("ptdatastatistics.api_models").CookieCloudUpdateData
 models = importlib.import_module("ptdatastatistics.models")
 PluginBase = models.PluginBase
-PTSiteSnapshot = models.PTSiteSnapshot
 PTSiteHourlySnapshot = models.PTSiteHourlySnapshot
 SnapshotRepository = importlib.import_module("ptdatastatistics.repository").SnapshotRepository
 
@@ -119,11 +131,10 @@ class HostContractTests(unittest.TestCase):
         self.assertEqual(value["domain"], "example.test")
         self.assertNotIn("cookie", value)
 
-    def test_v3_render_and_api_contracts(self):
+    def test_shared_v2_v3_render_and_api_contracts(self):
         plugin = PTDataStatistics.__new__(PTDataStatistics)
         plugin.init_plugin({"enabled": True})
         self.assertEqual(plugin.get_render_mode(), ("vue", "dist/assets"))
-        self.assertEqual(plugin.get_database_models(), [PTSiteSnapshot, PTSiteHourlySnapshot])
         self.assertEqual(plugin.get_sidebar_nav()[0]["nav_key"], "main")
         self.assertEqual(plugin.get_sidebar_nav()[0]["section"], "discovery")
         paths = {(item["path"], tuple(item["methods"])) for item in plugin.get_api()}

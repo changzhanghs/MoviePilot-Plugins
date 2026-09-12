@@ -6,75 +6,72 @@ from collections.abc import Iterable
 from datetime import date, timedelta
 from typing import Any
 
-from sqlalchemy import delete, func, or_, select, tuple_, update
+from sqlalchemy import delete, select, tuple_
 
 from .core import as_text, compute_daily_delta
-from .models import PTSiteHourlySnapshot, PTSiteSnapshot
+from .models import PTSiteHourlySnapshot
 
 
 class SnapshotRepository:
-    """通过 MoviePilot 提供的插件数据库句柄读写每日站点快照。"""
+    """查询 MP 日级快照，并在插件本地库读写小时快照。"""
 
-    def __init__(self, database_handle) -> None:
+    _DAILY_DEFAULTS = {
+        "site_id": None,
+        "domain": "",
+        "site_name": "",
+        "is_active": False,
+        "username": "",
+        "userid": "",
+        "join_at": "",
+        "user_level": "",
+        "upload": 0,
+        "download": 0,
+        "ratio": None,
+        "bonus": None,
+        "seeding": 0,
+        "seeding_size": 0,
+        "leeching": 0,
+        "leeching_size": 0,
+        "updated_day": "",
+        "updated_time": "",
+        "err_msg": "",
+        "source_updated_at": "",
+    }
+
+    def __init__(
+        self,
+        database_handle,
+        daily_snapshots: Iterable[dict[str, Any]] | None = None,
+    ) -> None:
         self._database = database_handle
+        self._daily_snapshots = [
+            {**self._DAILY_DEFAULTS, **item} for item in (daily_snapshots or [])
+        ]
 
     def count(self) -> int:
-        """返回当前插件数据库中的快照数量。"""
+        """返回当前日级数据源中的快照数量。"""
 
-        with self._database.session() as session:
-            return int(session.scalar(select(func.count()).select_from(PTSiteSnapshot)) or 0)
+        return len(self._daily_snapshots)
 
     def upsert(self, snapshots: Iterable[dict[str, Any]]) -> int:
-        """按站点域名和服务器日期新增或更新 MP 快照。"""
+        """更新日级数据视图；仅供隔离测试和兼容调用使用。"""
 
         items = [item for item in snapshots if item.get("domain") and item.get("updated_day")]
         if not items:
             return 0
-        domains = {str(item["domain"]) for item in items}
-        days = {str(item["updated_day"]) for item in items}
-        with self._database.session() as session:
-            try:
-                existing_rows = session.execute(
-                    select(PTSiteSnapshot).where(
-                        PTSiteSnapshot.domain.in_(domains),
-                        PTSiteSnapshot.updated_day.in_(days),
-                    )
-                ).scalars().all()
-                existing = {(row.domain, row.updated_day): row for row in existing_rows}
-                for item in items:
-                    key = (str(item["domain"]), str(item["updated_day"]))
-                    row = existing.get(key)
-                    if row is None:
-                        row = PTSiteSnapshot(domain=key[0], updated_day=key[1])
-                        session.add(row)
-                        existing[key] = row
-                    for field in (
-                        "site_id",
-                        "site_name",
-                        "is_active",
-                        "username",
-                        "userid",
-                        "join_at",
-                        "user_level",
-                        "upload",
-                        "download",
-                        "ratio",
-                        "bonus",
-                        "seeding",
-                        "seeding_size",
-                        "leeching",
-                        "leeching_size",
-                        "updated_time",
-                        "err_msg",
-                        "source_updated_at",
-                    ):
-                        if field in item:
-                            setattr(row, field, item[field])
-                session.commit()
-                return len(items)
-            except Exception:
-                session.rollback()
-                raise
+        by_key = {
+            (str(item["domain"]), str(item["updated_day"])): item
+            for item in self._daily_snapshots
+        }
+        for item in items:
+            key = (str(item["domain"]), str(item["updated_day"]))
+            by_key[key] = {
+                **self._DAILY_DEFAULTS,
+                **by_key.get(key, {}),
+                **item,
+            }
+        self._daily_snapshots = list(by_key.values())
+        return len(items)
 
     def capture_hourly(
         self,
@@ -148,25 +145,8 @@ class SnapshotRepository:
         """把站点当前启用状态投影到所有已保存历史行。"""
 
         domains = {domain for domain in active_domains if domain}
-        with self._database.session() as session:
-            try:
-                session.execute(update(PTSiteSnapshot).values(is_active=False))
-                if domains:
-                    session.execute(
-                        update(PTSiteSnapshot)
-                        .where(PTSiteSnapshot.domain.in_(domains))
-                        .values(is_active=True)
-                    )
-                session.commit()
-            except Exception:
-                session.rollback()
-                raise
-
-    @staticmethod
-    def _valid_condition():
-        """返回成功站点快照的统一过滤条件。"""
-
-        return or_(PTSiteSnapshot.err_msg.is_(None), PTSiteSnapshot.err_msg == "")
+        for item in self._daily_snapshots:
+            item["is_active"] = item.get("domain") in domains
 
     def latest(
         self,
@@ -176,29 +156,22 @@ class SnapshotRepository:
     ) -> list[dict[str, Any]]:
         """返回每个站点最近一条快照，可选择是否排除失败记录。"""
 
-        conditions = [self._valid_condition()] if valid_only else []
-        if active_only:
-            conditions.append(PTSiteSnapshot.is_active.is_(True))
-        latest_subquery = (
-            select(
-                PTSiteSnapshot.domain,
-                func.max(PTSiteSnapshot.updated_day).label("latest_day"),
-            )
-            .where(*conditions)
-            .group_by(PTSiteSnapshot.domain)
-            .subquery()
+        latest_by_domain: dict[str, dict[str, Any]] = {}
+        for item in self._daily_snapshots:
+            if active_only and not item.get("is_active"):
+                continue
+            if valid_only and as_text(item.get("err_msg")).strip():
+                continue
+            domain = as_text(item.get("domain"))
+            current = latest_by_domain.get(domain)
+            if current is None or as_text(item.get("updated_day")) > as_text(
+                current.get("updated_day")
+            ):
+                latest_by_domain[domain] = dict(item)
+        return sorted(
+            latest_by_domain.values(),
+            key=lambda item: (-int(item.get("upload") or 0), as_text(item.get("site_name"))),
         )
-        statement = (
-            select(PTSiteSnapshot)
-            .join(
-                latest_subquery,
-                (PTSiteSnapshot.domain == latest_subquery.c.domain)
-                & (PTSiteSnapshot.updated_day == latest_subquery.c.latest_day),
-            )
-            .order_by(PTSiteSnapshot.upload.desc(), PTSiteSnapshot.site_name)
-        )
-        with self._database.session() as session:
-            return [row.to_dict() for row in session.execute(statement).scalars().all()]
 
     def records_for_days(
         self,
@@ -211,16 +184,16 @@ class SnapshotRepository:
         day_values = {day for day in days if day}
         if not day_values:
             return []
-        conditions = [PTSiteSnapshot.updated_day.in_(day_values), self._valid_condition()]
-        if active_only:
-            conditions.append(PTSiteSnapshot.is_active.is_(True))
-        with self._database.session() as session:
-            rows = session.execute(
-                select(PTSiteSnapshot)
-                .where(*conditions)
-                .order_by(PTSiteSnapshot.updated_day, PTSiteSnapshot.site_name)
-            ).scalars().all()
-            return [row.to_dict() for row in rows]
+        return sorted(
+            [
+                dict(item)
+                for item in self._daily_snapshots
+                if item.get("updated_day") in day_values
+                and not as_text(item.get("err_msg")).strip()
+                and (not active_only or item.get("is_active"))
+            ],
+            key=lambda item: (as_text(item.get("updated_day")), as_text(item.get("site_name"))),
+        )
 
     def previous_successful(
         self,
@@ -235,28 +208,20 @@ class SnapshotRepository:
         }
         if not latest_days:
             return {}
-        earlier_conditions = [
-            (PTSiteSnapshot.domain == domain)
-            & (PTSiteSnapshot.updated_day < latest_day)
-            for domain, latest_day in latest_days.items()
-        ]
-        previous_days = (
-            select(
-                PTSiteSnapshot.domain,
-                func.max(PTSiteSnapshot.updated_day).label("previous_day"),
-            )
-            .where(self._valid_condition(), or_(*earlier_conditions))
-            .group_by(PTSiteSnapshot.domain)
-            .subquery()
-        )
-        statement = select(PTSiteSnapshot).join(
-            previous_days,
-            (PTSiteSnapshot.domain == previous_days.c.domain)
-            & (PTSiteSnapshot.updated_day == previous_days.c.previous_day),
-        )
-        with self._database.session() as session:
-            rows = session.execute(statement).scalars().all()
-            return {row.domain: row.to_dict() for row in rows}
+        previous: dict[str, dict[str, Any]] = {}
+        for item in self._daily_snapshots:
+            domain = as_text(item.get("domain"))
+            day = as_text(item.get("updated_day"))
+            if (
+                domain not in latest_days
+                or day >= latest_days[domain]
+                or as_text(item.get("err_msg")).strip()
+            ):
+                continue
+            current = previous.get(domain)
+            if current is None or day > as_text(current.get("updated_day")):
+                previous[domain] = dict(item)
+        return previous
 
     def history(
         self,
@@ -269,71 +234,47 @@ class SnapshotRepository:
     ) -> list[dict[str, Any]]:
         """查询历史，并为每行附加严格相邻日增量。"""
 
-        conditions = [
-            PTSiteSnapshot.updated_day >= start_day,
-            PTSiteSnapshot.updated_day <= end_day,
-            self._valid_condition(),
-        ]
         site_id_values = {int(value) for value in (site_ids or ()) if value}
-        if site_id_values:
-            conditions.append(PTSiteSnapshot.site_id.in_(site_id_values))
-        if not include_archived:
-            conditions.append(PTSiteSnapshot.is_active.is_(True))
-
-        statement = (
-            select(PTSiteSnapshot)
-            .where(*conditions)
-            .order_by(PTSiteSnapshot.updated_day.desc(), PTSiteSnapshot.domain)
+        valid_rows = [
+            dict(item)
+            for item in self._daily_snapshots
+            if start_day <= as_text(item.get("updated_day")) <= end_day
+            and not as_text(item.get("err_msg")).strip()
+            and (not site_id_values or item.get("site_id") in site_id_values)
+            and (include_archived or item.get("is_active"))
+        ]
+        valid_rows.sort(
+            key=lambda item: (as_text(item.get("updated_day")), as_text(item.get("domain"))),
+            reverse=True,
         )
         if limit is not None:
-            statement = statement.limit(max(1, min(limit, 50000)))
-        with self._database.session() as session:
-            rows = session.execute(statement).scalars().all()
-            values = [row.to_dict() for row in rows]
-
-            # 查询命中行各自的严格前一自然日，既保证分页返回最新记录，
-            # 又不会因为全局 limit 截断而误报“基线不足”。
-            selected_keys = {(row["domain"], row["updated_day"]) for row in values}
-            baseline_keys: set[tuple[str, str]] = set()
-            for row in values:
-                try:
-                    previous = (
-                        date.fromisoformat(row["updated_day"]) - timedelta(days=1)
-                    ).isoformat()
-                except ValueError:
-                    continue
-                key = (row["domain"], previous)
-                if key not in selected_keys:
-                    baseline_keys.add(key)
-            baseline_values = []
-            if baseline_keys:
-                baseline_rows = session.execute(
-                    select(PTSiteSnapshot).where(
-                        tuple_(PTSiteSnapshot.domain, PTSiteSnapshot.updated_day).in_(baseline_keys),
-                        self._valid_condition(),
-                    )
-                ).scalars().all()
-                baseline_values = [row.to_dict() for row in baseline_rows]
-
-        by_key = {
-            (row["domain"], row["updated_day"]): row
-            for row in [*values, *baseline_values]
+            valid_rows = valid_rows[: max(1, min(limit, 50000))]
+        all_valid = {
+            (as_text(item.get("domain")), as_text(item.get("updated_day"))): item
+            for item in self._daily_snapshots
+            if not as_text(item.get("err_msg")).strip()
         }
-        results: list[dict[str, Any]] = []
-        for row in values:
-            if row["updated_day"] < start_day:
-                continue
+        results = []
+        for row in valid_rows:
             try:
-                previous = (date.fromisoformat(row["updated_day"]) - timedelta(days=1)).isoformat()
-            except ValueError:
-                previous = ""
-            delta = compute_daily_delta(row, by_key.get((row["domain"], previous)))
+                previous_day = (
+                    date.fromisoformat(row["updated_day"]) - timedelta(days=1)
+                ).isoformat()
+            except (KeyError, ValueError):
+                previous_day = ""
+            delta = compute_daily_delta(
+                row,
+                all_valid.get((as_text(row.get("domain")), previous_day)),
+            )
             results.append({**row, **delta})
-        results.sort(key=lambda item: (item["updated_day"], item["site_name"]), reverse=True)
+        results.sort(
+            key=lambda item: (item["updated_day"], item["site_name"]),
+            reverse=True,
+        )
         return results
 
     def cleanup(self, *, retention_days: int, server_day: str) -> int:
-        """删除超过保留期的插件副本；零天表示永久保留。"""
+        """删除超过保留期的插件小时快照。"""
 
         if retention_days <= 0:
             return 0
@@ -343,26 +284,21 @@ class SnapshotRepository:
             return 0
         with self._database.session() as session:
             try:
-                daily_result = session.execute(
-                    delete(PTSiteSnapshot).where(PTSiteSnapshot.updated_day < cutoff)
-                )
                 hourly_result = session.execute(
                     delete(PTSiteHourlySnapshot).where(PTSiteHourlySnapshot.updated_day < cutoff)
                 )
                 session.commit()
-                return (
-                    int(getattr(daily_result, "rowcount", 0) or 0)
-                    + int(getattr(hourly_result, "rowcount", 0) or 0)
-                )
+                return int(getattr(hourly_result, "rowcount", 0) or 0)
             except Exception:
                 session.rollback()
                 raise
 
     def date_bounds(self) -> tuple[str, str]:
-        """返回插件历史库的最早和最晚日期。"""
+        """返回 MP 日级历史的最早和最晚日期。"""
 
-        with self._database.session() as session:
-            first, last = session.execute(
-                select(func.min(PTSiteSnapshot.updated_day), func.max(PTSiteSnapshot.updated_day))
-            ).one()
-            return as_text(first), as_text(last)
+        days = sorted(
+            as_text(item.get("updated_day"))
+            for item in self._daily_snapshots
+            if item.get("updated_day")
+        )
+        return (days[0], days[-1]) if days else ("", "")

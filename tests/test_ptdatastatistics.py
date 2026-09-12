@@ -10,7 +10,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 ROOT = Path(__file__).resolve().parents[1]
-PLUGIN = ROOT / "plugins.v3" / "ptdatastatistics"
+PLUGIN = ROOT / "plugins.v2" / "ptdatastatistics"
 
 
 def load_module(name: str, path: Path):
@@ -800,41 +800,18 @@ class TwelveAndExportTests(unittest.TestCase):
 
 
 class PackagingTests(unittest.TestCase):
-    def test_v3_manifest_matches_source(self):
-        manifest = json.loads((ROOT / "package.v3.json").read_text(encoding="utf-8"))
+    def test_shared_manifest_matches_source(self):
+        manifest = json.loads((ROOT / "package.v2.json").read_text(encoding="utf-8"))
         meta = manifest["PTDataStatistics"]
         source = (PLUGIN / "__init__.py").read_text(encoding="utf-8")
-        self.assertEqual(meta["version"], "2.0.0")
-        self.assertEqual(
-            meta["history"]["v2.0.0"],
-            "兼容v2及v3",
-        )
-        self.assertEqual(meta["history"]["v1.2.3"], "不值一提")
-        self.assertEqual(meta["history"]["v1.2.2"], "不值一提。")
-        self.assertEqual(meta["history"]["v1.2.1"], "不值一提")
-        self.assertEqual(meta["history"]["v1.2.0"], "不值一提")
-        self.assertEqual(meta["history"]["v1.1.9"], "不值一提")
-        self.assertEqual(meta["history"]["v1.1.8"], "不值一提")
-        self.assertEqual(meta["history"]["v1.1.7"], "更新了一些东西")
-        self.assertEqual(meta["history"]["v1.1.6"], "更新了一些东西")
-        self.assertEqual(meta["history"]["v1.1.5"], "更新了一些东西")
-        self.assertEqual(meta["history"]["v1.1.4"], "更新了一些东西")
-        self.assertEqual(meta["history"]["v1.1.3"], "更新了一些东西")
-        self.assertEqual(meta["history"]["v1.1.1"], "更新了一些内容")
-        self.assertEqual(meta["history"]["v1.1.0"], "更新了一些内容")
-        self.assertEqual(meta["history"]["v1.0.10"], "更新了一些内容")
-        self.assertEqual(meta["history"]["v1.0.9"], "更新了一些内容")
-        self.assertEqual(meta["history"]["v1.0.8"], "更新了一些内容")
-        self.assertEqual(meta["history"]["v1.0.6"], "更新了一些内容")
-        self.assertEqual(meta["history"]["v1.0.5"], "更新了一些内容")
-        self.assertEqual(meta["history"]["v1.0.4"], "更新了一些内容")
-        self.assertEqual(meta["history"]["v1.0.3"], "更新了一些内容")
-        self.assertEqual(meta["history"]["v1.0.2"], "更新了一些东西")
-        self.assertEqual(meta["history"]["v1.0.1"], "更新了一些东西")
-        self.assertEqual(meta["history"]["v1.0.0"], "更新了一些东西")
-        self.assertEqual(list(meta["history"]), ["v2.0.0", "v1.2.4", "v1.2.3", "v1.2.2", "v1.2.1", "v1.2.0", "v1.1.9", "v1.1.8", "v1.1.7", "v1.1.6", "v1.1.5", "v1.1.4", "v1.1.3", "v1.1.2", "v1.1.1", "v1.1.0", "v1.0.10", "v1.0.9", "v1.0.8", "v1.0.7", "v1.0.6", "v1.0.5", "v1.0.4", "v1.0.3", "v1.0.2", "v1.0.1", "v1.0.0"])
-        self.assertIn('plugin_version = "2.0.0"', source)
-        self.assertEqual(meta["system_version"], ">=3.0.0")
+        self.assertEqual(meta["version"], "2.0.1")
+        self.assertEqual(meta["history"], {
+            "v2.0.1": "不值一提",
+            "v2.0.0": "兼容v2及v3",
+        })
+        self.assertIn('plugin_version = "2.0.1"', source)
+        self.assertEqual(meta["system_version"], ">=2.12.0")
+        self.assertIsNot(meta.get("v3"), False)
         self.assertNotIn("release", meta)
 
     def test_plugin_source_does_not_read_downloaders_or_pt_sites(self):
@@ -843,12 +820,12 @@ class PackagingTests(unittest.TestCase):
         self.assertNotIn("requests.", source)
         self.assertIn("SiteOper", source)
 
-    def test_federation_exposes_all_v3_components(self):
+    def test_federation_exposes_all_components(self):
         source = (PLUGIN / "vite.config.js").read_text(encoding="utf-8")
         for name in ("./Page", "./Config", "./Dashboard", "./AppPage"):
             self.assertIn(name, source)
 
-    def test_federation_components_accept_v3_runtime_instance_props(self):
+    def test_federation_components_accept_runtime_instance_props(self):
         for filename in ("Page.vue", "Config.vue", "Dashboard.vue", "AppPage.vue"):
             source = (PLUGIN / "src" / "components" / filename).read_text(encoding="utf-8")
             self.assertIn("pluginId", source, filename)
@@ -1006,6 +983,8 @@ class PackagingTests(unittest.TestCase):
         self.assertIn('v-if="level.description"', source)
         self.assertIn(".retirement-level-row__detail strong{max-width:100%;margin-left:auto", source)
         self.assertIn("overflow-wrap:anywhere;text-align:right", source)
+        self.assertIn(".pt-workbench--compact .retirement-explorer{grid-template-columns:1fr", source)
+        self.assertIn(".pt-workbench--compact .requirement-table,.pt-workbench--compact .retirement-levels{max-width:100%;overflow-x:auto", source)
         self.assertIn("<h2>养老进度</h2>", source)
         self.assertNotIn("全部站点养老进度", source)
         self.assertNotIn("同步 MP 数据间隔", source)
