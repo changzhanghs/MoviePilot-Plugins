@@ -64,7 +64,7 @@ class PTDataStatistics(_PluginBase):
     plugin_name = "PT数据统计"
     plugin_desc = "统计 PT 站点累计与每日上传下载，提供历史、养老进度和通知。"
     plugin_icon = "ptdatastatistics.svg"
-    plugin_version = "2.0.4"
+    plugin_version = "2.0.5"
     plugin_author = "cz"
     author_url = "https://github.com/changzhanghs"
     plugin_config_prefix = "ptdatastatistics_"
@@ -809,6 +809,10 @@ class PTDataStatistics(_PluginBase):
                     item["torrent_uploads"] = as_float(
                         ptd_metric.get("torrent_uploads")
                     )
+                if not as_text(item.get("user_level")) and as_text(
+                    ptd_metric.get("user_level")
+                ):
+                    item["user_level"] = as_text(ptd_metric.get("user_level"))
             sites.append(item)
             if current and delta["baseline_valid"] and (
                 delta["daily_upload"] > 0 or delta["daily_download"] > 0
@@ -863,6 +867,9 @@ class PTDataStatistics(_PluginBase):
         retirement_snapshots = [
             {
                 **item,
+                "user_level": as_text(item.get("user_level")) or as_text(
+                    ptd_by_domain.get(item["domain"], {}).get("user_level")
+                ),
                 "site_priority": configured_by_domain.get(item["domain"], {}).get(
                     "site_priority"
                 ),

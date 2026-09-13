@@ -84,14 +84,24 @@ class PTDCookieCloudTests(unittest.TestCase):
             "pterclub": {
                 "site": "pterclub",
                 "siteName": "猫站",
+                "levelName": "Power User",
                 "uploads": 12,
                 "updateAt": 100,
             }
         })
 
         self.assertEqual(values[0]["ptd_site"], "pterclub")
+        self.assertEqual(values[0]["user_level"], "Power User")
         self.assertEqual(values[0]["torrent_uploads"], 12)
         self.assertIsNone(values[0]["seeding_points"])
+
+    def test_extracts_user_level_without_other_metrics(self):
+        values = ptd_cookiecloud._extract_metrics({
+            "pttime": {"site": "pttime", "levelName": "Elite User"}
+        })
+
+        self.assertEqual(values[0]["user_level"], "Elite User")
+        self.assertIsNone(values[0]["torrent_uploads"])
 
     def test_ptd_bonus_rate_is_used_for_seeding_points_eta_when_dedicated_rate_is_missing(self):
         values = ptd_cookiecloud._extract_metrics(
@@ -489,6 +499,15 @@ class TwelveAndExportTests(unittest.TestCase):
             "貴妃-正一品",
         ):
             self.assertGreaterEqual(core._match_level_index(traditional_name, queen_levels), 0)
+
+        self.assertEqual(
+            core._match_level_index("Power User", rules["藏宝阁"]["levels"]),
+            1,
+        )
+        self.assertEqual(
+            core._match_level_index("Power User", rules["RailgunPT"]["levels"]),
+            1,
+        )
 
     def test_site_without_retirement_target_keeps_level_route(self):
         progress = core.build_retirement_progress([{
@@ -1107,15 +1126,16 @@ class PackagingTests(unittest.TestCase):
         manifest = json.loads((ROOT / "package.v2.json").read_text(encoding="utf-8"))
         meta = manifest["PTDataStatistics"]
         source = (PLUGIN / "__init__.py").read_text(encoding="utf-8")
-        self.assertEqual(meta["version"], "2.0.4")
+        self.assertEqual(meta["version"], "2.0.5")
         self.assertEqual(meta["history"], {
+            "v2.0.5": "不值一提",
             "v2.0.4": "不值一提",
             "v2.0.3": "不值一提",
             "v2.0.2": "不值一提",
             "v2.0.1": "不值一提",
             "v2.0.0": "兼容v2及v3",
         })
-        self.assertIn('plugin_version = "2.0.4"', source)
+        self.assertIn('plugin_version = "2.0.5"', source)
         self.assertEqual(meta["system_version"], ">=2.12.0")
         self.assertIsNot(meta.get("v3"), False)
         self.assertNotIn("release", meta)
