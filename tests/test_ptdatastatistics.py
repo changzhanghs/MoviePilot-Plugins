@@ -103,6 +103,17 @@ class PTDCookieCloudTests(unittest.TestCase):
         self.assertEqual(values[0]["user_level"], "Elite User")
         self.assertIsNone(values[0]["torrent_uploads"])
 
+    def test_extracts_latest_user_level_from_new_list_export(self):
+        values = ptd_cookiecloud._extract_metrics([
+            {"site": "pttime", "date": "2026-09-12", "levelName": "Peasant"},
+            {"site": "pttime", "date": "2026-09-13", "levelName": "(幼儿园)User"},
+            {"site": "pter", "date": "2026-09-13", "levelName": "加菲猫 POWER USER"},
+        ])
+
+        by_site = {item["ptd_site"]: item for item in values}
+        self.assertEqual(by_site["pttime"]["user_level"], "(幼儿园)User")
+        self.assertEqual(by_site["pter"]["user_level"], "加菲猫 POWER USER")
+
     def test_ptd_bonus_rate_is_used_for_seeding_points_eta_when_dedicated_rate_is_missing(self):
         values = ptd_cookiecloud._extract_metrics(
             {
@@ -134,10 +145,12 @@ class PTDCookieCloudTests(unittest.TestCase):
         configured = [
             {"id": 1, "name": "观众", "domain": "audiences.me"},
             {"id": 2, "name": "示例站", "domain": "tracker.example"},
+            {"id": 3, "name": "PT时间", "domain": "pttime.org"},
         ]
         values = [
             {"ptd_site": "audiences", "seeding_points": 10},
             {"ptd_site": "custom", "estimated_bonus_hourly": 4},
+            {"ptd_site": "pttime", "user_level": "Elite User"},
         ]
 
         matched = ptd_cookiecloud.match_metrics(
@@ -147,7 +160,12 @@ class PTDCookieCloudTests(unittest.TestCase):
             "custom=tracker.example",
         )
 
-        self.assertEqual({item["domain"] for item in matched}, {"audiences.me", "tracker.example"})
+        self.assertEqual(
+            {item["domain"] for item in matched},
+            {"audiences.me", "tracker.example", "pttime.org"},
+        )
+        pttime = next(item for item in matched if item["domain"] == "pttime.org")
+        self.assertEqual(pttime["user_level"], "Elite User")
 
     def test_decrypts_cookiecloud_legacy_payload(self):
         from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
@@ -1126,8 +1144,9 @@ class PackagingTests(unittest.TestCase):
         manifest = json.loads((ROOT / "package.v2.json").read_text(encoding="utf-8"))
         meta = manifest["PTDataStatistics"]
         source = (PLUGIN / "__init__.py").read_text(encoding="utf-8")
-        self.assertEqual(meta["version"], "2.0.5")
+        self.assertEqual(meta["version"], "2.0.6")
         self.assertEqual(meta["history"], {
+            "v2.0.6": "不值一提",
             "v2.0.5": "不值一提",
             "v2.0.4": "不值一提",
             "v2.0.3": "不值一提",
@@ -1135,7 +1154,7 @@ class PackagingTests(unittest.TestCase):
             "v2.0.1": "不值一提",
             "v2.0.0": "兼容v2及v3",
         })
-        self.assertIn('plugin_version = "2.0.5"', source)
+        self.assertIn('plugin_version = "2.0.6"', source)
         self.assertEqual(meta["system_version"], ">=2.12.0")
         self.assertIsNot(meta.get("v3"), False)
         self.assertNotIn("release", meta)

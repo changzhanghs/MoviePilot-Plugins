@@ -28,6 +28,7 @@ _KNOWN_ALIASES = {
     "spring": ("春天", "spring", "spring-sunday"),
     "hdsky": ("天空", "hdsky", "skyey"),
     "pter": ("猫站", "pter", "pterclub"),
+    "pttime": ("PT时间", "PTTime"),
     "hdhome": ("家园", "hdhome"),
     "ourbits": ("我堡", "ourbits"),
 }
@@ -105,15 +106,29 @@ def _latest_number(
 
 
 def _extract_metrics(user_info: Any) -> list[dict[str, Any]]:
-    if isinstance(user_info, dict) and isinstance(user_info.get("userInfo"), dict):
+    if isinstance(user_info, dict) and isinstance(user_info.get("userInfo"), (dict, list)):
         user_info = user_info["userInfo"]
-    if not isinstance(user_info, dict):
+    grouped_records: dict[str, list[tuple[str, dict[str, Any]]]] = {}
+    if isinstance(user_info, list):
+        for record in user_info:
+            if not isinstance(record, dict):
+                continue
+            site_key = str(record.get("site") or "").strip()
+            if not site_key:
+                continue
+            grouped_records.setdefault(site_key, []).append(
+                (str(record.get("date") or ""), record)
+            )
+    elif not isinstance(user_info, dict):
         raise PTDCookieCloudError("PTD 用户信息的数据结构不受支持")
 
     output: list[dict[str, Any]] = []
-    for site_key, history in user_info.items():
+    histories = grouped_records.items() if grouped_records else user_info.items()
+    for site_key, history in histories:
         records: list[tuple[str, dict[str, Any]]] = []
-        if isinstance(history, dict) and (_METRIC_KEYS & set(history)):
+        if isinstance(history, list):
+            records.extend(history)
+        elif isinstance(history, dict) and (_METRIC_KEYS & set(history)):
             records.append(("", history))
         elif isinstance(history, dict):
             records.extend((str(day), value) for day, value in history.items() if isinstance(value, dict))
