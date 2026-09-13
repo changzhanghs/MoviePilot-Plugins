@@ -570,7 +570,12 @@ def build_retirement_progress(
         if (identity := normalize_identity(value))
     }
     sites: list[dict[str, Any]] = []
-    counts = {"retired": 0, "wealthy_retired": 0, "upgrading": 0, "rule_missing": 0}
+    counts = {
+        "retired": 0,
+        "wealthy_retired": 0,
+        "upgrading": 0,
+        "rule_missing": 0,
+    }
     for snapshot in snapshots:
         manual_candidates = (
             snapshot.get("domain"),
@@ -631,7 +636,7 @@ def build_retirement_progress(
         vip_levels = list(rule.get("vip_levels") or []) if rule else []
         retirement_name = as_text(rule.get("retirement_level")) if rule else ""
         vip_index = _match_level_index(base["current_level"], vip_levels)
-        if not raw_levels or not retirement_name:
+        if not raw_levels:
             if forced_wealthy or vip_index >= 0:
                 counts["wealthy_retired"] += 1
                 sites.append(
@@ -647,13 +652,18 @@ def build_retirement_progress(
             counts["rule_missing"] += 1
             continue
 
-        retirement_identity = normalize_identity(retirement_name)
         current_index = _match_level_index(base["current_level"], raw_levels)
+        retirement_identity = normalize_identity(retirement_name)
         retirement_index = next(
-            (index for index, level in enumerate(raw_levels) if normalize_identity(level.get("name")) == retirement_identity),
+            (
+                index
+                for index, level in enumerate(raw_levels)
+                if retirement_identity
+                and normalize_identity(level.get("name")) == retirement_identity
+            ),
             -1,
         )
-        if retirement_index < 0:
+        if retirement_name and retirement_index < 0:
             sites.append({**base, "retirement_level": retirement_name})
             counts["rule_missing"] += 1
             continue
@@ -744,6 +754,23 @@ def build_retirement_progress(
                 }
             )
             counts["rule_missing"] += 1
+            continue
+
+        if not retirement_name:
+            next_level = (
+                as_text(raw_levels[current_index + 1].get("name"))
+                if current_index + 1 < len(raw_levels)
+                else ""
+            )
+            counts["upgrading"] += 1
+            sites.append(
+                {
+                    **base,
+                    "next_level": next_level,
+                    "status": "upgrading",
+                    "route": route,
+                }
+            )
             continue
 
         retired = current_index >= retirement_index

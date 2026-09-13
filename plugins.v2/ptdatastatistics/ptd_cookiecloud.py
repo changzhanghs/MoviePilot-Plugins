@@ -13,7 +13,7 @@ from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
 from cryptography.hazmat.primitives.padding import PKCS7
 
 
-_METRIC_KEYS = {"seedingBonus", "bonusPerHour", "seedingBonusPerHour"}
+_METRIC_KEYS = {"seedingBonus", "bonusPerHour", "seedingBonusPerHour", "uploads"}
 _KNOWN_ALIASES = {
     "mteam": ("馒头", "mteam", "m-team"),
     "audiences": ("观众", "audiences", "audience"),
@@ -116,6 +116,9 @@ def _extract_metrics(user_info: Any) -> list[dict[str, Any]]:
         day_key, record = max(records, key=lambda item: _record_score(item[1], item[0]))
         ptd_site = str(record.get("site") or site_key)
         seeding_points = _number(record.get("seedingBonus"))
+        torrent_uploads = _number(record.get("uploads"))
+        if torrent_uploads is None:
+            torrent_uploads = _latest_number(records, "uploads")
         # Keep PTD's dedicated rates separate whenever both are available.
         bonus_hourly = _number(record.get("bonusPerHour"))
         seeding_points_hourly = _number(record.get("seedingBonusPerHour"))
@@ -126,7 +129,12 @@ def _extract_metrics(user_info: Any) -> list[dict[str, Any]]:
         # did not store seedingBonusPerHour for the site.
         if seeding_points_hourly is None and bonus_hourly is not None:
             seeding_points_hourly = bonus_hourly
-        if seeding_points is None and bonus_hourly is None and seeding_points_hourly is None:
+        if (
+            seeding_points is None
+            and bonus_hourly is None
+            and seeding_points_hourly is None
+            and torrent_uploads is None
+        ):
             continue
         output.append(
             {
@@ -135,6 +143,7 @@ def _extract_metrics(user_info: Any) -> list[dict[str, Any]]:
                 "seeding_points": seeding_points,
                 "estimated_bonus_hourly": bonus_hourly,
                 "seeding_points_hourly": seeding_points_hourly,
+                "torrent_uploads": torrent_uploads,
                 "source_updated_at": str(record.get("updateAt") or day_key or ""),
             }
         )

@@ -64,7 +64,7 @@ class PTDataStatistics(_PluginBase):
     plugin_name = "PT数据统计"
     plugin_desc = "统计 PT 站点累计与每日上传下载，提供历史、养老进度和通知。"
     plugin_icon = "ptdatastatistics.svg"
-    plugin_version = "2.0.3"
+    plugin_version = "2.0.4"
     plugin_author = "cz"
     author_url = "https://github.com/changzhanghs"
     plugin_config_prefix = "ptdatastatistics_"
@@ -788,6 +788,7 @@ class PTDataStatistics(_PluginBase):
                 ) if domain in valid_by_domain else None,
                 "seeding_points": None,
                 "seeding_points_hourly": None,
+                "torrent_uploads": None,
             }
             ptd_metric = ptd_by_domain.get(domain)
             if ptd_metric:
@@ -803,6 +804,10 @@ class PTDataStatistics(_PluginBase):
                 if ptd_metric.get("seeding_points_hourly") is not None:
                     item["seeding_points_hourly"] = as_float(
                         ptd_metric.get("seeding_points_hourly")
+                    )
+                if ptd_metric.get("torrent_uploads") is not None:
+                    item["torrent_uploads"] = as_float(
+                        ptd_metric.get("torrent_uploads")
                     )
             sites.append(item)
             if current and delta["baseline_valid"] and (
@@ -871,6 +876,9 @@ class PTDataStatistics(_PluginBase):
                 ),
                 "seeding_points_hourly": as_float(
                     ptd_by_domain.get(item["domain"], {}).get("seeding_points_hourly")
+                ),
+                "torrent_uploads": as_float(
+                    ptd_by_domain.get(item["domain"], {}).get("torrent_uploads")
                 ),
             }
             for item in latest_valid_all

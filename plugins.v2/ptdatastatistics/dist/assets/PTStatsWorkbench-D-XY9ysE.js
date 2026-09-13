@@ -14976,119 +14976,120 @@ const _hoisted_85 = { class: "retirement-site-option__title" };
 const _hoisted_86 = { class: "retirement-detail" };
 const _hoisted_87 = { class: "retirement-detail__header" };
 const _hoisted_88 = { class: "retirement-detail__identity" };
-const _hoisted_89 = { class: "target-level" };
-const _hoisted_90 = { class: "retirement-detail__right" };
-const _hoisted_91 = { class: "retirement-detail__metrics" };
-const _hoisted_92 = {
+const _hoisted_89 = { key: 0 };
+const _hoisted_90 = { class: "target-level" };
+const _hoisted_91 = { class: "retirement-detail__right" };
+const _hoisted_92 = { class: "retirement-detail__metrics" };
+const _hoisted_93 = {
   key: 0,
   class: "wealthy-retirement-state",
   "aria-label": "富贵养老状态"
 };
-const _hoisted_93 = { class: "wealthy-retirement-state__icon" };
-const _hoisted_94 = {
+const _hoisted_94 = { class: "wealthy-retirement-state__icon" };
+const _hoisted_95 = {
   key: 1,
   class: "retirement-route-rail",
-  "aria-label": "养老等级进度"
+  "aria-label": "等级进度"
 };
-const _hoisted_95 = { class: "retirement-route-rail__line" };
-const _hoisted_96 = { class: "retirement-route-rail__nodes" };
-const _hoisted_97 = {
+const _hoisted_96 = { class: "retirement-route-rail__line" };
+const _hoisted_97 = { class: "retirement-route-rail__nodes" };
+const _hoisted_98 = {
   class: "retirement-route-node__marker",
   "aria-hidden": "true"
 };
-const _hoisted_98 = { class: "retirement-route-node__badge" };
-const _hoisted_99 = {
+const _hoisted_99 = { class: "retirement-route-node__badge" };
+const _hoisted_100 = {
   key: 2,
   class: "retirement-target-grid"
 };
-const _hoisted_100 = { class: "requirement-panel" };
-const _hoisted_101 = { class: "requirement-panel__heading" };
-const _hoisted_102 = {
+const _hoisted_101 = { class: "requirement-panel" };
+const _hoisted_102 = { class: "requirement-panel__heading" };
+const _hoisted_103 = {
   key: 0,
   class: "spring-upgrade-tasks",
   role: "tablist",
   "aria-label": "春天神王晋级任务"
 };
-const _hoisted_103 = ["aria-selected", "onClick"];
-const _hoisted_104 = {
+const _hoisted_104 = ["aria-selected", "onClick"];
+const _hoisted_105 = {
   key: 1,
   class: "requirement-panel__subtitle"
 };
-const _hoisted_105 = {
+const _hoisted_106 = {
   key: 0,
   class: "requirement-overview"
 };
-const _hoisted_106 = { class: "requirement-overview__score" };
-const _hoisted_107 = { class: "requirement-table" };
-const _hoisted_108 = { class: "requirement-row__item" };
-const _hoisted_109 = { class: "requirement-row__progress" };
-const _hoisted_110 = {
+const _hoisted_107 = { class: "requirement-overview__score" };
+const _hoisted_108 = { class: "requirement-table" };
+const _hoisted_109 = { class: "requirement-row__item" };
+const _hoisted_110 = { class: "requirement-row__progress" };
+const _hoisted_111 = {
   key: 1,
   class: "compact-empty-state"
 };
-const _hoisted_111 = {
+const _hoisted_112 = {
   key: 3,
   class: "retirement-levels"
 };
-const _hoisted_112 = { class: "retirement-levels__heading" };
-const _hoisted_113 = { class: "retirement-levels__table" };
-const _hoisted_114 = ["open"];
-const _hoisted_115 = { class: "retirement-level-row__detail" };
-const _hoisted_116 = { key: 0 };
-const _hoisted_117 = { key: 1 };
-const _hoisted_118 = {
+const _hoisted_113 = { class: "retirement-levels__heading" };
+const _hoisted_114 = { class: "retirement-levels__table" };
+const _hoisted_115 = ["open"];
+const _hoisted_116 = { class: "retirement-level-row__detail" };
+const _hoisted_117 = { key: 0 };
+const _hoisted_118 = { key: 1 };
+const _hoisted_119 = {
   key: 4,
   class: "empty-state compact-empty"
 };
-const _hoisted_119 = {
+const _hoisted_120 = {
   key: 1,
   class: "empty-state"
 };
-const _hoisted_120 = { class: "section-block settings-layout" };
-const _hoisted_121 = { class: "settings-card" };
+const _hoisted_121 = { class: "section-block settings-layout" };
 const _hoisted_122 = { class: "settings-card" };
-const _hoisted_123 = { class: "settings-card settings-card--wide" };
-const _hoisted_124 = {
+const _hoisted_123 = { class: "settings-card" };
+const _hoisted_124 = { class: "settings-card settings-card--wide" };
+const _hoisted_125 = {
   key: 0,
   class: "ptd-settings-grid"
 };
-const _hoisted_125 = { class: "settings-card settings-card--wide wealthy-site-settings" };
-const _hoisted_126 = { class: "section-heading" };
-const _hoisted_127 = {
+const _hoisted_126 = { class: "settings-card settings-card--wide wealthy-site-settings" };
+const _hoisted_127 = { class: "section-heading" };
+const _hoisted_128 = {
   key: 0,
   class: "wealthy-selection-summary"
 };
-const _hoisted_128 = { class: "wealthy-selection-summary__sites" };
-const _hoisted_129 = {
+const _hoisted_129 = { class: "wealthy-selection-summary__sites" };
+const _hoisted_130 = {
   key: 0,
   class: "wealthy-selection-avatars",
   "aria-hidden": "true"
 };
-const _hoisted_130 = { class: "wealthy-selection-summary__copy" };
-const _hoisted_131 = {
+const _hoisted_131 = { class: "wealthy-selection-summary__copy" };
+const _hoisted_132 = {
   key: 1,
   class: "empty-state compact-empty"
 };
-const _hoisted_132 = { class: "wealthy-picker-toolbar" };
-const _hoisted_133 = { class: "wealthy-picker-status" };
-const _hoisted_134 = {
+const _hoisted_133 = { class: "wealthy-picker-toolbar" };
+const _hoisted_134 = { class: "wealthy-picker-status" };
+const _hoisted_135 = {
   key: 0,
   class: "wealthy-site-picker"
 };
-const _hoisted_135 = ["aria-pressed", "onClick"];
-const _hoisted_136 = {
+const _hoisted_136 = ["aria-pressed", "onClick"];
+const _hoisted_137 = {
   key: 1,
   class: "empty-state compact-empty"
 };
-const _hoisted_137 = { class: "settings-card settings-card--wide" };
-const _hoisted_138 = { class: "section-heading" };
-const _hoisted_139 = { class: "rules-upload__actions" };
-const _hoisted_140 = {
+const _hoisted_138 = { class: "settings-card settings-card--wide" };
+const _hoisted_139 = { class: "section-heading" };
+const _hoisted_140 = { class: "rules-upload__actions" };
+const _hoisted_141 = {
   key: 0,
   class: "rules-upload"
 };
-const _hoisted_141 = { key: 0 };
-const _hoisted_142 = { class: "settings-card settings-card--wide settings-actions" };
+const _hoisted_142 = { key: 0 };
+const _hoisted_143 = { class: "settings-card settings-card--wide settings-actions" };
 
 const {computed,inject,nextTick,onBeforeUnmount,onMounted,ref,watch} = await importShared('vue');
 
@@ -15499,9 +15500,10 @@ function stateMeta(state) {
   if (state === 'waiting') return { label: '待数据', color: 'warning', icon: 'mdi-clock-outline' }
   return { label: '未加入', color: 'secondary', icon: 'mdi-lock-outline' }
 }
-function retirementMeta(status) {
+function retirementMeta(status, site = null) {
   if (status === 'wealthy_retired') return { label: '富贵养老', color: 'warning', icon: 'mdi-crown' }
   if (status === 'retired') return { label: '已养老', color: 'success', icon: 'mdi-shield-check-outline' }
+  if (status === 'upgrading' && site && !site.retirement_level && !site.next_level) return { label: '最高等级', color: 'primary', icon: 'mdi-medal-outline' }
   if (status === 'upgrading') return { label: '升级中', color: 'warning', icon: 'mdi-trending-up' }
   return { label: '规则缺失', color: 'secondary', icon: 'mdi-help-circle-outline' }
 }
@@ -15767,7 +15769,7 @@ function retirementRoute(site) {
 function nextLevelOverallProgress(site) {
   if (site?.status === 'wealthy_retired') return 100
   const nextLevel = nextLevelRule(site);
-  if (!nextLevel) return site?.status === 'retired' ? 100 : 0
+  if (!nextLevel) return site?.status === 'retired' || !site?.retirement_level ? 100 : 0
   const taskIndex = springUpgradeTasks(site, nextLevel).length ? 0 : null;
   return averageRequirementProgress(requirementRows(site, nextLevel, taskIndex))
 }
@@ -16925,7 +16927,7 @@ return (_ctx, _cache) => {
                                 _createElementVNode("strong", null, _toDisplayString(site.site_name), 1),
                                 _createElementVNode("em", {
                                   class: _normalizeClass(`status-${site.status}`)
-                                }, _toDisplayString(retirementMeta(site.status).label), 3)
+                                }, _toDisplayString(retirementMeta(site.status, site).label), 3)
                               ]),
                               _createElementVNode("span", null, _toDisplayString(site.current_level || '站点未提供等级'), 1),
                               _createVNode(_component_VProgressLinear, {
@@ -16955,20 +16957,15 @@ return (_ctx, _cache) => {
                               _cache[67] || (_cache[67] = _createTextVNode("当前等级 ", -1)),
                               _createElementVNode("strong", null, _toDisplayString(selectedRetirementSite.value.current_level || '站点未提供'), 1)
                             ]),
-                            _createElementVNode("span", null, [
-                              _cache[68] || (_cache[68] = _createTextVNode("目标等级 ", -1)),
-                              _createElementVNode("strong", _hoisted_89, [
-                                _createTextVNode(_toDisplayString(selectedRetirementSite.value.retirement_level || '规则待补充'), 1),
-                                (selectedRetirementSite.value.retirement_level)
-                                  ? (_openBlock(), _createElementBlock(_Fragment, { key: 0 }, [
-                                      _createTextVNode("（保号）")
-                                    ], 64))
-                                  : _createCommentVNode("", true)
-                              ])
-                            ])
+                            (selectedRetirementSite.value.retirement_level)
+                              ? (_openBlock(), _createElementBlock("span", _hoisted_89, [
+                                  _cache[68] || (_cache[68] = _createTextVNode("目标等级 ", -1)),
+                                  _createElementVNode("strong", _hoisted_90, _toDisplayString(selectedRetirementSite.value.retirement_level) + "（保号）", 1)
+                                ]))
+                              : _createCommentVNode("", true)
                           ])
                         ]),
-                        _createElementVNode("div", _hoisted_90, [
+                        _createElementVNode("div", _hoisted_91, [
                           (selectedRetirementSite.value.status === 'wealthy_retired')
                             ? (_openBlock(), _createBlock(_component_VChip, {
                                 key: 0,
@@ -16982,7 +16979,7 @@ return (_ctx, _cache) => {
                                 _: 1
                               }))
                             : _createCommentVNode("", true),
-                          _createElementVNode("div", _hoisted_91, [
+                          _createElementVNode("div", _hoisted_92, [
                             _createElementVNode("span", null, [
                               _cache[70] || (_cache[70] = _createTextVNode("上传", -1)),
                               _createElementVNode("strong", null, _toDisplayString(_unref(formatBytes)(selectedRetirementSite.value.upload)), 1)
@@ -16999,8 +16996,8 @@ return (_ctx, _cache) => {
                         ])
                       ]),
                       (selectedRetirementSite.value.status === 'wealthy_retired')
-                        ? (_openBlock(), _createElementBlock("div", _hoisted_92, [
-                            _createElementVNode("div", _hoisted_93, [
+                        ? (_openBlock(), _createElementBlock("div", _hoisted_93, [
+                            _createElementVNode("div", _hoisted_94, [
                               _createVNode(_component_VIcon, {
                                 icon: "mdi-crown",
                                 size: "28"
@@ -17013,12 +17010,12 @@ return (_ctx, _cache) => {
                             ])
                           ]))
                         : (selectedRetirementView.value.route.length)
-                          ? (_openBlock(), _createElementBlock("div", _hoisted_94, [
+                          ? (_openBlock(), _createElementBlock("div", _hoisted_95, [
                               _createElementVNode("div", {
                                 class: "retirement-route-rail__track",
                                 style: _normalizeStyle(selectedRetirementView.value.routeStyle)
                               }, [
-                                _createElementVNode("div", _hoisted_95, [
+                                _createElementVNode("div", _hoisted_96, [
                                   _createVNode(_component_VProgressLinear, {
                                     "model-value": selectedRetirementView.value.routeProgress,
                                     color: "primary",
@@ -17028,15 +17025,15 @@ return (_ctx, _cache) => {
                                     rounded: ""
                                   }, null, 8, ["model-value"])
                                 ]),
-                                _createElementVNode("div", _hoisted_96, [
+                                _createElementVNode("div", _hoisted_97, [
                                   (_openBlock(true), _createElementBlock(_Fragment, null, _renderList(selectedRetirementView.value.route, (level, index) => {
                                     return (_openBlock(), _createElementBlock("div", {
                                       key: level.name,
                                       class: _normalizeClass({ 'is-reached': level.reached, 'is-current': level.is_current, 'is-next': level.name === selectedRetirementSite.value.next_level, 'is-retirement': level.is_retirement })
                                     }, [
-                                      _createElementVNode("i", _hoisted_97, _toDisplayString(index + 1), 1),
+                                      _createElementVNode("i", _hoisted_98, _toDisplayString(index + 1), 1),
                                       _createElementVNode("strong", null, _toDisplayString(level.name), 1),
-                                      _createElementVNode("em", _hoisted_98, _toDisplayString(routeNodeStatus(selectedRetirementSite.value, level)), 1),
+                                      _createElementVNode("em", _hoisted_99, _toDisplayString(routeNodeStatus(selectedRetirementSite.value, level)), 1),
                                       _createElementVNode("small", null, _toDisplayString(routeNodeMeta(level)), 1)
                                     ], 2))
                                   }), 128))
@@ -17045,9 +17042,9 @@ return (_ctx, _cache) => {
                             ]))
                           : _createCommentVNode("", true),
                       (selectedRetirementSite.value.status !== 'wealthy_retired' && selectedRetirementView.value.route.length)
-                        ? (_openBlock(), _createElementBlock("div", _hoisted_99, [
-                            _createElementVNode("section", _hoisted_100, [
-                              _createElementVNode("div", _hoisted_101, [
+                        ? (_openBlock(), _createElementBlock("div", _hoisted_100, [
+                            _createElementVNode("section", _hoisted_101, [
+                              _createElementVNode("div", _hoisted_102, [
                                 _createElementVNode("div", null, [
                                   _createVNode(_component_VIcon, {
                                     icon: "mdi-target",
@@ -17058,7 +17055,7 @@ return (_ctx, _cache) => {
                                   _createElementVNode("strong", null, _toDisplayString(selectedRetirementSite.value.next_level || '已是最高等级'), 1)
                                 ]),
                                 (selectedRetirementView.value.upgradeTasks.length)
-                                  ? (_openBlock(), _createElementBlock("div", _hoisted_102, [
+                                  ? (_openBlock(), _createElementBlock("div", _hoisted_103, [
                                       (_openBlock(true), _createElementBlock(_Fragment, null, _renderList(selectedRetirementView.value.upgradeTasks, (task, index) => {
                                         return (_openBlock(), _createElementBlock("button", {
                                           key: task.title,
@@ -17076,10 +17073,10 @@ return (_ctx, _cache) => {
                                             _createElementVNode("strong", null, _toDisplayString(task.title), 1),
                                             _createElementVNode("small", null, _toDisplayString(task.subtitle), 1)
                                           ])
-                                        ], 10, _hoisted_103))
+                                        ], 10, _hoisted_104))
                                       }), 128))
                                     ]))
-                                  : (_openBlock(), _createElementBlock("div", _hoisted_104, "完成以下要求即可升级，继续享受更多权益。")),
+                                  : (_openBlock(), _createElementBlock("div", _hoisted_105, "完成以下要求即可升级，继续享受更多权益。")),
                                 _createVNode(_component_VChip, {
                                   color: "warning",
                                   size: "small",
@@ -17098,8 +17095,8 @@ return (_ctx, _cache) => {
                                 })
                               ]),
                               (selectedRetirementView.value.requirements.length)
-                                ? (_openBlock(), _createElementBlock("div", _hoisted_105, [
-                                    _createElementVNode("div", _hoisted_106, [
+                                ? (_openBlock(), _createElementBlock("div", _hoisted_106, [
+                                    _createElementVNode("div", _hoisted_107, [
                                       _createVNode(_component_VProgressCircular, {
                                         "model-value": selectedRetirementView.value.overallProgress,
                                         size: 124,
@@ -17115,7 +17112,7 @@ return (_ctx, _cache) => {
                                       _createElementVNode("b", null, _toDisplayString(selectedRetirementView.value.overallProgress) + "%", 1),
                                       _createElementVNode("small", null, "已完成 " + _toDisplayString(selectedRetirementView.value.completedCount) + " 项 · 待完成 " + _toDisplayString(selectedRetirementView.value.pendingCount) + " 项", 1)
                                     ]),
-                                    _createElementVNode("div", _hoisted_107, [
+                                    _createElementVNode("div", _hoisted_108, [
                                       _cache[76] || (_cache[76] = _createElementVNode("div", { class: "requirement-table__head" }, [
                                         _createElementVNode("span", null, "项目"),
                                         _createElementVNode("span", null, "目标要求"),
@@ -17129,7 +17126,7 @@ return (_ctx, _cache) => {
                                           key: row.key,
                                           class: "requirement-row"
                                         }, [
-                                          _createElementVNode("span", _hoisted_108, [
+                                          _createElementVNode("span", _hoisted_109, [
                                             _createVNode(_component_VIcon, {
                                               icon: row.icon,
                                               color: "secondary",
@@ -17145,7 +17142,7 @@ return (_ctx, _cache) => {
                                             class: _normalizeClass({ 'text-success': row.complete, 'text-warning': row.unavailable })
                                           }, _toDisplayString(row.complete ? '—' : row.detail.replace(/^剩余\s*/, '')), 3),
                                           _createElementVNode("span", null, _toDisplayString(row.eta), 1),
-                                          _createElementVNode("span", _hoisted_109, [
+                                          _createElementVNode("span", _hoisted_110, [
                                             _createVNode(_component_VProgressLinear, {
                                               "model-value": row.progress,
                                               color: row.complete ? 'success' : row.unavailable ? 'warning' : 'primary',
@@ -17159,13 +17156,13 @@ return (_ctx, _cache) => {
                                       }), 128))
                                     ])
                                   ]))
-                                : (_openBlock(), _createElementBlock("div", _hoisted_110, "没有后续等级要求"))
+                                : (_openBlock(), _createElementBlock("div", _hoisted_111, "没有后续等级要求"))
                             ])
                           ]))
                         : _createCommentVNode("", true),
                       (selectedRetirementView.value.levels.length)
-                        ? (_openBlock(), _createElementBlock("section", _hoisted_111, [
-                            _createElementVNode("div", _hoisted_112, [
+                        ? (_openBlock(), _createElementBlock("section", _hoisted_112, [
+                            _createElementVNode("div", _hoisted_113, [
                               _createElementVNode("div", null, [
                                 _createVNode(_component_VIcon, {
                                   icon: "mdi-chart-bar",
@@ -17174,7 +17171,7 @@ return (_ctx, _cache) => {
                                 _cache[77] || (_cache[77] = _createElementVNode("strong", null, "等级路线与要求", -1))
                               ])
                             ]),
-                            _createElementVNode("div", _hoisted_113, [
+                            _createElementVNode("div", _hoisted_114, [
                               _cache[78] || (_cache[78] = _createElementVNode("div", { class: "retirement-levels__columns" }, [
                                 _createElementVNode("span", null, "等级"),
                                 _createElementVNode("span", null, "注册"),
@@ -17206,24 +17203,24 @@ return (_ctx, _cache) => {
                                       size: "18"
                                     })
                                   ]),
-                                  _createElementVNode("div", _hoisted_115, [
+                                  _createElementVNode("div", _hoisted_116, [
                                     (level.description)
-                                      ? (_openBlock(), _createElementBlock("span", _hoisted_116, _toDisplayString(level.description), 1))
+                                      ? (_openBlock(), _createElementBlock("span", _hoisted_117, _toDisplayString(level.description), 1))
                                       : _createCommentVNode("", true),
                                     (level.missing?.length)
-                                      ? (_openBlock(), _createElementBlock("strong", _hoisted_117, "未达成：" + _toDisplayString(routeMissingLabel(level)), 1))
+                                      ? (_openBlock(), _createElementBlock("strong", _hoisted_118, "未达成：" + _toDisplayString(routeMissingLabel(level)), 1))
                                       : _createCommentVNode("", true)
                                   ])
-                                ], 10, _hoisted_114))
+                                ], 10, _hoisted_115))
                               }), 128))
                             ])
                           ]))
-                        : (_openBlock(), _createElementBlock("div", _hoisted_118, "该站等级规则尚未确定"))
+                        : (_openBlock(), _createElementBlock("div", _hoisted_119, "该站等级规则尚未确定"))
                     ])
                   ]))
                 : _createCommentVNode("", true),
               (!retirement.value.sites?.length)
-                ? (_openBlock(), _createElementBlock("div", _hoisted_119, [
+                ? (_openBlock(), _createElementBlock("div", _hoisted_120, [
                     _createVNode(_component_VIcon, {
                       icon: "mdi-shield-search-outline",
                       size: "42"
@@ -17237,8 +17234,8 @@ return (_ctx, _cache) => {
         }),
         _createVNode(_component_VWindowItem, { value: "config" }, {
           default: _withCtx(() => [
-            _createElementVNode("section", _hoisted_120, [
-              _createElementVNode("div", _hoisted_121, [
+            _createElementVNode("section", _hoisted_121, [
+              _createElementVNode("div", _hoisted_122, [
                 _cache[80] || (_cache[80] = _createElementVNode("div", { class: "section-heading" }, [
                   _createElementVNode("div", null, [
                     _createElementVNode("span", { class: "section-kicker" }, "GENERAL"),
@@ -17273,7 +17270,7 @@ return (_ctx, _cache) => {
                   class: "mt-3"
                 }, null, 8, ["modelValue"])
               ]),
-              _createElementVNode("div", _hoisted_122, [
+              _createElementVNode("div", _hoisted_123, [
                 _cache[81] || (_cache[81] = _createElementVNode("div", { class: "section-heading" }, [
                   _createElementVNode("div", null, [
                     _createElementVNode("span", { class: "section-kicker" }, "NOTIFICATION"),
@@ -17311,7 +17308,7 @@ return (_ctx, _cache) => {
                 }, null, 8, ["modelValue"]),
                 _cache[82] || (_cache[82] = _createElementVNode("div", { class: "setting-hint mt-2" }, "Cron 错过后不补发；无数据站点不会通知。", -1))
               ]),
-              _createElementVNode("div", _hoisted_123, [
+              _createElementVNode("div", _hoisted_124, [
                 _cache[83] || (_cache[83] = _createElementVNode("div", { class: "section-heading" }, [
                   _createElementVNode("div", null, [
                     _createElementVNode("span", { class: "section-kicker" }, "PTD RECEIVER"),
@@ -17328,7 +17325,7 @@ return (_ctx, _cache) => {
                   "persistent-hint": ""
                 }, null, 8, ["modelValue"]),
                 (settingsDraft.value.ptd_cookiecloud_enabled)
-                  ? (_openBlock(), _createElementBlock("div", _hoisted_124, [
+                  ? (_openBlock(), _createElementBlock("div", _hoisted_125, [
                       _createVNode(_component_VTextField, {
                         "model-value": ptdReceiverUrl.value,
                         class: "ptd-receiver-url",
@@ -17403,8 +17400,8 @@ return (_ctx, _cache) => {
                   : _createCommentVNode("", true),
                 _cache[84] || (_cache[84] = _createElementVNode("div", { class: "setting-hint mt-3" }, "先保存本页，再在 PTD 中新增 CookieCloud 备份服务器：PTD 与 MoviePilot 同机时使用上方 localhost 地址；其它局域网设备将 localhost 替换为 MoviePilot 主机 IP。UUID、密码和可选 Headers 与这里保持一致；备份项目勾选“用户信息”。收到新备份后会立即解析并覆盖上一份数据，过程可在 MoviePilot 插件日志中查看。", -1))
               ]),
-              _createElementVNode("div", _hoisted_125, [
-                _createElementVNode("div", _hoisted_126, [
+              _createElementVNode("div", _hoisted_126, [
+                _createElementVNode("div", _hoisted_127, [
                   _cache[85] || (_cache[85] = _createElementVNode("div", null, [
                     _createElementVNode("span", { class: "section-kicker" }, "WEALTHY RETIREMENT"),
                     _createElementVNode("h2", null, "富贵养老")
@@ -17422,10 +17419,10 @@ return (_ctx, _cache) => {
                 ]),
                 _cache[93] || (_cache[93] = _createElementVNode("div", { class: "setting-hint" }, "选择当前拥有 VIP、捐赠者或其它特殊会员身份的站点；保存后该站养老进度显示为“富贵养老”。选择结果按 MoviePilot 站点 ID 保存。", -1)),
                 (wealthyRetirementSiteOptions.value.length)
-                  ? (_openBlock(), _createElementBlock("div", _hoisted_127, [
-                      _createElementVNode("div", _hoisted_128, [
+                  ? (_openBlock(), _createElementBlock("div", _hoisted_128, [
+                      _createElementVNode("div", _hoisted_129, [
                         (selectedWealthyRetirementSites.value.length)
-                          ? (_openBlock(), _createElementBlock("div", _hoisted_129, [
+                          ? (_openBlock(), _createElementBlock("div", _hoisted_130, [
                               (_openBlock(true), _createElementBlock(_Fragment, null, _renderList(selectedWealthyRetirementSites.value.slice(0, 5), (site) => {
                                 return (_openBlock(), _createBlock(_sfc_main$2, {
                                   key: wealthyRetirementSiteKey(site),
@@ -17436,7 +17433,7 @@ return (_ctx, _cache) => {
                               }), 128))
                             ]))
                           : _createCommentVNode("", true),
-                        _createElementVNode("div", _hoisted_130, [
+                        _createElementVNode("div", _hoisted_131, [
                           _createElementVNode("strong", null, _toDisplayString(selectedWealthyRetirementSites.value.length ? selectedWealthyRetirementSites.value.map(site => site.site_name).join('、') : '尚未选择站点'), 1),
                           _createElementVNode("small", null, _toDisplayString(selectedWealthyRetirementSites.value.length ? `已标记 ${selectedWealthyRetirementSites.value.length} 个特殊会员站点` : '需要时打开选择器，不会占用设置页空间'), 1)
                         ])
@@ -17453,7 +17450,7 @@ return (_ctx, _cache) => {
                         _: 1
                       })
                     ]))
-                  : (_openBlock(), _createElementBlock("div", _hoisted_131, "MoviePilot 暂无可选择的站点")),
+                  : (_openBlock(), _createElementBlock("div", _hoisted_132, "MoviePilot 暂无可选择的站点")),
                 _createVNode(_component_VDialog, {
                   modelValue: wealthyPickerOpen.value,
                   "onUpdate:modelValue": _cache[25] || (_cache[25] = $event => ((wealthyPickerOpen).value = $event)),
@@ -17481,7 +17478,7 @@ return (_ctx, _cache) => {
                         }),
                         _createVNode(_component_VCardText, { class: "wealthy-picker-dialog__body" }, {
                           default: _withCtx(() => [
-                            _createElementVNode("div", _hoisted_132, [
+                            _createElementVNode("div", _hoisted_133, [
                               _createVNode(_component_VTextField, {
                                 modelValue: wealthySiteSearch.value,
                                 "onUpdate:modelValue": _cache[23] || (_cache[23] = $event => ((wealthySiteSearch).value = $event)),
@@ -17505,12 +17502,12 @@ return (_ctx, _cache) => {
                                 _: 1
                               }, 8, ["disabled"])
                             ]),
-                            _createElementVNode("div", _hoisted_133, [
+                            _createElementVNode("div", _hoisted_134, [
                               _createElementVNode("span", null, "已选 " + _toDisplayString(settingsDraft.value.wealthy_retirement_sites?.length || 0) + " 个", 1),
                               _cache[89] || (_cache[89] = _createElementVNode("small", null, "已选站点优先显示", -1))
                             ]),
                             (filteredWealthyRetirementSiteOptions.value.length)
-                              ? (_openBlock(), _createElementBlock("div", _hoisted_134, [
+                              ? (_openBlock(), _createElementBlock("div", _hoisted_135, [
                                   (_openBlock(true), _createElementBlock(_Fragment, null, _renderList(filteredWealthyRetirementSiteOptions.value, (site) => {
                                     return (_openBlock(), _createElementBlock("button", {
                                       key: wealthyRetirementSiteKey(site),
@@ -17532,10 +17529,10 @@ return (_ctx, _cache) => {
                                         icon: isWealthyRetirementSiteSelected(site) ? 'mdi-check-circle' : 'mdi-circle-outline',
                                         size: "22"
                                       }, null, 8, ["icon"])
-                                    ], 10, _hoisted_135))
+                                    ], 10, _hoisted_136))
                                   }), 128))
                                 ]))
-                              : (_openBlock(), _createElementBlock("div", _hoisted_136, [
+                              : (_openBlock(), _createElementBlock("div", _hoisted_137, [
                                   _createVNode(_component_VIcon, {
                                     icon: "mdi-magnify-close",
                                     size: "34"
@@ -17568,13 +17565,13 @@ return (_ctx, _cache) => {
                   _: 1
                 }, 8, ["modelValue"])
               ]),
-              _createElementVNode("div", _hoisted_137, [
-                _createElementVNode("div", _hoisted_138, [
+              _createElementVNode("div", _hoisted_138, [
+                _createElementVNode("div", _hoisted_139, [
                   _cache[97] || (_cache[97] = _createElementVNode("div", null, [
                     _createElementVNode("span", { class: "section-kicker" }, "LEVEL RULES"),
                     _createElementVNode("h2", null, "等级规则")
                   ], -1)),
-                  _createElementVNode("div", _hoisted_139, [
+                  _createElementVNode("div", _hoisted_140, [
                     _createVNode(_component_VBtn, {
                       variant: "tonal",
                       color: "primary",
@@ -17621,19 +17618,19 @@ return (_ctx, _cache) => {
                   onChange: uploadRuleFile
                 }, null, 544),
                 (customRuleSites.value.length)
-                  ? (_openBlock(), _createElementBlock("div", _hoisted_140, [
+                  ? (_openBlock(), _createElementBlock("div", _hoisted_141, [
                       _createElementVNode("div", null, [
                         _createElementVNode("strong", null, "已载入 " + _toDisplayString(customRuleSites.value.length) + " 个站点", 1),
                         _createElementVNode("p", null, _toDisplayString(customRuleSites.value.join('、')), 1),
                         (rulesUploadName.value)
-                          ? (_openBlock(), _createElementBlock("small", _hoisted_141, "文件：" + _toDisplayString(rulesUploadName.value), 1))
+                          ? (_openBlock(), _createElementBlock("small", _hoisted_142, "文件：" + _toDisplayString(rulesUploadName.value), 1))
                           : _createCommentVNode("", true)
                       ])
                     ]))
                   : _createCommentVNode("", true),
                 _cache[98] || (_cache[98] = _createElementVNode("div", { class: "setting-hint mt-3" }, "支持 site、aliases、domains、VIP 等级、任选条件、做种体积、发布数和平均做种时间；流量门槛使用字节，等级按 levels 中的顺序展示。模板中的 _comment 仅用于说明，导入时忽略；文件只写入插件设置，不会上传到外部服务。", -1))
               ]),
-              _createElementVNode("div", _hoisted_142, [
+              _createElementVNode("div", _hoisted_143, [
                 _cache[100] || (_cache[100] = _createElementVNode("div", null, [
                   _createElementVNode("strong", null, "数据来源"),
                   _createElementVNode("p", null, "上传、下载、分享率等仍仅来自 MoviePilot；PTD 只补充最新时魔和做种积分。")
@@ -17664,6 +17661,6 @@ return (_ctx, _cache) => {
 }
 
 };
-const PTStatsWorkbench = /*#__PURE__*/_export_sfc(_sfc_main, [['__scopeId',"data-v-ec1c5be2"]]);
+const PTStatsWorkbench = /*#__PURE__*/_export_sfc(_sfc_main, [['__scopeId',"data-v-1af0ce01"]]);
 
 export { PTStatsWorkbench as P };
