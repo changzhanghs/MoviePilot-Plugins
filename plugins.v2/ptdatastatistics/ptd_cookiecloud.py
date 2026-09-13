@@ -13,7 +13,13 @@ from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
 from cryptography.hazmat.primitives.padding import PKCS7
 
 
-_METRIC_KEYS = {"seedingBonus", "bonusPerHour", "seedingBonusPerHour", "uploads"}
+_METRIC_KEYS = {
+    "seedingBonus",
+    "bonusPerHour",
+    "seedingBonusPerHour",
+    "uploads",
+    "levelName",
+}
 _KNOWN_ALIASES = {
     "mteam": ("馒头", "mteam", "m-team"),
     "audiences": ("观众", "audiences", "audience"),
@@ -115,6 +121,7 @@ def _extract_metrics(user_info: Any) -> list[dict[str, Any]]:
             continue
         day_key, record = max(records, key=lambda item: _record_score(item[1], item[0]))
         ptd_site = str(record.get("site") or site_key)
+        user_level = str(record.get("levelName") or "").strip()
         seeding_points = _number(record.get("seedingBonus"))
         torrent_uploads = _number(record.get("uploads"))
         if torrent_uploads is None:
@@ -134,12 +141,14 @@ def _extract_metrics(user_info: Any) -> list[dict[str, Any]]:
             and bonus_hourly is None
             and seeding_points_hourly is None
             and torrent_uploads is None
+            and not user_level
         ):
             continue
         output.append(
             {
                 "ptd_site": ptd_site,
                 "site_name": str(record.get("siteName") or record.get("name") or ""),
+                "user_level": user_level,
                 "seeding_points": seeding_points,
                 "estimated_bonus_hourly": bonus_hourly,
                 "seeding_points_hourly": seeding_points_hourly,

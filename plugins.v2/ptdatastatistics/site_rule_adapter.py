@@ -66,6 +66,28 @@ _LEVEL_SUFFIXES = (
 # MoviePilot 部分站点返回本地化等级名，而固定来源规则只记录英文等级名。
 # 这里仅补充已经在插件旧版中验证过的兼容别名，不修改上游门槛。
 _LEVEL_COMPATIBILITY_ALIASES = {
+    "RailgunPT": {
+        "Lv0": ("User", "Peasant"),
+        "Lv1": ("Power User",),
+        "Lv2": ("Elite User",),
+        "Lv3": ("Crazy User",),
+        "Lv4": ("Insane User",),
+        "Lv5": ("Veteran User",),
+        "Lv6": ("Extreme User",),
+        "Lv7": ("Ultimate User",),
+        "Lv8": ("Nexus Master",),
+    },
+    "藏宝阁": {
+        "寻宝学徒": ("User", "Peasant"),
+        "初入江湖": ("Power User",),
+        "熟练巧匠": ("Elite User",),
+        "慧眼识珍": ("Crazy User",),
+        "护阁精英": ("Insane User",),
+        "传法执事": ("Veteran User",),
+        "藏经长老": ("Extreme User",),
+        "镇阁宗师": ("Ultimate User",),
+        "殿堂尊者": ("Nexus Master",),
+    },
     "皇后": {
         "Elite User": ("貴人-正六品",),
         "Insane User": ("容華-正四品",),
