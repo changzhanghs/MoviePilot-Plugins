@@ -405,9 +405,10 @@ function stateMeta(state) {
   if (state === 'waiting') return { label: '待数据', color: 'warning', icon: 'mdi-clock-outline' }
   return { label: '未加入', color: 'secondary', icon: 'mdi-lock-outline' }
 }
-function retirementMeta(status) {
+function retirementMeta(status, site = null) {
   if (status === 'wealthy_retired') return { label: '富贵养老', color: 'warning', icon: 'mdi-crown' }
   if (status === 'retired') return { label: '已养老', color: 'success', icon: 'mdi-shield-check-outline' }
+  if (status === 'upgrading' && site && !site.retirement_level && !site.next_level) return { label: '最高等级', color: 'primary', icon: 'mdi-medal-outline' }
   if (status === 'upgrading') return { label: '升级中', color: 'warning', icon: 'mdi-trending-up' }
   return { label: '规则缺失', color: 'secondary', icon: 'mdi-help-circle-outline' }
 }
@@ -673,7 +674,7 @@ function retirementRoute(site) {
 function nextLevelOverallProgress(site) {
   if (site?.status === 'wealthy_retired') return 100
   const nextLevel = nextLevelRule(site)
-  if (!nextLevel) return site?.status === 'retired' ? 100 : 0
+  if (!nextLevel) return site?.status === 'retired' || !site?.retirement_level ? 100 : 0
   const taskIndex = springUpgradeTasks(site, nextLevel).length ? 0 : null
   return averageRequirementProgress(requirementRows(site, nextLevel, taskIndex))
 }
@@ -1198,7 +1199,7 @@ onBeforeUnmount(() => historyChart?.destroy())
                 >
                   <SiteAvatar :api="api" :site="site" :size="42" />
                   <span class="retirement-site-option__body">
-                    <span class="retirement-site-option__title"><strong>{{ site.site_name }}</strong><em :class="`status-${site.status}`">{{ retirementMeta(site.status).label }}</em></span>
+                    <span class="retirement-site-option__title"><strong>{{ site.site_name }}</strong><em :class="`status-${site.status}`">{{ retirementMeta(site.status, site).label }}</em></span>
                     <span>{{ site.current_level || '站点未提供等级' }}</span>
                     <VProgressLinear :model-value="nextLevelOverallProgress(site)" :color="site.status === 'wealthy_retired' ? 'warning' : 'primary'" bg-color="surface-variant" height="4" rounded />
                   </span>
@@ -1211,7 +1212,7 @@ onBeforeUnmount(() => historyChart?.destroy())
               <header class="retirement-detail__header">
                 <div class="retirement-detail__identity">
                   <SiteAvatar :api="api" :site="selectedRetirementSite" :size="58" />
-                  <div><h3>{{ selectedRetirementSite.site_name }}</h3><span>当前等级 <strong>{{ selectedRetirementSite.current_level || '站点未提供' }}</strong></span><span>目标等级 <strong class="target-level">{{ selectedRetirementSite.retirement_level || '规则待补充' }}<template v-if="selectedRetirementSite.retirement_level">（保号）</template></strong></span></div>
+                  <div><h3>{{ selectedRetirementSite.site_name }}</h3><span>当前等级 <strong>{{ selectedRetirementSite.current_level || '站点未提供' }}</strong></span><span v-if="selectedRetirementSite.retirement_level">目标等级 <strong class="target-level">{{ selectedRetirementSite.retirement_level }}（保号）</strong></span></div>
                 </div>
                 <div class="retirement-detail__right">
                   <VChip v-if="selectedRetirementSite.status === 'wealthy_retired'" class="wealthy-retirement-badge" prepend-icon="mdi-crown" variant="flat">富贵养老</VChip>
@@ -1228,7 +1229,7 @@ onBeforeUnmount(() => historyChart?.destroy())
                 <div><span>{{ selectedRetirementSite.wealthy_retirement_manual ? '手动指定站点' : 'VIP 会员等级' }}</span><strong>富贵养老</strong><small>{{ selectedRetirementSite.wealthy_retirement_manual ? '已在设置中手动标记；完整等级路线仍可在下方查看。' : '会员等级不强行映射普通等级，完整等级路线仍可在下方查看。' }}</small></div>
               </div>
 
-              <div v-else-if="selectedRetirementView.route.length" class="retirement-route-rail" aria-label="养老等级进度">
+              <div v-else-if="selectedRetirementView.route.length" class="retirement-route-rail" aria-label="等级进度">
                 <div
                   class="retirement-route-rail__track"
                   :style="selectedRetirementView.routeStyle"

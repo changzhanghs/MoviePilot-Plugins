@@ -650,12 +650,17 @@ class HostContractTests(unittest.TestCase):
         plugin._configured_sites = lambda: [
             {"id": 1, "name": "示例", "domain": "active.test", "is_active": True}
         ]
+        plugin._ptd_metrics_by_domain = lambda: {
+            "active.test": {"estimated_bonus_hourly": 2.0, "torrent_uploads": 12}
+        }
         plugin._now = lambda: datetime(2026, 9, 5, 12, 0, tzinfo=ZoneInfo("Asia/Shanghai"))
 
         result = plugin._build_overview()
 
         self.assertEqual(result.sites[0].estimated_bonus_hourly, 2.0)
+        self.assertEqual(result.sites[0].torrent_uploads, 12)
         self.assertEqual(result.retirement.sites[0].estimated_bonus_hourly, 2.0)
+        self.assertEqual(result.retirement.sites[0].torrent_uploads, 12)
 
     def test_notification_excludes_empty_sites_and_sends_at_most_once_per_day(self):
         plugin = PTDataStatistics.__new__(PTDataStatistics)

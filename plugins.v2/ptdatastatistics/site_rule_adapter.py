@@ -66,6 +66,13 @@ _LEVEL_SUFFIXES = (
 # MoviePilot 部分站点返回本地化等级名，而固定来源规则只记录英文等级名。
 # 这里仅补充已经在插件旧版中验证过的兼容别名，不修改上游门槛。
 _LEVEL_COMPATIBILITY_ALIASES = {
+    "皇后": {
+        "Elite User": ("貴人-正六品",),
+        "Insane User": ("容華-正四品",),
+        "Veteran User": ("貴嬪-正三品",),
+        "Extreme User": ("淑儀-正二品",),
+        "Ultimate User": ("貴妃-正一品",),
+    },
     "馒头": {
         "User": ("小卒",),
         "Power User": ("捕头",),
@@ -80,6 +87,10 @@ _LEVEL_COMPATIBILITY_ALIASES = {
 }
 
 _SITE_COMPATIBILITY_ALIASES = {
+    "Monikadesign": ("莫妮卡",),
+    "MyPT": ("我的PT",),
+    "PTTime": ("PT时间",),
+    "传道院": ("修道院",),
     "馒头": ("M-Team", "MTeam", "m-team"),
     "观众": ("Audiences", "Audience"),
     "彩虹岛": ("Rainbow", "CHDBits"),
@@ -123,6 +134,11 @@ def _level_patch(
 
 # 用户依据各站当前等级页校正的规则。上游生成文件保持原样，便于后续重新生成和审计。
 _SITE_RULE_PATCHES: dict[str, dict[str, Any]] = {
+    "Monikadesign": {"retirement_source_id": 8},
+    "MyPT": {"retirement_source_id": 10},
+    "PTTime": {"retirement_source_id": 9},
+    "传道院": {"retirement_source_id": 10},
+    "朱雀": {"retirement_source_id": 8},
     "春天": {
         "retirement_source_id": 5,
         "levels": {
@@ -434,7 +450,8 @@ def bundled_retirement_rules() -> dict[str, Mapping[str, Any]]:
                 ),
                 retirement_name,
             )
-        if not vip_levels and (not levels or not retirement_name):
+        # 即使站点没有公开保号等级，也保留普通等级路线，供下一级进度展示。
+        if not levels and not vip_levels:
             continue
         aliases = [str(raw_rule.get("source_key") or "").strip()]
         aliases.extend(str(item).strip() for item in raw_rule.get("aliases") or ())

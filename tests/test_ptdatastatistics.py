@@ -41,6 +41,7 @@ class PTDCookieCloudTests(unittest.TestCase):
                         "seedingBonus": 1000,
                         "seedingBonusPerHour": 2.5,
                         "uploaded": 999,
+                        "uploads": 4,
                     },
                     "2026-09-11": {
                         "site": "audiences",
@@ -56,6 +57,7 @@ class PTDCookieCloudTests(unittest.TestCase):
         self.assertEqual(values[0]["seeding_points"], 1200)
         self.assertEqual(values[0]["estimated_bonus_hourly"], 3.5)
         self.assertEqual(values[0]["seeding_points_hourly"], 2.5)
+        self.assertEqual(values[0]["torrent_uploads"], 4)
         self.assertNotIn("uploaded", values[0])
 
     def test_uses_bonus_rate_instead_of_seeding_points_rate_for_hourly_magic(self):
@@ -67,6 +69,7 @@ class PTDCookieCloudTests(unittest.TestCase):
                     "seedingBonus": 439_222,
                     "bonusPerHour": 41.35,
                     "seedingBonusPerHour": 12.45,
+                    "uploads": 0,
                 }
             }
         )
@@ -74,6 +77,21 @@ class PTDCookieCloudTests(unittest.TestCase):
         self.assertEqual(values[0]["seeding_points"], 439_222)
         self.assertEqual(values[0]["estimated_bonus_hourly"], 41.35)
         self.assertEqual(values[0]["seeding_points_hourly"], 12.45)
+        self.assertEqual(values[0]["torrent_uploads"], 0)
+
+    def test_extracts_torrent_uploads_without_bonus_metrics(self):
+        values = ptd_cookiecloud._extract_metrics({
+            "pterclub": {
+                "site": "pterclub",
+                "siteName": "猫站",
+                "uploads": 12,
+                "updateAt": 100,
+            }
+        })
+
+        self.assertEqual(values[0]["ptd_site"], "pterclub")
+        self.assertEqual(values[0]["torrent_uploads"], 12)
+        self.assertIsNone(values[0]["seeding_points"])
 
     def test_ptd_bonus_rate_is_used_for_seeding_points_eta_when_dedicated_rate_is_missing(self):
         values = ptd_cookiecloud._extract_metrics(
@@ -410,7 +428,7 @@ class TwelveAndExportTests(unittest.TestCase):
             site_rules_builtin.SOURCE_COMMIT,
             "7480ca57a96254680c47bed2b1f74bacb6018f42",
         )
-        self.assertEqual(len(core.DEFAULT_RETIREMENT_RULES), 138)
+        self.assertEqual(len(core.DEFAULT_RETIREMENT_RULES), 196)
         queen = core.DEFAULT_RETIREMENT_RULES["皇后"]
         veteran = next(level for level in queen["levels"] if level["name"] == "Veteran User")
         self.assertEqual(queen["retirement_level"], "Veteran User")
@@ -419,6 +437,94 @@ class TwelveAndExportTests(unittest.TestCase):
             [{"min_download": 600_000_000_000}, {"min_torrent_uploads": 200}],
         )
         self.assertEqual(core.DEFAULT_RETIREMENT_RULES["听听歌"]["retirement_level"], "BrontoByte")
+
+    def test_moviepilot_site_names_match_fixed_source_rules(self):
+        adapter = sys.modules["ptdatastatistics.site_rule_adapter"]
+        expected_aliases = {
+            "Monikadesign": ("莫妮卡",),
+            "MyPT": ("我的PT",),
+            "传道院": ("修道院",),
+            "PTTime": ("PT时间",),
+        }
+        for source_name, moviepilot_names in expected_aliases.items():
+            self.assertEqual(
+                adapter._SITE_COMPATIBILITY_ALIASES[source_name],
+                moviepilot_names,
+            )
+
+        rules = core.DEFAULT_RETIREMENT_RULES
+        expected_matches = {
+            "藏宝阁": "藏宝阁",
+            "皇后": "皇后",
+            "莫妮卡": "Monikadesign",
+            "我的PT": "MyPT",
+            "修道院": "传道院",
+            "朱雀": "朱雀",
+            "PT时间": "PTTime",
+            "RailgunPT": "RailgunPT",
+        }
+        for moviepilot_name, source_name in expected_matches.items():
+            self.assertIs(core._match_named_rule(moviepilot_name, rules), rules[source_name])
+
+        self.assertEqual(
+            {
+                source_name: rules[source_name]["retirement_level"]
+                for source_name in ("Monikadesign", "MyPT", "传道院", "朱雀", "PTTime")
+            },
+            {
+                "Monikadesign": "Archivist",
+                "MyPT": "Nexus Master",
+                "传道院": "Nexus Master",
+                "朱雀": "真仙",
+                "PTTime": "Nexus Master",
+            },
+        )
+
+        queen_levels = rules["皇后"]["levels"]
+        for traditional_name in (
+            "貴人-正六品",
+            "容華-正四品",
+            "貴嬪-正三品",
+            "淑儀-正二品",
+            "貴妃-正一品",
+        ):
+            self.assertGreaterEqual(core._match_level_index(traditional_name, queen_levels), 0)
+
+    def test_site_without_retirement_target_keeps_level_route(self):
+        progress = core.build_retirement_progress([{
+            "site_id": 1,
+            "site_name": "Aither",
+            "user_level": "Harmonia",
+            "join_at": "2026-01-01",
+            "updated_day": "2026-09-13",
+        }])
+        site = progress["sites"][0]
+        self.assertEqual(progress["rule_missing"], 0)
+        self.assertEqual(progress["upgrading"], 1)
+        self.assertEqual(site["status"], "upgrading")
+        self.assertEqual(site["retirement_level"], "")
+        self.assertEqual(site["next_level"], "Zeus")
+        self.assertEqual([level["name"] for level in site["route"]], [
+            "Phobos",
+            "Harmonia",
+            "Zeus",
+            "Helios",
+            "Prometheus",
+            "Oceanus",
+            "Gigantes",
+            "Titan",
+        ])
+        self.assertFalse(any(level["is_retirement"] for level in site["route"]))
+
+        highest = core.build_retirement_progress([{
+            "site_id": 1,
+            "site_name": "Aither",
+            "user_level": "Titan",
+            "updated_day": "2026-09-13",
+        }])
+        self.assertEqual(highest["upgrading"], 1)
+        self.assertEqual(highest["sites"][0]["status"], "upgrading")
+        self.assertEqual(highest["sites"][0]["next_level"], "")
 
     def test_user_supplied_rules_update_eight_site_names(self):
         rules = core.DEFAULT_RETIREMENT_RULES
@@ -1001,14 +1107,15 @@ class PackagingTests(unittest.TestCase):
         manifest = json.loads((ROOT / "package.v2.json").read_text(encoding="utf-8"))
         meta = manifest["PTDataStatistics"]
         source = (PLUGIN / "__init__.py").read_text(encoding="utf-8")
-        self.assertEqual(meta["version"], "2.0.3")
+        self.assertEqual(meta["version"], "2.0.4")
         self.assertEqual(meta["history"], {
+            "v2.0.4": "不值一提",
             "v2.0.3": "不值一提",
             "v2.0.2": "不值一提",
             "v2.0.1": "不值一提",
             "v2.0.0": "兼容v2及v3",
         })
-        self.assertIn('plugin_version = "2.0.3"', source)
+        self.assertIn('plugin_version = "2.0.4"', source)
         self.assertEqual(meta["system_version"], ">=2.12.0")
         self.assertIsNot(meta.get("v3"), False)
         self.assertNotIn("release", meta)
@@ -1133,6 +1240,10 @@ class PackagingTests(unittest.TestCase):
         self.assertIn('class="retirement-detail"', source)
         self.assertIn('class="retirement-route-rail"', source)
         self.assertIn('class="retirement-route-rail__track"', source)
+        self.assertIn('v-if="selectedRetirementSite.retirement_level">目标等级', source)
+        self.assertIn('aria-label="等级进度"', source)
+        self.assertNotIn("等级升级中", source)
+        self.assertIn("!site.retirement_level && !site.next_level", source)
         self.assertIn("--route-count", source)
         self.assertIn(".retirement-detail{min-width:0;min-height:0;overflow:visible", source)
         self.assertNotIn(".retirement-detail{min-width:0;min-height:0;overflow-y:auto", source)
