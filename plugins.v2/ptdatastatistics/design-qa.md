@@ -2,55 +2,56 @@
 
 ## Evidence
 
-- Source visual truth:
-  - `C:\Users\cz\AppData\Local\Temp\codex-clipboard-8a42a283-b420-4e64-87e0-28a7b25d23fb.png` (1285 × 689)
-  - `C:\Users\cz\AppData\Local\Temp\codex-clipboard-31b1261e-a88d-40de-8863-4ea6f6c29073.png` (1549 × 326)
-  - `C:\Users\cz\AppData\Local\Temp\codex-clipboard-aa0d68b7-49b1-4515-b2b3-6f0e057c6761.png` (450 × 187)
-  - `C:\Users\cz\AppData\Local\Temp\codex-clipboard-3ae1f234-20af-4221-befa-dd16f3964d4c.png` (2075 × 256)
-- Implementation capture: Codex in-app Browser at `http://127.0.0.1:4173/qa.html`, using a temporary local mock-data harness that was removed after verification.
-- Viewport: 1565 × 900 CSS pixels at device scale 1.
-- State: dark theme; overview metrics, dashboard with two active sites, normal retirement route, and wealthy-retirement sidebar entry.
+- Source visual truth: `C:\Users\cz\AppData\Local\Temp\codex-clipboard-7d379452-577c-43e6-a7b2-dea7419276fb.png` (1141 × 789).
+- Implementation screenshot: `C:\codex\站点数据\plugins.v2\ptdatastatistics\qa-dashboard-final.png` (1141 × 789; temporary QA artifact removed after verification).
+- Side-by-side comparison: `C:\codex\站点数据\plugins.v2\ptdatastatistics\qa-dashboard-comparison.png` (2298 × 837; temporary QA artifact removed after verification).
+- Viewport: 1141 × 789 CSS pixels at device scale 1.
+- Component frame: 1035 × 696 CSS pixels at x=73, y=57, matching the source crop.
+- State: dark theme; three active sites; API-shaped mock data; normal loaded state.
 
 ## Full-view comparison evidence
 
-- The overview metric row contains only each title and its primary value; no helper text nodes remain.
-- The dashboard root resolves to the Vuetify surface color instead of a transparent background.
-- Both dashboard site rows resolve to the same five-column grid, and each of the three data columns measures 214 px in the verification viewport.
-- The retirement route keeps the existing rail, marker, badge, and date layout.
+- The title/divider, three summary capsules, left donut, and three right-hand site rows occupy the same primary regions as the reference.
+- The component frame measured exactly 1035 × 696 with no horizontal or vertical document overflow.
+- Site rows start within 3 px of the source vertically and 1 px horizontally; the donut aligns to the source left edge and vertical center.
+- User-directed differences from the source are intentional: the title is `今日流量`, the title uses an `mdi-finance` statistics icon, and the date capsule is first.
 
 ## Focused region comparison evidence
 
-- Route labels render Chinese and English as separate child rows. Browser measurements placed the two rows at distinct vertical positions (14 px apart) for all four sampled levels.
-- The removed upgrade helper sentence is absent from rendered text.
-- The wealthy-retirement sidebar entry contains no inline title status, while its right-hand status remains `富贵养老`.
-- The overview contains zero `.metric-card .text-truncate` helper rows.
+- Summary capsules reproduce the 80 px height, full-pill radius, icon medallion, two-line label/value structure, and equal-width three-column rhythm.
+- Site rows reproduce the 90 px height, bordered surface, fixed upload/download capsules, and compact contribution pill.
+- The donut uses the source's bright-green dominant segment, centered count, and matching 210 px diameter.
 
 ## Findings
 
-- No actionable P0, P1, or P2 mismatch remains for the requested regions.
-- Fonts and typography: existing MoviePilot/Vuetify typography is preserved; only the bilingual level label gains a controlled second line.
-- Spacing and layout rhythm: metric columns are equal-width and numeric values use tabular figures; existing card padding and radii are unchanged.
-- Colors and visual tokens: the dashboard background now uses `--v-theme-surface`, matching the adjacent surface treatment.
-- Image quality and asset fidelity: existing site avatars and Vuetify icons are unchanged; no replacement assets were introduced.
-- Copy and content: helper metric text and the requested upgrade sentence are removed; the right-hand wealthy-retirement label is retained.
+- No actionable P0, P1, or P2 mismatch remains.
+- Fonts and typography: MoviePilot/Vuetify typography is retained; title, labels, values, and tabular numerals preserve the source hierarchy without wrapping.
+- Spacing and layout rhythm: header divider, three-column summary, left/right split, row heights, gaps, padding, and radii match the reference structure.
+- Colors and visual tokens: host surface/border tokens remain theme-safe; the donut uses a local bright-green dashboard palette to match the source.
+- Image quality and asset fidelity: production continues to use MoviePilot's real site avatars and MDI icons. The standalone QA harness showed text fallbacks only because it did not call the host icon endpoint.
+- Copy and content: `今日流量`, `今天 00:00 起`, `统计时间`, `上传增量`, and `下载增量` match the final user instructions.
+- Responsive behavior: below 700 px the card becomes a natural-height single-column layout, avoiding internal scrollbars or clipped content.
 
 ## Comparison history
 
-- Initial findings: transparent dashboard background, uneven metric columns, bilingual level names wrapping inconsistently, duplicated wealthy-retirement status, and unwanted helper copy.
-- Fixes made: surface background token, three equal metric tracks, explicit bilingual label rows, conditional suppression of the duplicate status, and removal of helper copy.
-- Post-fix evidence: browser-computed layout and rendered text checks above; no remaining P0/P1/P2 issue in the changed regions.
+- Pass 1 finding: the right-hand summary and site list were vertically centered too low, while cards were too compact.
+- Fix: top-align the detail column and set summary/site row heights to 80/90 px.
+- Pass 2 finding: the donut was 9 px right and 13 px low; metric capsules were too narrow and too far right.
+- Fix: left-align and vertically offset the donut, then use fixed 126 px traffic capsules and an 80 px contribution track.
+- Pass 3 finding: summary icons and contribution values lacked the source's pill/medallion treatment.
+- Fix: add circular icon surfaces and compact contribution pills; the final comparison showed no remaining P0/P1/P2 issue.
 
 ## Implementation checklist
 
-- [x] Match dashboard background to the surrounding surface.
-- [x] Use equal-width upload, download, and share columns.
-- [x] Split Chinese and English level labels into two rows.
-- [x] Remove the upgrade helper sentence.
-- [x] Keep only the right-side wealthy-retirement status in the site card.
-- [x] Remove overview metric helper text.
+- [x] Match the reference card frame and header divider.
+- [x] Place the date first, followed by upload and download totals.
+- [x] Align the donut and right-side content to the reference grid.
+- [x] Match capsule and site-row dimensions.
+- [x] Add the finance statistics icon and final Chinese copy.
+- [x] Preserve responsive behavior without an internal scrollbar.
 
 ## Follow-up polish
 
-- None required for this scope.
+- Production avatars will be visually richer than the standalone QA fallbacks because MoviePilot supplies the actual site icons.
 
 final result: passed
