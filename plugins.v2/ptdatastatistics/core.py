@@ -827,15 +827,15 @@ def career_days(earliest: str, server_day: str) -> int | None:
 
 
 def format_bytes(value: Any) -> str:
-    """按十进制 1000 进位格式化通知和导出图片共用的容量文本。"""
+    """按二进制 1024 进位格式化通知和导出图片共用的容量文本。"""
 
     number = float(max(as_int(value), 0))
     units = ("B", "KB", "MB", "GB", "TB", "PB", "EB")
     unit = units[0]
     for unit in units:
-        if number < 1000 or unit == units[-1]:
+        if number < 1024 or unit == units[-1]:
             break
-        number /= 1000
+        number /= 1024
     if unit == "B":
         return f"{int(number)} {unit}"
     precision = 2 if number < 100 else 1

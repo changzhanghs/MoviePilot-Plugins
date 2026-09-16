@@ -1,5 +1,5 @@
 import { importShared } from './__federation_fn_import-JrT3xvdd.js';
-import { _ as _export_sfc, f as formatBytes, b as formatNumber$1, o as openNativePicker, a as _sfc_main$2, w as withQuery, u as unwrapResponse, s as siteColors } from './SiteAvatar-DwA7AJDm.js';
+import { _ as _export_sfc, f as formatBytes, b as formatNumber$1, o as openNativePicker, a as _sfc_main$2, w as withQuery, u as unwrapResponse, s as siteColors } from './SiteAvatar-DCSfizL-.js';
 
 /*!
  * @kurkle/color v0.3.4
