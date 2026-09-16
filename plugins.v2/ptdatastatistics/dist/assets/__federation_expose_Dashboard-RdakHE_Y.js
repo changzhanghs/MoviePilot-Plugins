@@ -17,7 +17,11 @@ const _hoisted_7 = { class: "pt-dashboard__totals" };
 const _hoisted_8 = { class: "total-pill" };
 const _hoisted_9 = { class: "total-pill total-pill--upload" };
 const _hoisted_10 = { class: "total-pill total-pill--download" };
-const _hoisted_11 = { class: "site-list" };
+const _hoisted_11 = {
+  class: "site-list",
+  tabindex: "0",
+  "aria-label": "今日站点流量列表"
+};
 const _hoisted_12 = { class: "site-row__identity" };
 const _hoisted_13 = { class: "site-row__metric site-row__metric--upload" };
 const _hoisted_14 = { class: "site-row__metric site-row__metric--download" };
@@ -217,6 +221,6 @@ return (_ctx, _cache) => {
 }
 
 };
-const Dashboard = /*#__PURE__*/_export_sfc(_sfc_main, [['__scopeId',"data-v-f06d5bb7"]]);
+const Dashboard = /*#__PURE__*/_export_sfc(_sfc_main, [['__scopeId',"data-v-1d46a842"]]);
 
 export { Dashboard as default };

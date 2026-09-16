@@ -100,7 +100,7 @@ onUnmounted(() => {
           </div>
         </div>
 
-        <div class="site-list">
+        <div class="site-list" tabindex="0" aria-label="今日站点流量列表">
           <div v-for="(site, index) in sites" :key="site.site_id || site.site_name" class="site-row">
             <div class="site-row__identity">
               <SiteAvatar :api="api" :site="site" :size="30" />
@@ -269,7 +269,20 @@ onUnmounted(() => {
 
 .site-list {
   display: grid;
+  flex: 1 1 auto;
   gap: 14px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding-right: 3px;
+  scrollbar-color: rgba(var(--v-theme-on-surface), .28) transparent;
+  scrollbar-width: thin;
+}
+
+.site-list::-webkit-scrollbar { width: 5px; }
+.site-list::-webkit-scrollbar-track { background: transparent; }
+.site-list::-webkit-scrollbar-thumb {
+  border-radius: 999px;
+  background: rgba(var(--v-theme-on-surface), .28);
 }
 
 .site-row {
@@ -335,15 +348,64 @@ onUnmounted(() => {
 
 .pt-dashboard__empty strong { color: rgb(var(--v-theme-on-surface)); }
 
-@container (max-width: 700px) {
+@container (max-width: 820px) {
+  .pt-dashboard { padding: 8px; }
+  .pt-dashboard__heading { min-height: 56px; }
+  .pt-dashboard__heading > span { font-size: .68rem; }
+  .pt-dashboard__title { gap: 7px; }
+  .pt-dashboard__title-icon { width: 28px; height: 28px; }
+  .pt-dashboard__title strong { font-size: .95rem; }
+  .pt-dashboard__body {
+    grid-template-columns: minmax(130px, .62fr) minmax(0, 2.38fr);
+    gap: 12px;
+    padding-top: 12px;
+  }
+  .donut { width: min(100%, 140px); }
+  .donut__hole strong { font-size: 1.55rem; }
+  .donut__hole span { font-size: .68rem; }
+  .pt-dashboard__details { gap: 10px; }
+  .pt-dashboard__totals { gap: 6px; }
+  .total-pill {
+    min-height: 52px;
+    padding: 5px 8px;
+    column-gap: 6px;
+  }
+  .total-pill__icon { width: 26px; height: 26px; }
+  .total-pill span { font-size: .64rem; }
+  .total-pill strong { font-size: .75rem; }
+  .site-list { gap: 8px; }
+  .site-row {
+    grid-template-columns: minmax(70px, 1fr) repeat(2, minmax(68px, .82fr)) minmax(52px, .58fr);
+    column-gap: 6px;
+    min-height: 60px;
+    padding: 6px 8px;
+  }
+  .site-row__identity { gap: 6px; }
+  .site-row__identity :deep(.v-avatar) { width: 22px !important; height: 22px !important; }
+  .site-row__identity strong { font-size: .76rem; }
+  .site-row__metric {
+    min-height: 24px;
+    padding: 3px 5px;
+    font-size: .66rem;
+  }
+  .site-row__share {
+    min-width: 0;
+    min-height: 22px;
+    padding: 2px 4px;
+    font-size: .64rem;
+  }
+}
+
+@container (max-width: 480px) {
   .pt-dashboard { block-size: auto; min-block-size: 100%; }
   .pt-dashboard__body { grid-template-columns: 1fr; }
   .donut-wrap { place-items: center; transform: none; }
   .donut { width: min(42cqi, 170px); }
   .pt-dashboard__details { width: 100%; }
+  .site-list { overflow-y: visible; padding-right: 0; }
 }
 
-@container (max-width: 520px) {
+@container (max-width: 380px) {
   .pt-dashboard__totals { grid-template-columns: 1fr; }
   .pt-dashboard__heading { min-height: 56px; }
   .site-row {
