@@ -62,6 +62,8 @@
 - Fix: top-align the grid tracks and use fixed 90 px desktop / 60 px compact row tracks, while retaining natural-height rows below 480 px. The 1141 × 789 browser capture and computed styles confirmed fixed row heights and the requested glass surface treatment.
 - Pass 7 finding: `surface-variant` produced opaque-looking light gray cards in MoviePilot, capacity values used decimal 1000 conversion, and typography/alignment remained lighter than the reference.
 - Fix: use a 4% theme-foreground translucent glass surface, unify all plugin capacity conversion to 1024, increase summary/site-name typography, and pin the three row metrics to the right. Browser measurements confirmed 126/126/80 px right-aligned controls and no console warnings or errors.
+- Pass 8 finding: the two dominant donut segments used adjacent green hues and visually merged; repeated backdrop filters on scrolling rows and nested metric pills could produce GPU compositing flicker; traffic values and arrows retained semantic colors.
+- Fix: use a high-contrast green/blue/amber/purple dashboard palette, remove blur layers from repeated scrolling surfaces while retaining translucent fills, borders, inset highlights, and shadows, and use the host foreground color for every traffic value and arrow, including all three top summary cards. Browser computed styles confirmed four distinct donut segments, `backdrop-filter: none` on rows and metric pills, white metric text/icons, and no console warnings or errors.
 
 ## Implementation checklist
 
@@ -77,6 +79,8 @@
 - [x] Apply a theme-safe glass treatment to summary and site data surfaces.
 - [x] Unify dashboard, workbench, history, notification, export, and rule capacity values on binary conversion.
 - [x] Match the reference typography and right-aligned row metrics.
+- [x] Distinguish real traffic categories and eliminate scrolling-card compositing flicker.
+- [x] Use white traffic text and arrows in site rows and all three top summary cards.
 
 ## Follow-up polish
 

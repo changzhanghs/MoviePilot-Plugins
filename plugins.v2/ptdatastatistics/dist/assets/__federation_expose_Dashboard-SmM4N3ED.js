@@ -1,5 +1,5 @@
 import { importShared } from './__federation_fn_import-JrT3xvdd.js';
-import { _ as _export_sfc, f as formatBytes, a as _sfc_main$1, s as siteColors, u as unwrapResponse } from './SiteAvatar-DCSfizL-.js';
+import { _ as _export_sfc, f as formatBytes, a as _sfc_main$1, u as unwrapResponse } from './SiteAvatar-DCSfizL-.js';
 
 const {resolveComponent:_resolveComponent,createVNode:_createVNode,createElementVNode:_createElementVNode,openBlock:_openBlock,createBlock:_createBlock,createCommentVNode:_createCommentVNode,toDisplayString:_toDisplayString,normalizeStyle:_normalizeStyle,unref:_unref,renderList:_renderList,Fragment:_Fragment,createElementBlock:_createElementBlock,withCtx:_withCtx} = await importShared('vue');
 
@@ -58,7 +58,11 @@ let refreshTimer;
 
 const pluginBase = computed(() => `plugin/${props.pluginId || 'PTDataStatistics'}`);
 const sites = computed(() => overview.value.today_sites || []);
-const dashboardColors = ['#52d000', '#84cc16', '#22d3ee', ...siteColors.slice(3)];
+const dashboardColors = [
+  '#52d000', '#29a8e8', '#f59e0b', '#8b5cf6',
+  '#22d3ee', '#fb7185', '#60a5fa', '#a78bfa',
+  '#2dd4bf', '#f97316', '#e879f9', '#38bdf8',
+];
 
 const donutBackground = computed(() => {
   if (!sites.value.length) return 'conic-gradient(rgba(var(--v-theme-on-surface), .1) 0 100%)'
@@ -149,8 +153,7 @@ return (_ctx, _cache) => {
                   _createVNode(_component_VIcon, {
                     class: "total-pill__icon",
                     icon: "mdi-arrow-up",
-                    size: "20",
-                    color: "success"
+                    size: "20"
                   }),
                   _cache[4] || (_cache[4] = _createElementVNode("span", null, "上传增量", -1)),
                   _createElementVNode("strong", null, _toDisplayString(_unref(formatBytes)(overview.value.summary.today_upload)), 1)
@@ -159,8 +162,7 @@ return (_ctx, _cache) => {
                   _createVNode(_component_VIcon, {
                     class: "total-pill__icon",
                     icon: "mdi-arrow-down",
-                    size: "20",
-                    color: "error"
+                    size: "20"
                   }),
                   _cache[5] || (_cache[5] = _createElementVNode("span", null, "下载增量", -1)),
                   _createElementVNode("strong", null, _toDisplayString(_unref(formatBytes)(overview.value.summary.today_download)), 1)
@@ -221,6 +223,6 @@ return (_ctx, _cache) => {
 }
 
 };
-const Dashboard = /*#__PURE__*/_export_sfc(_sfc_main, [['__scopeId',"data-v-bde9ac3a"]]);
+const Dashboard = /*#__PURE__*/_export_sfc(_sfc_main, [['__scopeId',"data-v-cbb01c71"]]);
 
 export { Dashboard as default };
