@@ -199,7 +199,10 @@ onUnmounted(() => {
   padding: 9px 20px;
   border: 1px solid rgba(var(--v-border-color), var(--v-border-opacity));
   border-radius: 999px;
-  background: rgba(var(--v-theme-surface-variant), .18);
+  background: rgba(var(--v-theme-surface-variant), .22);
+  box-shadow: inset 0 1px 0 rgba(var(--v-theme-on-surface), .06), 0 8px 22px rgba(0, 0, 0, .08);
+  backdrop-filter: blur(16px) saturate(125%);
+  -webkit-backdrop-filter: blur(16px) saturate(125%);
   min-width: 0;
 }
 
@@ -269,6 +272,8 @@ onUnmounted(() => {
 
 .site-list {
   display: grid;
+  grid-auto-rows: 90px;
+  align-content: start;
   flex: 1 1 auto;
   gap: 14px;
   overflow-y: auto;
@@ -290,11 +295,14 @@ onUnmounted(() => {
   grid-template-columns: minmax(110px, 1fr) 126px 126px 80px;
   column-gap: 14px;
   align-items: center;
-  min-height: 90px;
+  height: 90px;
   padding: 12px 20px;
   border: 1px solid rgba(var(--v-border-color), var(--v-border-opacity));
   border-radius: 14px;
-  background: rgba(var(--v-theme-surface-variant), .14);
+  background: rgba(var(--v-theme-surface-variant), .20);
+  box-shadow: inset 0 1px 0 rgba(var(--v-theme-on-surface), .06), 0 10px 26px rgba(0, 0, 0, .08);
+  backdrop-filter: blur(18px) saturate(125%);
+  -webkit-backdrop-filter: blur(18px) saturate(125%);
 }
 
 .site-row__identity,
@@ -314,6 +322,9 @@ onUnmounted(() => {
   padding: 5px 12px;
   border: 1px solid rgba(var(--v-border-color), var(--v-border-opacity));
   border-radius: 999px;
+  background: rgba(var(--v-theme-surface), .18);
+  backdrop-filter: blur(10px) saturate(120%);
+  -webkit-backdrop-filter: blur(10px) saturate(120%);
   color: rgb(var(--v-theme-success));
   font-size: .8rem;
   font-variant-numeric: tabular-nums;
@@ -373,11 +384,11 @@ onUnmounted(() => {
   .total-pill__icon { width: 26px; height: 26px; }
   .total-pill span { font-size: .64rem; }
   .total-pill strong { font-size: .75rem; }
-  .site-list { gap: 8px; }
+  .site-list { grid-auto-rows: 60px; gap: 8px; }
   .site-row {
     grid-template-columns: minmax(70px, 1fr) repeat(2, minmax(68px, .82fr)) minmax(52px, .58fr);
     column-gap: 6px;
-    min-height: 60px;
+    height: 60px;
     padding: 6px 8px;
   }
   .site-row__identity { gap: 6px; }
@@ -402,7 +413,8 @@ onUnmounted(() => {
   .donut-wrap { place-items: center; transform: none; }
   .donut { width: min(42cqi, 170px); }
   .pt-dashboard__details { width: 100%; }
-  .site-list { overflow-y: visible; padding-right: 0; }
+  .site-list { grid-auto-rows: auto; overflow-y: visible; padding-right: 0; }
+  .site-row { height: auto; min-height: 60px; }
 }
 
 @container (max-width: 380px) {
