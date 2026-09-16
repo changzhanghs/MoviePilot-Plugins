@@ -1149,8 +1149,9 @@ class PackagingTests(unittest.TestCase):
         manifest = json.loads((ROOT / "package.v2.json").read_text(encoding="utf-8"))
         meta = manifest["PTDataStatistics"]
         source = (PLUGIN / "__init__.py").read_text(encoding="utf-8")
-        self.assertEqual(meta["version"], "2.0.9")
+        self.assertEqual(meta["version"], "2.0.10")
         self.assertEqual(meta["history"], {
+            "v2.0.10": "不值一提",
             "v2.0.9": "不值一提",
             "v2.0.8": "不值一提",
             "v2.0.7": "不值一提",
@@ -1162,10 +1163,13 @@ class PackagingTests(unittest.TestCase):
             "v2.0.1": "不值一提",
             "v2.0.0": "兼容v2及v3",
         })
-        self.assertIn('plugin_version = "2.0.9"', source)
-        icon_url = "https://raw.githubusercontent.com/changzhanghs/MoviePilot-Plugins/main/icons/ptdatastatistics.svg"
+        self.assertIn('plugin_version = "2.0.10"', source)
+        icon_url = "https://raw.githubusercontent.com/changzhanghs/MoviePilot-Plugins/main/icons/ptdatastatistics.png"
         self.assertEqual(meta["icon"], icon_url)
         self.assertIn(f'plugin_icon = "{icon_url}"', source)
+        icon_png = (ROOT / "icons" / "ptdatastatistics.png").read_bytes()
+        self.assertTrue(icon_png.startswith(b"\x89PNG\r\n\x1a\n"))
+        self.assertGreater(len(icon_png), 1024)
         icon = (ROOT / "icons" / "ptdatastatistics.svg").read_text(encoding="utf-8")
         self.assertIn('aria-label="PT数据统计"', icon)
         self.assertIn('fill="#ffc83d"', icon)
@@ -1401,8 +1405,11 @@ class PackagingTests(unittest.TestCase):
         self.assertIn("container-type: inline-size", dashboard)
         self.assertIn("background: rgb(var(--v-theme-surface));", dashboard)
         self.assertIn("grid-template-columns: minmax(180px, .7fr) minmax(0, 2.3fr)", dashboard)
-        self.assertIn("@container (max-width: 700px)", dashboard)
-        self.assertNotIn("overflow-y: auto", dashboard)
+        self.assertIn("@container (max-width: 820px)", dashboard)
+        self.assertIn("@container (max-width: 480px)", dashboard)
+        self.assertNotIn("@container (max-width: 700px)", dashboard)
+        self.assertIn('aria-label="今日站点流量列表"', dashboard)
+        self.assertIn("overflow-y: auto", dashboard)
         self.assertIn("font-variant-numeric: tabular-nums", dashboard)
 
         self.assertNotIn("<h2>数据导出</h2>", source)
