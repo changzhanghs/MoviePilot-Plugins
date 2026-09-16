@@ -11,9 +11,15 @@ from pprint import pformat
 SOURCE_REPOSITORY = "https://github.com/zyt0339/MoviePilot-Plugins"
 SOURCE_COMMIT = "7480ca57a96254680c47bed2b1f74bacb6018f42"
 
+# MoviePilot currently returns localized Home/HDHome levels that conflict with
+# PTDepilerMp's aliases (for example, ``(士兵)User`` versus ``临时演员``).
+# Keep the upstream thresholds and English route, but do not publish those
+# conflicting localized aliases in the bundled rules.
+SITES_WITHOUT_LOCALIZED_LEVEL_ALIASES = {"家园"}
+
 
 def load_rules(source: Path) -> tuple[dict, ...]:
-    """Load production rule files deterministically without dropping fields."""
+    """Load production rules deterministically and apply documented local corrections."""
 
     rules: list[dict] = []
     for path in sorted(source.glob("*.json"), key=lambda item: item.name.casefold()):
@@ -24,6 +30,10 @@ def load_rules(source: Path) -> tuple[dict, ...]:
             raise ValueError(f"Invalid site rule: {path}")
         if not isinstance(value.get("levels"), list):
             raise ValueError(f"Invalid level list: {path}")
+        if str(value.get("name") or "").strip() in SITES_WITHOUT_LOCALIZED_LEVEL_ALIASES:
+            for level in value["levels"]:
+                if isinstance(level, dict):
+                    level.pop("nameAka", None)
         # 文件名是上游规则仓库用于定位站点的稳定标识。保留它，供 MP
         # 展示名、域名与中文规则名不一致时参与匹配。
         value["source_key"] = path.stem
