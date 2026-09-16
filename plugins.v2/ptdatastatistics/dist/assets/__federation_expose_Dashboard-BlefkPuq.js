@@ -1,5 +1,5 @@
 import { importShared } from './__federation_fn_import-JrT3xvdd.js';
-import { _ as _export_sfc, f as formatBytes, a as _sfc_main$1, s as siteColors, u as unwrapResponse } from './SiteAvatar-DwA7AJDm.js';
+import { _ as _export_sfc, f as formatBytes, a as _sfc_main$1, s as siteColors, u as unwrapResponse } from './SiteAvatar-DCSfizL-.js';
 
 const {resolveComponent:_resolveComponent,createVNode:_createVNode,createElementVNode:_createElementVNode,openBlock:_openBlock,createBlock:_createBlock,createCommentVNode:_createCommentVNode,toDisplayString:_toDisplayString,normalizeStyle:_normalizeStyle,unref:_unref,renderList:_renderList,Fragment:_Fragment,createElementBlock:_createElementBlock,withCtx:_withCtx} = await importShared('vue');
 
@@ -221,6 +221,6 @@ return (_ctx, _cache) => {
 }
 
 };
-const Dashboard = /*#__PURE__*/_export_sfc(_sfc_main, [['__scopeId',"data-v-df78adb9"]]);
+const Dashboard = /*#__PURE__*/_export_sfc(_sfc_main, [['__scopeId',"data-v-bde9ac3a"]]);
 
 export { Dashboard as default };

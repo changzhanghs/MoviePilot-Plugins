@@ -214,9 +214,10 @@ class PTDCookieCloudTests(unittest.TestCase):
         self.assertEqual(backup.metrics[0]["seeding_points_hourly"], 3.5)
 
 class DeltaTests(unittest.TestCase):
-    def test_formats_capacity_with_decimal_units(self):
-        self.assertEqual(core.format_bytes(1_000_000_000), "1.00 GB")
-        self.assertEqual(core.format_bytes(120_000_000_000), "120.0 GB")
+    def test_formats_capacity_with_binary_units(self):
+        self.assertEqual(core.format_bytes(1024**3), "1.00 GB")
+        self.assertEqual(core.format_bytes(10 * 1024**3), "10.00 GB")
+        self.assertEqual(core.format_bytes(120 * 1024**3), "120.0 GB")
 
     def test_requires_exact_previous_server_day(self):
         current = {"updated_day": "2026-09-05", "upload": 500, "download": 200}
@@ -462,7 +463,7 @@ class TwelveAndExportTests(unittest.TestCase):
         self.assertEqual(queen["retirement_level"], "Veteran User")
         self.assertEqual(
             veteran["alternatives"],
-            [{"min_download": 600_000_000_000}, {"min_torrent_uploads": 200}],
+            [{"min_download": 600 * core.GIB}, {"min_torrent_uploads": 200}],
         )
         self.assertEqual(core.DEFAULT_RETIREMENT_RULES["听听歌"]["retirement_level"], "BrontoByte")
         home_source = next(rule for rule in site_rules_builtin.SITE_LEVEL_RULES if rule["name"] == "家园")
@@ -529,6 +530,11 @@ class TwelveAndExportTests(unittest.TestCase):
             core._match_level_index("Power User", rules["RailgunPT"]["levels"]),
             1,
         )
+
+    def test_rule_size_parser_uses_binary_capacity_units(self):
+        adapter = sys.modules["ptdatastatistics.site_rule_adapter"]
+        self.assertEqual(adapter._size_bytes("10 GB"), 10 * 1024**3)
+        self.assertEqual(adapter._size_bytes("10 GiB"), 10 * 1024**3)
 
     def test_site_without_retirement_target_keeps_level_route(self):
         progress = core.build_retirement_progress([{
@@ -674,8 +680,8 @@ class TwelveAndExportTests(unittest.TestCase):
         self.assertEqual(site["status"], "upgrading")
         self.assertEqual(site["retirement_level"], "Extreme User")
         self.assertEqual(levels["Power User"]["eligible_date"], "2026-08-07")
-        self.assertEqual(levels["Power User"]["min_download"], 120_000_000_000)
-        self.assertEqual(levels["Power User"]["min_upload"], 240_000_000_000)
+        self.assertEqual(levels["Power User"]["min_download"], 120 * core.GIB)
+        self.assertEqual(levels["Power User"]["min_upload"], 240 * core.GIB)
         self.assertFalse(levels["Power User"]["min_upload_strict"])
         self.assertEqual(levels["Power User"]["min_ratio"], 2.0)
         self.assertFalse(levels["Power User"]["min_ratio_strict"])
@@ -781,8 +787,8 @@ class TwelveAndExportTests(unittest.TestCase):
         self.assertEqual(site["retirement_level"], "Extreme User")
         self.assertEqual(site["next_level"], "Power User")
         self.assertEqual(levels["Power User"]["eligible_date"], "2026-01-29")
-        self.assertEqual(levels["Power User"]["min_download"], 200_000_000_000)
-        self.assertEqual(levels["Power User"]["min_upload"], 400_000_000_000)
+        self.assertEqual(levels["Power User"]["min_download"], 200 * core.GIB)
+        self.assertEqual(levels["Power User"]["min_upload"], 400 * core.GIB)
         self.assertFalse(levels["Power User"]["min_join_days_strict"])
         self.assertFalse(levels["Power User"]["min_upload_strict"])
         self.assertFalse(levels["Power User"]["min_download_strict"])
@@ -794,7 +800,7 @@ class TwelveAndExportTests(unittest.TestCase):
         self.assertTrue(levels["Extreme User"]["is_retirement"])
         self.assertIn("+6%", levels["Extreme User"]["description"])
         self.assertEqual(levels["mTorrent Master"]["min_join_days"], 224)
-        self.assertEqual(levels["mTorrent Master"]["min_download"], 3_000_000_000_000)
+        self.assertEqual(levels["mTorrent Master"]["min_download"], 3000 * core.GIB)
 
     def test_bundled_mteam_rule_matches_legacy_site_and_level_aliases(self):
         progress = core.build_retirement_progress(
@@ -873,7 +879,7 @@ class TwelveAndExportTests(unittest.TestCase):
         self.assertIsNone(named("Power User")["min_bonus"])
         self.assertIn("做种积分剩余 1", named("Power User")["missing"])
         self.assertFalse(any("魔力" in item for item in named("Power User")["missing"]))
-        self.assertEqual(named("Power User")["min_upload"], 52_500_000_000)
+        self.assertEqual(named("Power User")["min_upload"], int(52.5 * core.GIB))
         self.assertEqual(
             [named(name)["min_seeding_points"] for name in (
                 "Power User", "Elite User", "Crazy User", "Insane User",
@@ -949,8 +955,8 @@ class TwelveAndExportTests(unittest.TestCase):
         )
         self.assertEqual(
             [levels[name]["min_download"] for name in ordered],
-            [256_000_000_000, 386_000_000_000, 512_000_000_000, 768_000_000_000,
-             1_000_000_000_000, 2_000_000_000_000, 8_000_000_000_000, 10_000_000_000_000],
+            [256 * core.GIB, 386 * core.GIB, 512 * core.GIB, 768 * core.GIB,
+             1024 * core.GIB, 2048 * core.GIB, 8192 * core.GIB, 10240 * core.GIB],
         )
         self.assertEqual(
             [levels[name]["min_seeding_points"] for name in ordered],
@@ -958,8 +964,8 @@ class TwelveAndExportTests(unittest.TestCase):
              400_000, 540_000, 700_000, 1_000_000],
         )
         self.assertTrue(all(levels[name]["min_bonus"] is None for name in ordered))
-        self.assertEqual(levels["Power User"]["min_upload"], 512_000_000_000)
-        self.assertEqual(levels["Nexus Master"]["min_upload"], 100_000_000_000_000)
+        self.assertEqual(levels["Power User"]["min_upload"], 512 * core.GIB)
+        self.assertEqual(levels["Nexus Master"]["min_upload"], 100 * 1024**4)
         self.assertTrue(levels["Nexus Master"]["is_retirement"])
 
     def test_hdfans_retirement_rules_use_seeding_points_not_bonus(self):
@@ -992,8 +998,8 @@ class TwelveAndExportTests(unittest.TestCase):
         )
         self.assertEqual(
             [levels[name]["min_download"] for name in ordered],
-            [50_000_000_000, 120_000_000_000, 256_000_000_000, 512_000_000_000,
-             1_000_000_000_000, 2_000_000_000_000, 4_000_000_000_000, 10_000_000_000_000],
+            [50 * core.GIB, 120 * core.GIB, 256 * core.GIB, 512 * core.GIB,
+             1024 * core.GIB, 2048 * core.GIB, 4096 * core.GIB, 10240 * core.GIB],
         )
         self.assertEqual(
             [levels[name]["min_seeding_points"] for name in ordered],
@@ -1001,8 +1007,8 @@ class TwelveAndExportTests(unittest.TestCase):
              600_000, 800_000, 1_000_000, 1_688_888],
         )
         self.assertTrue(all(levels[name]["min_bonus"] is None for name in ordered))
-        self.assertEqual(levels["Power User"]["min_upload"], 50_000_000_000)
-        self.assertEqual(levels["Extreme User"]["min_upload"], 7_000_000_000_000)
+        self.assertEqual(levels["Power User"]["min_upload"], 50 * core.GIB)
+        self.assertEqual(levels["Extreme User"]["min_upload"], 7 * 1024**4)
         self.assertTrue(levels["Extreme User"]["is_retirement"])
 
     def test_kylin_retirement_rules_match_published_requirements(self):
@@ -1149,8 +1155,9 @@ class PackagingTests(unittest.TestCase):
         manifest = json.loads((ROOT / "package.v2.json").read_text(encoding="utf-8"))
         meta = manifest["PTDataStatistics"]
         source = (PLUGIN / "__init__.py").read_text(encoding="utf-8")
-        self.assertEqual(meta["version"], "2.0.11")
+        self.assertEqual(meta["version"], "2.0.12")
         self.assertEqual(meta["history"], {
+            "v2.0.12": "不值一提",
             "v2.0.11": "不值一提",
             "v2.0.10": "不值一提",
             "v2.0.9": "不值一提",
@@ -1164,7 +1171,7 @@ class PackagingTests(unittest.TestCase):
             "v2.0.1": "不值一提",
             "v2.0.0": "兼容v2及v3",
         })
-        self.assertIn('plugin_version = "2.0.11"', source)
+        self.assertIn('plugin_version = "2.0.12"', source)
         icon_url = "https://raw.githubusercontent.com/changzhanghs/MoviePilot-Plugins/main/icons/ptdatastatistics.png"
         self.assertEqual(meta["icon"], icon_url)
         self.assertIn(f'plugin_icon = "{icon_url}"', source)
@@ -1414,6 +1421,9 @@ class PackagingTests(unittest.TestCase):
         self.assertIn("grid-auto-rows: 90px", dashboard)
         self.assertIn("align-content: start", dashboard)
         self.assertIn("backdrop-filter: blur(18px) saturate(125%)", dashboard)
+        self.assertIn("background: rgba(var(--v-theme-on-surface), .04)", dashboard)
+        self.assertIn("width: 126px", dashboard)
+        self.assertIn("font-size: 1rem; font-weight: 700", dashboard)
         self.assertIn("font-variant-numeric: tabular-nums", dashboard)
 
         self.assertNotIn("<h2>数据导出</h2>", source)
@@ -1423,6 +1433,10 @@ class PackagingTests(unittest.TestCase):
         self.assertIn("其它局域网设备请替换为 MoviePilot 主机 IP", source)
 
         utils = (PLUGIN / "src" / "utils.js").read_text(encoding="utf-8")
+        self.assertIn("while (bytes >= 1024", utils)
+        self.assertIn("bytes /= 1024", utils)
+        self.assertIn("const digits = bytes < 100 ? 2 : 1", utils)
+        self.assertNotIn("bytes /= 1000", utils)
         self.assertIn("event?.preventDefault?.()", utils)
 
 

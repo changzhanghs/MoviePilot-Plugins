@@ -13,6 +13,8 @@
 - Responsive implementation capture: Codex in-app Browser at `http://127.0.0.1:4173/qa.html`, 590 × 480 component state inside the available browser surface, verified with seven active sites.
 - Current proportion/glass reference: `C:\Users\cz\AppData\Local\Temp\codex-clipboard-417c836f-5ad5-4fc4-8a4b-d34e3a5cbbc5.png` (2162 × 840), comparing the compact fixed-height rows with the incorrectly stretched rows.
 - Current implementation capture: Codex in-app Browser at `http://127.0.0.1:4173/qa.html`, 1141 × 789 viewport with three active sites.
+- Fidelity/data reference: `C:\Users\cz\AppData\Local\Temp\codex-clipboard-1f91824f-4aad-485b-aed8-e181486e9b29.png` (2119 × 759), comparing the desired dark glass surfaces and binary capacity values with the prior bright cards and decimal values.
+- Current fidelity capture: Codex in-app Browser at `http://127.0.0.1:4173/qa.html`, 1060 × 760 viewport with four active sites and the same capacity values as the reference.
 
 ## Full-view comparison evidence
 
@@ -28,6 +30,9 @@
 - Site rows reproduce the 90 px height, bordered surface, fixed upload/download capsules, and compact contribution pill.
 - Computed browser measurements confirm all three site rows remain exactly 90 px tall inside a 503 px list area; unused height stays blank instead of being redistributed into the rows.
 - Summary capsules and site rows use translucent host-theme surfaces, 16–18 px backdrop blur, mild saturation, an inset highlight, and a restrained shadow for the requested glass treatment.
+- Browser output confirms the reference values now render as `14.43 GB` total, `10.00 GB` and `4.35 GB` per site under the unified binary conversion.
+- Site names render at 16 px / weight 700 in the host foreground color; summary values use weight 700 and the same foreground color.
+- The upload, download, and contribution controls form a fixed-width group aligned to the right edge of every site row.
 - The donut uses the source's bright-green dominant segment, centered count, and matching 210 px diameter.
 
 ## Findings
@@ -55,6 +60,8 @@
 - Fix: make only the site list keyboard-focusable and vertically scrollable, add a thin themed scrollbar, and retain natural page scrolling below 480 px. The seven-site capture confirmed multiple visible rows and an active list scrollbar.
 - Pass 6 finding: CSS Grid stretched three site rows to consume the entire available list height, making the card proportions depend on the dashboard height.
 - Fix: top-align the grid tracks and use fixed 90 px desktop / 60 px compact row tracks, while retaining natural-height rows below 480 px. The 1141 × 789 browser capture and computed styles confirmed fixed row heights and the requested glass surface treatment.
+- Pass 7 finding: `surface-variant` produced opaque-looking light gray cards in MoviePilot, capacity values used decimal 1000 conversion, and typography/alignment remained lighter than the reference.
+- Fix: use a 4% theme-foreground translucent glass surface, unify all plugin capacity conversion to 1024, increase summary/site-name typography, and pin the three row metrics to the right. Browser measurements confirmed 126/126/80 px right-aligned controls and no console warnings or errors.
 
 ## Implementation checklist
 
@@ -68,6 +75,8 @@
 - [x] Restore vertical scrolling for long site lists without moving the summary area.
 - [x] Prevent site rows from stretching with the dashboard card height.
 - [x] Apply a theme-safe glass treatment to summary and site data surfaces.
+- [x] Unify dashboard, workbench, history, notification, export, and rule capacity values on binary conversion.
+- [x] Match the reference typography and right-aligned row metrics.
 
 ## Follow-up polish
 

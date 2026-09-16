@@ -1,14 +1,15 @@
-/** 按十进制 1000 进位将字节数格式化为紧凑容量文本。 */
+/** 按二进制 1024 进位将字节数格式化为 MoviePilot 一致的容量文本。 */
 export function formatBytes(value) {
   let bytes = Number(value || 0)
   if (!Number.isFinite(bytes) || bytes <= 0) return '0 B'
   const units = ['B', 'KB', 'MB', 'GB', 'TB', 'PB', 'EB']
   let index = 0
-  while (bytes >= 1000 && index < units.length - 1) {
-    bytes /= 1000
+  while (bytes >= 1024 && index < units.length - 1) {
+    bytes /= 1024
     index += 1
   }
-  const digits = bytes >= 100 ? 0 : bytes >= 10 ? 1 : 2
+  if (index === 0) return `${Math.round(bytes)} ${units[index]}`
+  const digits = bytes < 100 ? 2 : 1
   return `${bytes.toFixed(digits)} ${units[index]}`
 }
 
