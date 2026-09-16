@@ -465,6 +465,9 @@ class TwelveAndExportTests(unittest.TestCase):
             [{"min_download": 600_000_000_000}, {"min_torrent_uploads": 200}],
         )
         self.assertEqual(core.DEFAULT_RETIREMENT_RULES["听听歌"]["retirement_level"], "BrontoByte")
+        home_source = next(rule for rule in site_rules_builtin.SITE_LEVEL_RULES if rule["name"] == "家园")
+        self.assertTrue(all("nameAka" not in level for level in home_source["levels"]))
+        self.assertTrue(all(not level["aliases"] for level in core.DEFAULT_RETIREMENT_RULES["家园"]["levels"]))
 
     def test_moviepilot_site_names_match_fixed_source_rules(self):
         adapter = sys.modules["ptdatastatistics.site_rule_adapter"]
@@ -920,7 +923,7 @@ class TwelveAndExportTests(unittest.TestCase):
             [{
                 "site_id": 1,
                 "site_name": "家园",
-                "user_level": "User",
+                "user_level": "(士兵)User",
                 "join_at": "2026-01-01",
                 "updated_day": "2026-09-11",
                 "upload": 0,
@@ -939,6 +942,7 @@ class TwelveAndExportTests(unittest.TestCase):
 
         self.assertEqual(site["next_level"], "Power User")
         self.assertEqual(site["retirement_level"], "Nexus Master")
+        self.assertEqual(site["current_level"], "(士兵)User")
         self.assertEqual(
             [levels[name]["min_join_days"] for name in ordered],
             [35, 56, 84, 112, 140, 168, 210, 252],
@@ -1145,8 +1149,9 @@ class PackagingTests(unittest.TestCase):
         manifest = json.loads((ROOT / "package.v2.json").read_text(encoding="utf-8"))
         meta = manifest["PTDataStatistics"]
         source = (PLUGIN / "__init__.py").read_text(encoding="utf-8")
-        self.assertEqual(meta["version"], "2.0.7")
+        self.assertEqual(meta["version"], "2.0.8")
         self.assertEqual(meta["history"], {
+            "v2.0.8": "不值一提",
             "v2.0.7": "不值一提",
             "v2.0.6": "不值一提",
             "v2.0.5": "不值一提",
@@ -1156,7 +1161,7 @@ class PackagingTests(unittest.TestCase):
             "v2.0.1": "不值一提",
             "v2.0.0": "兼容v2及v3",
         })
-        self.assertIn('plugin_version = "2.0.7"', source)
+        self.assertIn('plugin_version = "2.0.8"', source)
         self.assertEqual(meta["system_version"], ">=2.12.0")
         self.assertIsNot(meta.get("v3"), False)
         self.assertNotIn("release", meta)
@@ -1382,8 +1387,12 @@ class PackagingTests(unittest.TestCase):
             encoding="utf-8"
         )
         self.assertLess(dashboard.index("统计日期"), dashboard.index("上传增量"))
+        self.assertIn('<VCard class="pt-dashboard dashboard-grid-fill">', dashboard)
+        self.assertIn("container-type: inline-size", dashboard)
         self.assertIn("background: rgb(var(--v-theme-surface));", dashboard)
-        self.assertIn("repeat(3, minmax(88px, .72fr))", dashboard)
+        self.assertIn("repeat(3, minmax(0, .85fr))", dashboard)
+        self.assertIn("@container (max-width: 700px)", dashboard)
+        self.assertNotIn("overflow-y: auto", dashboard)
         self.assertIn("font-variant-numeric: tabular-nums", dashboard)
 
         self.assertNotIn("<h2>数据导出</h2>", source)

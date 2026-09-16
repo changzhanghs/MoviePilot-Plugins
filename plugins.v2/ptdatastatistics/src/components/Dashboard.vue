@@ -59,7 +59,7 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <div class="pt-dashboard">
+  <VCard class="pt-dashboard dashboard-grid-fill">
     <div class="pt-dashboard__header">
       <div class="pt-dashboard__totals">
         <div class="total-pill">
@@ -112,17 +112,19 @@ onUnmounted(() => {
       <strong>今日暂无站点流量</strong>
       <span>仅显示今日上传或下载大于零、且基线有效的站点</span>
     </div>
-  </div>
+  </VCard>
 </template>
 
 <style scoped>
 .pt-dashboard {
   display: flex;
   flex-direction: column;
+  inline-size: 100%;
+  block-size: 100%;
   min-height: 0;
-  max-height: 100%;
   min-width: 0;
   overflow: hidden;
+  container-type: inline-size;
   background: rgb(var(--v-theme-surface));
 }
 
@@ -158,8 +160,9 @@ onUnmounted(() => {
 
 .pt-dashboard__body {
   display: grid;
-  grid-template-columns: minmax(150px, 30%) minmax(0, 1fr);
-  gap: 18px;
+  grid-template-columns: minmax(140px, .65fr) minmax(0, 1.75fr);
+  align-items: center;
+  gap: clamp(12px, 2cqi, 20px);
   min-height: 0;
   flex: 1 1 auto;
 }
@@ -172,7 +175,7 @@ onUnmounted(() => {
 .donut {
   display: grid;
   place-items: center;
-  width: clamp(132px, 18vw, 190px);
+  width: min(100%, 190px);
   aspect-ratio: 1;
   border-radius: 50%;
   box-shadow: 0 12px 32px rgba(0, 0, 0, .16);
@@ -193,15 +196,14 @@ onUnmounted(() => {
 .donut__hole span { margin-top: 5px; font-size: .78rem; color: rgba(var(--v-theme-on-surface), .62); }
 
 .site-scroll {
+  min-width: 0;
   min-height: 0;
-  max-height: min(420px, 55vh);
-  overflow-y: auto;
-  padding-right: 5px;
+  overflow: visible;
 }
 
 .site-row {
   display: grid;
-  grid-template-columns: auto minmax(120px, 1fr) repeat(3, minmax(88px, .72fr));
+  grid-template-columns: auto minmax(0, 1.15fr) repeat(3, minmax(0, .85fr));
   column-gap: 12px;
   align-items: center;
   padding: 10px 12px;
@@ -215,8 +217,8 @@ onUnmounted(() => {
 .site-row__avatar { display: flex; }
 .site-row__name strong, .site-row__name span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .site-row__name span { font-size: .72rem; color: rgba(var(--v-theme-on-surface), .58); }
-.site-row__metric { font-size: .82rem; font-weight: 650; font-variant-numeric: tabular-nums; text-align: center; white-space: nowrap; }
-.site-row__share { display: flex; align-items: center; justify-content: center; gap: 5px; font-size: .78rem; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.site-row__metric { min-width: 0; overflow: hidden; font-size: .82rem; font-weight: 650; font-variant-numeric: tabular-nums; text-align: center; text-overflow: ellipsis; white-space: nowrap; }
+.site-row__share { display: flex; min-width: 0; align-items: center; justify-content: center; gap: 5px; overflow: hidden; font-size: .78rem; font-variant-numeric: tabular-nums; text-overflow: ellipsis; white-space: nowrap; }
 .site-row__share i { width: 8px; height: 8px; border-radius: 50%; }
 
 .pt-dashboard__empty {
@@ -232,18 +234,21 @@ onUnmounted(() => {
 
 .pt-dashboard__empty strong { color: rgb(var(--v-theme-on-surface)); }
 
-@media (max-width: 700px) {
-  .pt-dashboard__totals { grid-template-columns: 1fr; }
+@container (max-width: 700px) {
   .pt-dashboard__body { grid-template-columns: 1fr; }
-  .donut-wrap { display: none; }
+  .donut { width: min(42cqi, 170px); }
+}
+
+@container (max-width: 520px) {
+  .pt-dashboard__totals { grid-template-columns: 1fr; }
   .site-row {
-    grid-template-columns: auto minmax(0, 1fr) minmax(0, 1fr);
-    grid-template-areas: 'avatar name name' 'avatar upload download';
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    grid-template-areas: 'avatar name share' 'avatar upload download';
   }
   .site-row__avatar { grid-area: avatar; align-self: center; }
   .site-row__name { grid-area: name; }
   .site-row__metric--upload { grid-area: upload; }
   .site-row__metric--download { grid-area: download; text-align: right; }
-  .site-row__share { display: none; }
+  .site-row__share { grid-area: share; justify-content: flex-end; }
 }
 </style>
