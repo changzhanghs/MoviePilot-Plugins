@@ -1,7 +1,7 @@
 <script setup>
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import SiteAvatar from './SiteAvatar.vue'
-import { formatBytes, siteColors, unwrapResponse } from '../utils'
+import { formatBytes, unwrapResponse } from '../utils'
 
 const props = defineProps({
   api: { type: Object, default: () => ({}) },
@@ -22,7 +22,11 @@ let refreshTimer
 
 const pluginBase = computed(() => `plugin/${props.pluginId || 'PTDataStatistics'}`)
 const sites = computed(() => overview.value.today_sites || [])
-const dashboardColors = ['#52d000', '#84cc16', '#22d3ee', ...siteColors.slice(3)]
+const dashboardColors = [
+  '#52d000', '#29a8e8', '#f59e0b', '#8b5cf6',
+  '#22d3ee', '#fb7185', '#60a5fa', '#a78bfa',
+  '#2dd4bf', '#f97316', '#e879f9', '#38bdf8',
+]
 
 const donutBackground = computed(() => {
   if (!sites.value.length) return 'conic-gradient(rgba(var(--v-theme-on-surface), .1) 0 100%)'
@@ -89,12 +93,12 @@ onUnmounted(() => {
             <strong>{{ overview.server_date || '暂无' }}</strong>
           </div>
           <div class="total-pill total-pill--upload">
-            <VIcon class="total-pill__icon" icon="mdi-arrow-up" size="20" color="success" />
+            <VIcon class="total-pill__icon" icon="mdi-arrow-up" size="20" />
             <span>上传增量</span>
             <strong>{{ formatBytes(overview.summary.today_upload) }}</strong>
           </div>
           <div class="total-pill total-pill--download">
-            <VIcon class="total-pill__icon" icon="mdi-arrow-down" size="20" color="error" />
+            <VIcon class="total-pill__icon" icon="mdi-arrow-down" size="20" />
             <span>下载增量</span>
             <strong>{{ formatBytes(overview.summary.today_download) }}</strong>
           </div>
@@ -212,8 +216,9 @@ onUnmounted(() => {
   height: 38px;
   border-radius: 50%;
   background: rgba(var(--v-theme-surface-variant), .42);
+  color: rgb(var(--v-theme-on-surface)) !important;
 }
-.total-pill span { grid-area: label; font-size: .8rem; font-weight: 600; color: rgba(var(--v-theme-on-surface), .9); }
+.total-pill span { grid-area: label; font-size: .8rem; font-weight: 600; color: rgb(var(--v-theme-on-surface)); }
 .total-pill strong { grid-area: value; overflow: hidden; color: rgb(var(--v-theme-on-surface)); font-size: 1.12rem; font-weight: 700; font-variant-numeric: tabular-nums; text-overflow: ellipsis; white-space: nowrap; }
 
 .pt-dashboard__body {
@@ -301,8 +306,6 @@ onUnmounted(() => {
   border-radius: 14px;
   background: rgba(var(--v-theme-on-surface), .04);
   box-shadow: inset 0 1px 0 rgba(var(--v-theme-on-surface), .06), 0 10px 26px rgba(0, 0, 0, .08);
-  backdrop-filter: blur(18px) saturate(125%);
-  -webkit-backdrop-filter: blur(18px) saturate(125%);
 }
 
 .site-row__identity,
@@ -325,14 +328,13 @@ onUnmounted(() => {
   border: 1px solid rgba(var(--v-border-color), var(--v-border-opacity));
   border-radius: 999px;
   background: rgba(var(--v-theme-on-surface), .025);
-  backdrop-filter: blur(10px) saturate(120%);
-  -webkit-backdrop-filter: blur(10px) saturate(120%);
-  color: rgb(var(--v-theme-success));
+  color: rgb(var(--v-theme-on-surface));
   font-size: .8rem;
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
 }
-.site-row__metric--download { color: rgb(var(--v-theme-error)); }
+.site-row__metric span { color: rgb(var(--v-theme-on-surface)); font-weight: 700; }
+.site-row__metric--download { color: rgb(var(--v-theme-on-surface)); }
 .site-row__share {
   justify-self: end;
   justify-content: center;

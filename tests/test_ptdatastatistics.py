@@ -1155,8 +1155,9 @@ class PackagingTests(unittest.TestCase):
         manifest = json.loads((ROOT / "package.v2.json").read_text(encoding="utf-8"))
         meta = manifest["PTDataStatistics"]
         source = (PLUGIN / "__init__.py").read_text(encoding="utf-8")
-        self.assertEqual(meta["version"], "2.0.12")
+        self.assertEqual(meta["version"], "2.0.13")
         self.assertEqual(meta["history"], {
+            "v2.0.13": "不值一提",
             "v2.0.12": "不值一提",
             "v2.0.11": "不值一提",
             "v2.0.10": "不值一提",
@@ -1171,7 +1172,7 @@ class PackagingTests(unittest.TestCase):
             "v2.0.1": "不值一提",
             "v2.0.0": "兼容v2及v3",
         })
-        self.assertIn('plugin_version = "2.0.12"', source)
+        self.assertIn('plugin_version = "2.0.13"', source)
         icon_url = "https://raw.githubusercontent.com/changzhanghs/MoviePilot-Plugins/main/icons/ptdatastatistics.png"
         self.assertEqual(meta["icon"], icon_url)
         self.assertIn(f'plugin_icon = "{icon_url}"', source)
@@ -1420,10 +1421,18 @@ class PackagingTests(unittest.TestCase):
         self.assertIn("overflow-y: auto", dashboard)
         self.assertIn("grid-auto-rows: 90px", dashboard)
         self.assertIn("align-content: start", dashboard)
-        self.assertIn("backdrop-filter: blur(18px) saturate(125%)", dashboard)
+        self.assertIn("'#52d000', '#29a8e8', '#f59e0b', '#8b5cf6'", dashboard)
+        self.assertNotIn("backdrop-filter: blur(18px)", dashboard)
+        self.assertNotIn("backdrop-filter: blur(10px)", dashboard)
         self.assertIn("background: rgba(var(--v-theme-on-surface), .04)", dashboard)
         self.assertIn("width: 126px", dashboard)
         self.assertIn("font-size: 1rem; font-weight: 700", dashboard)
+        self.assertIn(".site-row__metric span { color: rgb(var(--v-theme-on-surface)); font-weight: 700; }", dashboard)
+        self.assertIn(".site-row__metric--download { color: rgb(var(--v-theme-on-surface)); }", dashboard)
+        self.assertNotIn('icon="mdi-arrow-up" size="20" color="success"', dashboard)
+        self.assertNotIn('icon="mdi-arrow-down" size="20" color="error"', dashboard)
+        self.assertIn("color: rgb(var(--v-theme-on-surface)) !important", dashboard)
+        self.assertIn(".total-pill span { grid-area: label; font-size: .8rem; font-weight: 600; color: rgb(var(--v-theme-on-surface)); }", dashboard)
         self.assertIn("font-variant-numeric: tabular-nums", dashboard)
 
         self.assertNotIn("<h2>数据导出</h2>", source)
