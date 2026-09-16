@@ -99,6 +99,7 @@ class LevelRequirementData(BaseModel):
     """养老进度中的一个等级及其门槛。"""
 
     name: str
+    aliases: list[str] = Field(default_factory=list)
     description: str = ""
     min_join_days: int = 0
     min_join_days_strict: bool = False

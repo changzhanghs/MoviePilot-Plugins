@@ -689,6 +689,20 @@ function routeNodeStatus(site, level) {
   if (level.is_retirement) return level.reached ? '已保号' : '保号目标'
   return level.reached ? '已达成' : '待达成'
 }
+function splitLevelName(level) {
+  const name = String(level?.name || level || '').trim()
+  const aliases = Array.isArray(level?.aliases) ? level.aliases.map(value => String(value || '').trim()).filter(Boolean) : []
+  const combined = [name, ...aliases]
+    .map(value => value.match(/^(.+?[\u3400-\u9fff])\s*(?:[（(]([A-Za-z][A-Za-z0-9 .&+/_-]*)[）)]|([A-Za-z][A-Za-z0-9 .&+/_-]*))$/))
+    .find(Boolean)
+  if (combined) return { local: combined[1].trim(), english: String(combined[2] || combined[3]).trim() }
+  const hasChinese = value => /[\u3400-\u9fff]/.test(value)
+  const hasEnglish = value => /[A-Za-z]/.test(value)
+  const chinese = [name, ...aliases].find(hasChinese) || ''
+  const english = [name, ...aliases].find(value => hasEnglish(value) && !hasChinese(value)) || ''
+  if (chinese) return { local: chinese, english }
+  return { local: name, english: '' }
+}
 function nextLevelEta(site, requirements) {
   const serverDate = String(overview.value.server_date || site?.updated_day || '').slice(0, 10)
   if (!serverDate) return { label: '预计时间待补充', days: null }
@@ -1025,11 +1039,11 @@ onBeforeUnmount(() => historyChart?.destroy())
     <VWindow v-model="activeTab">
       <VWindowItem value="overview">
         <section class="section-block"><div class="metric-grid">
-          <MetricCard label="总上传" :value="formatBytes(summary.total_upload)" icon="mdi-arrow-up-bold" color="success" :hint="`${summary.valid_sites || 0} 个有效站点`" />
-          <MetricCard label="总下载" :value="formatBytes(summary.total_download)" icon="mdi-arrow-down-bold" color="error" :hint="`总分享率 ${formatNumber(summary.overall_ratio, 3)}`" />
-          <MetricCard label="总做种数" :value="formatNumber(summary.total_seeding, 0)" icon="mdi-seed-outline" color="warning" :hint="`做种体积 ${formatBytes(summary.total_seeding_size)}`" />
-          <MetricCard label="总做种体积" :value="formatBytes(summary.total_seeding_size)" icon="mdi-database-outline" color="info" :hint="`${summary.valid_sites || 0} 个有效站点`" />
-          <MetricCard label="今日上传" :value="formatBytes(summary.today_upload)" icon="mdi-arrow-up-bold" color="success" :hint="`${todaySites.length} 个有流量站点`" />
+          <MetricCard label="总上传" :value="formatBytes(summary.total_upload)" icon="mdi-arrow-up-bold" color="success" />
+          <MetricCard label="总下载" :value="formatBytes(summary.total_download)" icon="mdi-arrow-down-bold" color="error" />
+          <MetricCard label="总做种数" :value="formatNumber(summary.total_seeding, 0)" icon="mdi-seed-outline" color="warning" />
+          <MetricCard label="总做种体积" :value="formatBytes(summary.total_seeding_size)" icon="mdi-database-outline" color="info" />
+          <MetricCard label="今日上传" :value="formatBytes(summary.today_upload)" icon="mdi-arrow-up-bold" color="success" />
           <MetricCard label="今日下载" :value="formatBytes(summary.today_download)" icon="mdi-arrow-down-bold" color="error" />
         </div></section>
 
@@ -1199,7 +1213,7 @@ onBeforeUnmount(() => historyChart?.destroy())
                 >
                   <SiteAvatar :api="api" :site="site" :size="42" />
                   <span class="retirement-site-option__body">
-                    <span class="retirement-site-option__title"><strong>{{ site.site_name }}</strong><em :class="`status-${site.status}`">{{ retirementMeta(site.status, site).label }}</em></span>
+                    <span class="retirement-site-option__title"><strong>{{ site.site_name }}</strong><em v-if="site.status !== 'wealthy_retired'" :class="`status-${site.status}`">{{ retirementMeta(site.status, site).label }}</em></span>
                     <span>{{ site.current_level || '站点未提供等级' }}</span>
                     <VProgressLinear :model-value="nextLevelOverallProgress(site)" :color="site.status === 'wealthy_retired' ? 'warning' : 'primary'" bg-color="surface-variant" height="4" rounded />
                   </span>
@@ -1240,7 +1254,7 @@ onBeforeUnmount(() => historyChart?.destroy())
                   <div class="retirement-route-rail__nodes">
                     <div v-for="(level, index) in selectedRetirementView.route" :key="level.name" :class="{ 'is-reached': level.reached, 'is-current': level.is_current, 'is-next': level.name === selectedRetirementSite.next_level, 'is-retirement': level.is_retirement }">
                       <i class="retirement-route-node__marker" aria-hidden="true">{{ index + 1 }}</i>
-                      <strong>{{ level.name }}</strong>
+                      <strong class="retirement-route-node__name"><span>{{ splitLevelName(level).local }}</span><span v-if="splitLevelName(level).english">{{ splitLevelName(level).english }}</span></strong>
                       <em class="retirement-route-node__badge">{{ routeNodeStatus(selectedRetirementSite, level) }}</em>
                       <small>{{ routeNodeMeta(level) }}</small>
                     </div>
@@ -1267,7 +1281,7 @@ onBeforeUnmount(() => historyChart?.destroy())
                         <span><strong>{{ task.title }}</strong><small>{{ task.subtitle }}</small></span>
                       </button>
                     </div>
-                    <div v-else class="requirement-panel__subtitle">完成以下要求即可升级，继续享受更多权益。</div>
+                    <div v-else class="requirement-panel__spacer" aria-hidden="true" />
                     <VChip color="warning" size="small" variant="tonal" prepend-icon="mdi-clock-outline">{{ selectedRetirementView.eta.label }}<template v-if="selectedRetirementView.eta.days !== null"> · 约 {{ selectedRetirementView.eta.days }} 天</template></VChip>
                   </div>
                   <div v-if="selectedRetirementView.requirements.length" class="requirement-overview">
@@ -1459,6 +1473,7 @@ onBeforeUnmount(() => historyChart?.destroy())
 .retirement-route-rail__nodes .is-current .retirement-route-node__marker,.retirement-route-rail__nodes .is-next .retirement-route-node__marker{box-shadow:0 0 0 4px rgb(var(--v-theme-surface)),0 0 0 7px rgba(var(--v-theme-primary),.18)}
 .retirement-route-rail__nodes .is-retirement .retirement-route-node__marker{border-color:rgb(var(--v-theme-success));background:rgb(var(--v-theme-success))}
 .retirement-route-rail__nodes strong{max-width:100%;color:rgba(var(--v-theme-on-surface),.78);font-size:.7rem;line-height:1.2}
+.retirement-route-node__name{display:grid;min-height:34px;align-content:start;place-items:center;gap:1px}.retirement-route-node__name>span{display:block;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.retirement-route-node__name>span+span{font-size:.66rem;text-transform:uppercase}
 .retirement-route-node__badge{padding:2px 9px;border-radius:999px;background:rgba(var(--v-theme-on-surface),.1);color:rgba(var(--v-theme-on-surface),.68);font-size:.6rem;font-style:normal;font-weight:800;line-height:16px;white-space:nowrap}
 .retirement-route-rail__nodes small{color:rgba(var(--v-theme-on-surface),.58);font-size:.58rem;line-height:1.15;white-space:nowrap}
 .retirement-route-rail__nodes .is-current strong,.retirement-route-rail__nodes .is-current .retirement-route-node__badge{color:rgb(var(--v-theme-primary))}
@@ -1473,7 +1488,7 @@ onBeforeUnmount(() => historyChart?.destroy())
 .requirement-panel__heading>div:first-child{display:flex;align-items:center;gap:9px}
 .requirement-panel__heading span{color:rgba(var(--v-theme-on-surface),.56);font-size:.72rem}
 .requirement-panel__heading strong{margin-left:3px;font-size:1.22rem}
-.requirement-panel__subtitle{color:rgba(var(--v-theme-on-surface),.56);font-size:.7rem}
+.requirement-panel__spacer{min-width:0}
 .spring-upgrade-tasks{display:grid;grid-template-columns:repeat(2,minmax(112px,1fr));justify-self:center;gap:8px}.spring-upgrade-task{appearance:none;display:flex;align-items:center;justify-content:center;gap:8px;min-width:112px;padding:8px 12px;border:1px solid var(--pt-border);border-radius:12px;background:rgba(var(--v-theme-surface-variant),.12);color:rgba(var(--v-theme-on-surface),.62);font:inherit;text-align:left;cursor:pointer;transition:border-color .16s ease,background-color .16s ease,color .16s ease,box-shadow .16s ease}.spring-upgrade-task:hover,.spring-upgrade-task:focus-visible{border-color:rgba(var(--v-theme-primary),.48);outline:none}.spring-upgrade-task.is-selected{border-color:rgb(var(--v-theme-primary));background:rgba(var(--v-theme-primary),.14);color:rgb(var(--v-theme-primary));box-shadow:0 5px 16px rgba(var(--v-theme-primary),.12)}.spring-upgrade-task>span{display:grid;gap:1px;color:inherit}.requirement-panel__heading .spring-upgrade-task strong{margin:0;color:inherit;font-size:.72rem;line-height:1.1}.spring-upgrade-task small{color:rgba(var(--v-theme-on-surface),.58);font-size:.61rem;white-space:nowrap}.spring-upgrade-task.is-selected small{color:rgba(var(--v-theme-primary),.82)}
 .requirement-overview{display:grid;grid-template-columns:190px minmax(0,1fr);gap:20px;padding-top:14px}
 .requirement-overview__score{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:5px;border-right:1px solid var(--pt-border)}

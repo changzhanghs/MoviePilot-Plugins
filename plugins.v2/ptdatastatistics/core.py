@@ -695,6 +695,7 @@ def build_retirement_progress(
             route.append(
                 {
                     "name": level_name,
+                    "aliases": list(level.get("aliases") or []),
                     "description": as_text(level.get("description")),
                     "min_join_days": max(as_int(level.get("min_join_days")), 0),
                     "min_join_days_strict": bool(level.get("min_join_days_strict")),

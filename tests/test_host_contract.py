@@ -231,6 +231,7 @@ class HostContractTests(unittest.TestCase):
         )
         self.assertEqual(progress["sites"][0]["retirement_level"], "Keeper")
         self.assertEqual([item["name"] for item in progress["sites"][0]["route"]], ["User", "Keeper"])
+        self.assertEqual(progress["sites"][0]["route"][1]["aliases"], [])
 
         decorated = importlib.import_module("ptdatastatistics.core").build_retirement_progress(
             [{"site_name": "红豆饭 HDFans", "user_level": "User", "updated_day": "2026-09-12"}],

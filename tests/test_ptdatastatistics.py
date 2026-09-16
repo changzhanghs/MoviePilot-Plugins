@@ -677,6 +677,7 @@ class TwelveAndExportTests(unittest.TestCase):
         self.assertEqual(levels["Power User"]["min_ratio"], 2.0)
         self.assertFalse(levels["Power User"]["min_ratio_strict"])
         self.assertEqual(levels["Power User"]["min_seeding_points"], 100_000.0)
+        self.assertIn("年轻气盛", levels["Power User"]["aliases"])
         self.assertIsNone(levels["Power User"]["min_bonus"])
         self.assertIn("做种积分数据未提供", levels["Power User"]["missing"])
         self.assertFalse(
@@ -1144,8 +1145,9 @@ class PackagingTests(unittest.TestCase):
         manifest = json.loads((ROOT / "package.v2.json").read_text(encoding="utf-8"))
         meta = manifest["PTDataStatistics"]
         source = (PLUGIN / "__init__.py").read_text(encoding="utf-8")
-        self.assertEqual(meta["version"], "2.0.6")
+        self.assertEqual(meta["version"], "2.0.7")
         self.assertEqual(meta["history"], {
+            "v2.0.7": "不值一提",
             "v2.0.6": "不值一提",
             "v2.0.5": "不值一提",
             "v2.0.4": "不值一提",
@@ -1154,7 +1156,7 @@ class PackagingTests(unittest.TestCase):
             "v2.0.1": "不值一提",
             "v2.0.0": "兼容v2及v3",
         })
-        self.assertIn('plugin_version = "2.0.6"', source)
+        self.assertIn('plugin_version = "2.0.7"', source)
         self.assertEqual(meta["system_version"], ">=2.12.0")
         self.assertIsNot(meta.get("v3"), False)
         self.assertNotIn("release", meta)
@@ -1343,6 +1345,14 @@ class PackagingTests(unittest.TestCase):
         self.assertIn("富贵养老", source)
         self.assertIn("wealthyRetiredCount", source)
         self.assertIn('class="wealthy-retirement-state"', source)
+        self.assertIn("function splitLevelName(level)", source)
+        self.assertIn("const chinese = [name, ...aliases].find(hasChinese)", source)
+        self.assertIn('class="retirement-route-node__name"', source)
+        self.assertIn("site.status !== 'wealthy_retired'", source)
+        self.assertNotIn("完成以下要求即可升级，继续享受更多权益。", source)
+        self.assertNotIn(':hint="`${summary.valid_sites || 0} 个有效站点`"', source)
+        self.assertNotIn(':hint="`总分享率 ${formatNumber(summary.overall_ratio, 3)}`"', source)
+        self.assertNotIn(':hint="`${todaySites.length} 个有流量站点`"', source)
         self.assertLess(source.index("规则缺失 {{ retirement.rule_missing"), source.index("升级中 {{ retirement.upgrading"))
         self.assertLess(source.index("升级中 {{ retirement.upgrading"), source.index("养老中 {{ ordinaryRetiredCount"))
         self.assertLess(source.index("养老中 {{ ordinaryRetiredCount"), source.index("富贵养老 {{ wealthyRetiredCount"))
@@ -1372,6 +1382,9 @@ class PackagingTests(unittest.TestCase):
             encoding="utf-8"
         )
         self.assertLess(dashboard.index("统计日期"), dashboard.index("上传增量"))
+        self.assertIn("background: rgb(var(--v-theme-surface));", dashboard)
+        self.assertIn("repeat(3, minmax(88px, .72fr))", dashboard)
+        self.assertIn("font-variant-numeric: tabular-nums", dashboard)
 
         self.assertNotIn("<h2>数据导出</h2>", source)
         self.assertNotIn("ExportDialog", source)
