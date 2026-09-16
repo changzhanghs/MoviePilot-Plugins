@@ -2,17 +2,17 @@ const currentImports = {};
       const exportSet = new Set(['Module', '__esModule', 'default', '_export_sfc']);
       let moduleMap = {
 "./Page":()=>{
-      dynamicLoadingCss(["PTStatsWorkbench-B3CEQIHp.css"], false, './Page');
-      return __federation_import('./__federation_expose_Page-BeeeyoIb.js').then(module =>Object.keys(module).every(item => exportSet.has(item)) ? () => module.default : () => module)},
+      dynamicLoadingCss(["PTStatsWorkbench-CTCcEljE.css"], false, './Page');
+      return __federation_import('./__federation_expose_Page-BxtCeq1p.js').then(module =>Object.keys(module).every(item => exportSet.has(item)) ? () => module.default : () => module)},
 "./Config":()=>{
-      dynamicLoadingCss(["PTStatsWorkbench-B3CEQIHp.css"], false, './Config');
-      return __federation_import('./__federation_expose_Config-CvICgNLv.js').then(module =>Object.keys(module).every(item => exportSet.has(item)) ? () => module.default : () => module)},
+      dynamicLoadingCss(["PTStatsWorkbench-CTCcEljE.css"], false, './Config');
+      return __federation_import('./__federation_expose_Config-bkT-b1ge.js').then(module =>Object.keys(module).every(item => exportSet.has(item)) ? () => module.default : () => module)},
 "./Dashboard":()=>{
-      dynamicLoadingCss(["__federation_expose_Dashboard-Cxvke7AT.css"], false, './Dashboard');
-      return __federation_import('./__federation_expose_Dashboard-Dhs3fJzB.js').then(module =>Object.keys(module).every(item => exportSet.has(item)) ? () => module.default : () => module)},
+      dynamicLoadingCss(["__federation_expose_Dashboard-C4pkTp_8.css"], false, './Dashboard');
+      return __federation_import('./__federation_expose_Dashboard-Qi84VT7N.js').then(module =>Object.keys(module).every(item => exportSet.has(item)) ? () => module.default : () => module)},
 "./AppPage":()=>{
-      dynamicLoadingCss(["PTStatsWorkbench-B3CEQIHp.css"], false, './AppPage');
-      return __federation_import('./__federation_expose_AppPage-CyW9fMAV.js').then(module =>Object.keys(module).every(item => exportSet.has(item)) ? () => module.default : () => module)},};
+      dynamicLoadingCss(["PTStatsWorkbench-CTCcEljE.css"], false, './AppPage');
+      return __federation_import('./__federation_expose_AppPage-DqnSB_4r.js').then(module =>Object.keys(module).every(item => exportSet.has(item)) ? () => module.default : () => module)},};
       const seen = {};
       const dynamicLoadingCss = (cssFilePaths, dontAppendStylesToHead, exposeItemName) => {
         const metaUrl = import.meta.url;
