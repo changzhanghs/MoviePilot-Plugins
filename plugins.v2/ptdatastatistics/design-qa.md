@@ -11,6 +11,8 @@
 - Reported regression capture: `C:\Users\cz\AppData\Local\Temp\codex-clipboard-392e2f82-1fde-4d18-a413-90c882355a2b.png` (1080 × 784), showing the unintended stacked layout in MoviePilot.
 - User comparison composite: `C:\Users\cz\AppData\Local\Temp\codex-clipboard-26ebf06c-7e39-4ee1-a4e2-0a40b5f8527f.png` (1308 × 1550), with the oversized stacked production state above and the intended compact two-column state below.
 - Responsive implementation capture: Codex in-app Browser at `http://127.0.0.1:4173/qa.html`, 590 × 480 component state inside the available browser surface, verified with seven active sites.
+- Current proportion/glass reference: `C:\Users\cz\AppData\Local\Temp\codex-clipboard-417c836f-5ad5-4fc4-8a4b-d34e3a5cbbc5.png` (2162 × 840), comparing the compact fixed-height rows with the incorrectly stretched rows.
+- Current implementation capture: Codex in-app Browser at `http://127.0.0.1:4173/qa.html`, 1141 × 789 viewport with three active sites.
 
 ## Full-view comparison evidence
 
@@ -24,6 +26,8 @@
 
 - Summary capsules reproduce the 80 px height, full-pill radius, icon medallion, two-line label/value structure, and equal-width three-column rhythm.
 - Site rows reproduce the 90 px height, bordered surface, fixed upload/download capsules, and compact contribution pill.
+- Computed browser measurements confirm all three site rows remain exactly 90 px tall inside a 503 px list area; unused height stays blank instead of being redistributed into the rows.
+- Summary capsules and site rows use translucent host-theme surfaces, 16–18 px backdrop blur, mild saturation, an inset highlight, and a restrained shadow for the requested glass treatment.
 - The donut uses the source's bright-green dominant segment, centered count, and matching 210 px diameter.
 
 ## Findings
@@ -49,6 +53,8 @@
 - Fix: add a compact 481–820 px two-column mode, reduce its title, donut, summary, avatar, row, and metric sizes, and defer stacking until 480 px. The in-app Browser at 590 px confirmed the intended left-donut/right-data structure with all rows visible.
 - Pass 5 finding: a fixed-height dashboard with more site rows had no vertical navigation because the root clipped overflow.
 - Fix: make only the site list keyboard-focusable and vertically scrollable, add a thin themed scrollbar, and retain natural page scrolling below 480 px. The seven-site capture confirmed multiple visible rows and an active list scrollbar.
+- Pass 6 finding: CSS Grid stretched three site rows to consume the entire available list height, making the card proportions depend on the dashboard height.
+- Fix: top-align the grid tracks and use fixed 90 px desktop / 60 px compact row tracks, while retaining natural-height rows below 480 px. The 1141 × 789 browser capture and computed styles confirmed fixed row heights and the requested glass surface treatment.
 
 ## Implementation checklist
 
@@ -60,6 +66,8 @@
 - [x] Preserve responsive behavior without an internal scrollbar.
 - [x] Preserve the two-column structure in MoviePilot's scaled medium-width dashboard slot.
 - [x] Restore vertical scrolling for long site lists without moving the summary area.
+- [x] Prevent site rows from stretching with the dashboard card height.
+- [x] Apply a theme-safe glass treatment to summary and site data surfaces.
 
 ## Follow-up polish
 

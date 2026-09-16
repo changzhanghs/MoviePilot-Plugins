@@ -1410,6 +1410,9 @@ class PackagingTests(unittest.TestCase):
         self.assertNotIn("@container (max-width: 700px)", dashboard)
         self.assertIn('aria-label="今日站点流量列表"', dashboard)
         self.assertIn("overflow-y: auto", dashboard)
+        self.assertIn("grid-auto-rows: 90px", dashboard)
+        self.assertIn("align-content: start", dashboard)
+        self.assertIn("backdrop-filter: blur(18px) saturate(125%)", dashboard)
         self.assertIn("font-variant-numeric: tabular-nums", dashboard)
 
         self.assertNotIn("<h2>数据导出</h2>", source)
