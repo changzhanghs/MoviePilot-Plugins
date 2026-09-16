@@ -1149,8 +1149,9 @@ class PackagingTests(unittest.TestCase):
         manifest = json.loads((ROOT / "package.v2.json").read_text(encoding="utf-8"))
         meta = manifest["PTDataStatistics"]
         source = (PLUGIN / "__init__.py").read_text(encoding="utf-8")
-        self.assertEqual(meta["version"], "2.0.7")
+        self.assertEqual(meta["version"], "2.0.8")
         self.assertEqual(meta["history"], {
+            "v2.0.8": "不值一提",
             "v2.0.7": "不值一提",
             "v2.0.6": "不值一提",
             "v2.0.5": "不值一提",
@@ -1160,7 +1161,7 @@ class PackagingTests(unittest.TestCase):
             "v2.0.1": "不值一提",
             "v2.0.0": "兼容v2及v3",
         })
-        self.assertIn('plugin_version = "2.0.7"', source)
+        self.assertIn('plugin_version = "2.0.8"', source)
         self.assertEqual(meta["system_version"], ">=2.12.0")
         self.assertIsNot(meta.get("v3"), False)
         self.assertNotIn("release", meta)
