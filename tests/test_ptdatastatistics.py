@@ -1149,8 +1149,9 @@ class PackagingTests(unittest.TestCase):
         manifest = json.loads((ROOT / "package.v2.json").read_text(encoding="utf-8"))
         meta = manifest["PTDataStatistics"]
         source = (PLUGIN / "__init__.py").read_text(encoding="utf-8")
-        self.assertEqual(meta["version"], "2.0.8")
+        self.assertEqual(meta["version"], "2.0.9")
         self.assertEqual(meta["history"], {
+            "v2.0.9": "不值一提",
             "v2.0.8": "不值一提",
             "v2.0.7": "不值一提",
             "v2.0.6": "不值一提",
@@ -1161,7 +1162,13 @@ class PackagingTests(unittest.TestCase):
             "v2.0.1": "不值一提",
             "v2.0.0": "兼容v2及v3",
         })
-        self.assertIn('plugin_version = "2.0.8"', source)
+        self.assertIn('plugin_version = "2.0.9"', source)
+        icon_url = "https://raw.githubusercontent.com/changzhanghs/MoviePilot-Plugins/main/icons/ptdatastatistics.svg"
+        self.assertEqual(meta["icon"], icon_url)
+        self.assertIn(f'plugin_icon = "{icon_url}"', source)
+        icon = (ROOT / "icons" / "ptdatastatistics.svg").read_text(encoding="utf-8")
+        self.assertIn('aria-label="PT数据统计"', icon)
+        self.assertIn('fill="#ffc83d"', icon)
         self.assertEqual(meta["system_version"], ">=2.12.0")
         self.assertIsNot(meta.get("v3"), False)
         self.assertNotIn("release", meta)
@@ -1386,11 +1393,14 @@ class PackagingTests(unittest.TestCase):
         dashboard = (PLUGIN / "src" / "components" / "Dashboard.vue").read_text(
             encoding="utf-8"
         )
-        self.assertLess(dashboard.index("统计日期"), dashboard.index("上传增量"))
+        self.assertLess(dashboard.index("统计时间"), dashboard.index("上传增量"))
+        self.assertIn("今日流量", dashboard)
+        self.assertIn('icon="mdi-finance"', dashboard)
+        self.assertIn("今天 00:00 起", dashboard)
         self.assertIn('<VCard class="pt-dashboard dashboard-grid-fill">', dashboard)
         self.assertIn("container-type: inline-size", dashboard)
         self.assertIn("background: rgb(var(--v-theme-surface));", dashboard)
-        self.assertIn("repeat(3, minmax(0, .85fr))", dashboard)
+        self.assertIn("grid-template-columns: minmax(180px, .7fr) minmax(0, 2.3fr)", dashboard)
         self.assertIn("@container (max-width: 700px)", dashboard)
         self.assertNotIn("overflow-y: auto", dashboard)
         self.assertIn("font-variant-numeric: tabular-nums", dashboard)

@@ -22,6 +22,7 @@ let refreshTimer
 
 const pluginBase = computed(() => `plugin/${props.pluginId || 'PTDataStatistics'}`)
 const sites = computed(() => overview.value.today_sites || [])
+const dashboardColors = ['#52d000', '#84cc16', '#22d3ee', ...siteColors.slice(3)]
 
 const donutBackground = computed(() => {
   if (!sites.value.length) return 'conic-gradient(rgba(var(--v-theme-on-surface), .1) 0 100%)'
@@ -29,7 +30,7 @@ const donutBackground = computed(() => {
   const stops = sites.value.map((site, index) => {
     const start = offset
     offset += Number(site.contribution || 0)
-    return `${siteColors[index % siteColors.length]} ${start}% ${Math.min(offset, 100)}%`
+    return `${dashboardColors[index % dashboardColors.length]} ${start}% ${Math.min(offset, 100)}%`
   })
   if (offset < 100) stops.push(`rgba(var(--v-theme-on-surface), .1) ${offset}% 100%`)
   return `conic-gradient(${stops.join(', ')})`
@@ -60,26 +61,15 @@ onUnmounted(() => {
 
 <template>
   <VCard class="pt-dashboard dashboard-grid-fill">
-    <div class="pt-dashboard__header">
-      <div class="pt-dashboard__totals">
-        <div class="total-pill">
-          <VIcon class="total-pill__icon" icon="mdi-calendar-blank-outline" size="20" />
-          <span>统计日期</span>
-          <strong>{{ overview.server_date || '暂无' }}</strong>
-        </div>
-        <div class="total-pill total-pill--upload">
-          <VIcon class="total-pill__icon" icon="mdi-arrow-up" size="20" color="success" />
-          <span>上传增量</span>
-          <strong>{{ formatBytes(overview.summary.today_upload) }}</strong>
-        </div>
-        <div class="total-pill total-pill--download">
-          <VIcon class="total-pill__icon" icon="mdi-arrow-down" size="20" color="error" />
-          <span>下载增量</span>
-          <strong>{{ formatBytes(overview.summary.today_download) }}</strong>
-        </div>
+    <header class="pt-dashboard__heading">
+      <div class="pt-dashboard__title">
+        <VIcon class="pt-dashboard__title-icon" icon="mdi-finance" size="24" color="warning" />
+        <strong>今日流量</strong>
       </div>
-      <VProgressLinear v-if="loading" indeterminate color="primary" height="2" />
-    </div>
+      <span>今天 00:00 起</span>
+    </header>
+
+    <VProgressLinear v-if="loading" indeterminate color="primary" height="2" />
 
     <div v-if="sites.length" class="pt-dashboard__body">
       <div class="donut-wrap">
@@ -91,17 +81,43 @@ onUnmounted(() => {
         </div>
       </div>
 
-      <div class="site-scroll">
-        <div v-for="(site, index) in sites" :key="site.site_id || site.site_name" class="site-row">
-          <div class="site-row__avatar"><SiteAvatar :api="api" :site="site" :size="36" /></div>
-          <div class="site-row__name">
-            <strong>{{ site.site_name }}</strong>
+      <div class="pt-dashboard__details">
+        <div class="pt-dashboard__totals">
+          <div class="total-pill">
+            <VIcon class="total-pill__icon" icon="mdi-calendar-blank-outline" size="20" />
+            <span>统计时间</span>
+            <strong>{{ overview.server_date || '暂无' }}</strong>
           </div>
-          <div class="site-row__metric site-row__metric--upload">↑ {{ formatBytes(site.daily_upload) }}</div>
-          <div class="site-row__metric site-row__metric--download">↓ {{ formatBytes(site.daily_download) }}</div>
-          <div class="site-row__share">
-            <i :style="{ backgroundColor: siteColors[index % siteColors.length] }" />
-            {{ site.contribution.toFixed(1) }}%
+          <div class="total-pill total-pill--upload">
+            <VIcon class="total-pill__icon" icon="mdi-arrow-up" size="20" color="success" />
+            <span>上传增量</span>
+            <strong>{{ formatBytes(overview.summary.today_upload) }}</strong>
+          </div>
+          <div class="total-pill total-pill--download">
+            <VIcon class="total-pill__icon" icon="mdi-arrow-down" size="20" color="error" />
+            <span>下载增量</span>
+            <strong>{{ formatBytes(overview.summary.today_download) }}</strong>
+          </div>
+        </div>
+
+        <div class="site-list">
+          <div v-for="(site, index) in sites" :key="site.site_id || site.site_name" class="site-row">
+            <div class="site-row__identity">
+              <SiteAvatar :api="api" :site="site" :size="30" />
+              <strong>{{ site.site_name }}</strong>
+            </div>
+            <div class="site-row__metric site-row__metric--upload">
+              <VIcon icon="mdi-arrow-up" size="16" />
+              <span>{{ formatBytes(site.daily_upload) }}</span>
+            </div>
+            <div class="site-row__metric site-row__metric--download">
+              <VIcon icon="mdi-arrow-down" size="16" />
+              <span>{{ formatBytes(site.daily_download) }}</span>
+            </div>
+            <div class="site-row__share">
+              <i :style="{ backgroundColor: dashboardColors[index % dashboardColors.length] }" />
+              <span>{{ Number(site.contribution || 0).toFixed(1) }}%</span>
+            </div>
           </div>
         </div>
       </div>
@@ -126,17 +142,51 @@ onUnmounted(() => {
   overflow: hidden;
   container-type: inline-size;
   background: rgb(var(--v-theme-surface));
+  padding: 12px;
 }
 
-.pt-dashboard__header {
+.pt-dashboard__heading {
   flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  min-height: 74px;
+  padding: 0 2px;
+  border-bottom: 1px solid rgba(var(--v-border-color), var(--v-border-opacity));
+}
+
+.pt-dashboard__heading > span {
+  color: rgba(var(--v-theme-on-surface), .78);
+  font-size: .82rem;
+  white-space: nowrap;
+}
+
+.pt-dashboard__title {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.pt-dashboard__title-icon {
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  background: rgba(43, 67, 88, .9);
+}
+
+.pt-dashboard__title strong {
+  overflow: hidden;
+  font-size: 1.25rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .pt-dashboard__totals {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 10px;
-  padding-bottom: 14px;
+  gap: clamp(8px, 1.5cqi, 16px);
 }
 
 .total-pill {
@@ -144,38 +194,46 @@ onUnmounted(() => {
   grid-template-columns: auto minmax(0, 1fr);
   grid-template-areas: 'icon label' 'icon value';
   align-items: center;
-  column-gap: 9px;
-  padding: 10px 13px;
+  column-gap: 14px;
+  min-height: 80px;
+  padding: 9px 20px;
   border: 1px solid rgba(var(--v-border-color), var(--v-border-opacity));
   border-radius: 999px;
-  background: rgba(var(--v-theme-surface-variant), .32);
+  background: rgba(var(--v-theme-surface-variant), .18);
   min-width: 0;
 }
 
-.total-pill__icon { grid-area: icon; }
+.total-pill__icon {
+  grid-area: icon;
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  background: rgba(var(--v-theme-surface-variant), .42);
+}
 .total-pill span { grid-area: label; font-size: .72rem; color: rgba(var(--v-theme-on-surface), .64); }
-.total-pill strong { grid-area: value; overflow-wrap: anywhere; }
-.site-row__metric--upload { color: rgb(var(--v-theme-success)); }
-.site-row__metric--download { color: rgb(var(--v-theme-error)); }
+.total-pill strong { grid-area: value; overflow: hidden; font-size: 1.05rem; font-variant-numeric: tabular-nums; text-overflow: ellipsis; white-space: nowrap; }
 
 .pt-dashboard__body {
   display: grid;
-  grid-template-columns: minmax(140px, .65fr) minmax(0, 1.75fr);
+  grid-template-columns: minmax(180px, .7fr) minmax(0, 2.3fr);
   align-items: center;
-  gap: clamp(12px, 2cqi, 20px);
+  gap: clamp(18px, 3cqi, 38px);
   min-height: 0;
   flex: 1 1 auto;
+  padding-top: clamp(20px, 2.6cqi, 30px);
 }
 
 .donut-wrap {
   display: grid;
-  place-items: center;
+  place-items: center start;
+  min-width: 0;
+  transform: translateY(-14px);
 }
 
 .donut {
   display: grid;
   place-items: center;
-  width: min(100%, 190px);
+  width: min(100%, 210px);
   aspect-ratio: 1;
   border-radius: 50%;
   box-shadow: 0 12px 32px rgba(0, 0, 0, .16);
@@ -186,39 +244,82 @@ onUnmounted(() => {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  width: 68%;
+  width: 72%;
   aspect-ratio: 1;
   border-radius: 50%;
-  background: rgb(var(--v-theme-surface));
+  background: color-mix(in srgb, #52d000 38%, rgb(var(--v-theme-surface)));
 }
 
-.donut__hole strong { font-size: 2rem; line-height: 1; }
-.donut__hole span { margin-top: 5px; font-size: .78rem; color: rgba(var(--v-theme-on-surface), .62); }
+.donut__hole strong { font-size: 2rem; line-height: 1; font-variant-numeric: tabular-nums; }
+.donut__hole span { margin-top: 6px; font-size: .8rem; color: rgba(var(--v-theme-on-surface), .68); }
 
-.site-scroll {
+.pt-dashboard__details,
+.site-list {
   min-width: 0;
   min-height: 0;
-  overflow: visible;
+}
+
+.pt-dashboard__details {
+  display: flex;
+  flex-direction: column;
+  align-self: stretch;
+  justify-content: flex-start;
+  gap: clamp(16px, 2cqi, 22px);
+}
+
+.site-list {
+  display: grid;
+  gap: 14px;
 }
 
 .site-row {
   display: grid;
-  grid-template-columns: auto minmax(0, 1.15fr) repeat(3, minmax(0, .85fr));
-  column-gap: 12px;
+  grid-template-columns: minmax(110px, 1fr) 126px 126px 80px;
+  column-gap: 14px;
   align-items: center;
-  padding: 10px 12px;
-  margin-bottom: 9px;
+  min-height: 90px;
+  padding: 12px 20px;
   border: 1px solid rgba(var(--v-border-color), var(--v-border-opacity));
   border-radius: 14px;
-  background: rgba(var(--v-theme-surface-variant), .2);
+  background: rgba(var(--v-theme-surface-variant), .14);
 }
 
-.site-row__name { display: flex; flex-direction: column; min-width: 0; }
-.site-row__avatar { display: flex; }
-.site-row__name strong, .site-row__name span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.site-row__name span { font-size: .72rem; color: rgba(var(--v-theme-on-surface), .58); }
-.site-row__metric { min-width: 0; overflow: hidden; font-size: .82rem; font-weight: 650; font-variant-numeric: tabular-nums; text-align: center; text-overflow: ellipsis; white-space: nowrap; }
-.site-row__share { display: flex; min-width: 0; align-items: center; justify-content: center; gap: 5px; overflow: hidden; font-size: .78rem; font-variant-numeric: tabular-nums; text-overflow: ellipsis; white-space: nowrap; }
+.site-row__identity,
+.site-row__metric,
+.site-row__share {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+}
+
+.site-row__identity { gap: 10px; }
+.site-row__identity strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.site-row__metric {
+  justify-content: center;
+  gap: 5px;
+  min-height: 34px;
+  padding: 5px 12px;
+  border: 1px solid rgba(var(--v-border-color), var(--v-border-opacity));
+  border-radius: 999px;
+  color: rgb(var(--v-theme-success));
+  font-size: .8rem;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.site-row__metric--download { color: rgb(var(--v-theme-error)); }
+.site-row__share {
+  justify-self: end;
+  justify-content: center;
+  gap: 6px;
+  min-width: 72px;
+  min-height: 28px;
+  padding: 4px 9px;
+  border-radius: 999px;
+  background: rgba(var(--v-theme-surface-variant), .32);
+  font-size: .78rem;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
 .site-row__share i { width: 8px; height: 8px; border-radius: 50%; }
 
 .pt-dashboard__empty {
@@ -235,20 +336,23 @@ onUnmounted(() => {
 .pt-dashboard__empty strong { color: rgb(var(--v-theme-on-surface)); }
 
 @container (max-width: 700px) {
+  .pt-dashboard { block-size: auto; min-block-size: 100%; }
   .pt-dashboard__body { grid-template-columns: 1fr; }
+  .donut-wrap { place-items: center; transform: none; }
   .donut { width: min(42cqi, 170px); }
+  .pt-dashboard__details { width: 100%; }
 }
 
 @container (max-width: 520px) {
   .pt-dashboard__totals { grid-template-columns: 1fr; }
+  .pt-dashboard__heading { min-height: 56px; }
   .site-row {
-    grid-template-columns: auto minmax(0, 1fr) auto;
-    grid-template-areas: 'avatar name share' 'avatar upload download';
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-areas: 'identity share' 'upload download';
   }
-  .site-row__avatar { grid-area: avatar; align-self: center; }
-  .site-row__name { grid-area: name; }
+  .site-row__identity { grid-area: identity; }
   .site-row__metric--upload { grid-area: upload; }
-  .site-row__metric--download { grid-area: download; text-align: right; }
+  .site-row__metric--download { grid-area: download; }
   .site-row__share { grid-area: share; justify-content: flex-end; }
 }
 </style>
