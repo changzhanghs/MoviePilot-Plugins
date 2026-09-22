@@ -22,9 +22,6 @@ class FakePlugin(CORE.MediaServerNotifyCore):
         self.saved_config = None
         self._initialize_core()
 
-    def _host_initialize(self):
-        pass
-
     def _server_options(self):
         return []
 
@@ -33,9 +30,6 @@ class FakePlugin(CORE.MediaServerNotifyCore):
 
     def _enrich_context(self, info, context):
         pass
-
-    def _play_link(self, context):
-        return None
 
     def post_message(self, **kwargs):
         self.messages.append(kwargs)
@@ -46,9 +40,6 @@ class FakePlugin(CORE.MediaServerNotifyCore):
     def _log_debug(self, message):
         pass
 
-    def _log_warning(self, message):
-        pass
-
     def _log_error(self, message):
         raise AssertionError(message)
 
@@ -57,7 +48,7 @@ class TemplateTests(unittest.TestCase):
     def test_vue_config_exposes_card_editor_metadata(self):
         plugin = FakePlugin()
         form, defaults = plugin.get_form()
-        self.assertEqual(form, [])
+        self.assertIsNone(form)
         self.assertEqual(plugin.get_render_mode(), ("vue", "dist/assets"))
         self.assertIn("library_added", defaults["field_configs"])
         self.assertIn("library_added", defaults["_action_meta"])
@@ -66,40 +57,6 @@ class TemplateTests(unittest.TestCase):
         self.assertIn("_server_options", defaults)
         self.assertTrue(plugin.get_page())
         self.assertNotIn("notification_type", defaults)
-
-    def test_arbitrary_layout_and_field_order(self):
-        renderer = CORE.SafeTemplateRenderer({
-            "library_added": {
-                "title": "{server} :: {title}",
-                "body": "演员={actors}\n先简介：{overview}\n后时间：{time}",
-            }
-        })
-        title, body = renderer.render("library_added", {
-            "server": "Emby", "title": "电影", "actors": "甲、乙",
-            "overview": "简介", "time": "12:00",
-        })
-        self.assertEqual(title, "Emby :: 电影")
-        self.assertEqual(body, "演员=甲、乙\n先简介：简介\n后时间：12:00")
-
-    def test_empty_field_line_and_conditional_line_are_hidden(self):
-        renderer = CORE.SafeTemplateRenderer({
-            "library_added": {
-                "title": "{title}",
-                "body": "⭐ {rating}\n[[overview]]---\n{overview}\n始终显示",
-            }
-        })
-        _, body = renderer.render("library_added", {"title": "电影"})
-        self.assertEqual(body, "始终显示")
-
-    def test_unsafe_or_unknown_fields_are_rejected(self):
-        with self.assertRaises(CORE.TemplateError):
-            CORE.SafeTemplateRenderer({
-                "library_added": {"title": "{title.__class__}", "body": "x"}
-            })
-        with self.assertRaises(CORE.TemplateError):
-            CORE.SafeTemplateRenderer({
-                "library_added": {"title": "{unknown}", "body": "x"}
-            })
 
     def test_custom_field_order_label_and_switch_are_loaded_per_event(self):
         plugin = FakePlugin()
@@ -143,14 +100,15 @@ class TemplateTests(unittest.TestCase):
         self.assertNotIn("兰香如故 (2026)", message["text"])
         self.assertEqual(message["link"], "https://www.themoviedb.org/tv/1")
 
-    def test_playback_fields_merge_device_client_and_offer_overview(self):
+    def test_media_notification_fields_match_playback_started(self):
         configs = CORE.default_field_configs()
         expected = [
-            "season_episode", "user", "device", "progress", "ip", "library",
-            "region", "rating", "actors", "time", "overview", "server",
+            "season_episode", "user", "device", "progress", "server", "library",
+            "rating", "actors", "region", "ip", "time", "overview",
         ]
         for action in (
-            "playback_started", "playback_stopped", "playback_paused", "playback_resumed",
+            "library_added", "library_deleted", "playback_started", "playback_stopped",
+            "playback_paused", "playback_resumed", "rated",
         ):
             self.assertEqual([row["key"] for row in configs[action]], expected)
         playback_keys = [row["key"] for row in configs["playback_started"]]
@@ -158,6 +116,11 @@ class TemplateTests(unittest.TestCase):
         self.assertNotIn("media_type", playback_keys)
         self.assertNotIn("play_link", playback_keys)
         self.assertEqual(CORE.FIELD_CATALOG["device"]["label"], "设备")
+        self.assertEqual(
+            [row["key"] for row in configs["auth_success"]],
+            ["user", "device", "ip", "server", "time"],
+        )
+        self.assertEqual([row["key"] for row in configs["test"]], ["server", "time"])
 
         info = SimpleNamespace(
             json_object={"Item": {"SeriesName": "兰香如故", "Name": "交个朋友吧?"}},
@@ -183,14 +146,14 @@ class TemplateTests(unittest.TestCase):
             item_path="/media/anime/Show/Season 01/episode.mkv",
             json_object={"Item": {"Path": "/media/anime/Show/Season 01/episode.mkv"}},
         )
-        self.assertEqual(plugin._match_library(info, context), "cz::lib-tv")
+        self.assertTrue(plugin._match_library(info, context))
         self.assertEqual(context["library"], "动漫")
 
         name_context = {"server": "cz"}
         name_info = SimpleNamespace(
             item_path="", json_object={"Item": {"librarySectionTitle": "动漫"}},
         )
-        self.assertEqual(plugin._match_library(name_info, name_context), "cz::lib-tv")
+        self.assertTrue(plugin._match_library(name_info, name_context))
         self.assertEqual(name_context["library"], "动漫")
 
     def test_ip_field_also_contains_location_without_a_second_option(self):
@@ -206,6 +169,7 @@ class TemplateTests(unittest.TestCase):
             CORE.merge_ip_location("192.0.2.1 中国 上海", "中国 上海"),
             "192.0.2.1 中国 上海",
         )
+
     def test_retired_fields_are_removed_and_media_events_offer_overview(self):
         configs = CORE.default_field_configs()
         for rows in configs.values():
@@ -222,7 +186,7 @@ class TemplateTests(unittest.TestCase):
         self.assertNotIn("ip_location", CORE.FIELD_CATALOG)
         self.assertNotIn("play_link", CORE.FIELD_CATALOG)
         self.assertEqual(CORE.FIELD_CATALOG["library"]["label"], "媒体库分类")
-        self.assertEqual(CORE.FIELD_CATALOG["category"]["label"], "媒体类别")
+        self.assertEqual(set(CORE.FIELD_CATALOG), set(CORE.COMMON_MEDIA_FIELDS))
 
     def test_legacy_field_config_is_migrated_before_sending(self):
         normalized = CORE.normalize_field_configs({
@@ -245,7 +209,7 @@ class TemplateTests(unittest.TestCase):
         self.assertIn("overview", {row["key"] for row in rows})
         library_rows = {row["key"]: row for row in normalized["library_added"]}
         self.assertEqual(library_rows["library"]["label"], "媒体库分类")
-        self.assertEqual(library_rows["category"]["label"], "媒体类别")
+        self.assertNotIn("category", library_rows)
 
     def test_login_and_test_notifications_never_link_to_tmdb(self):
         plugin = FakePlugin()

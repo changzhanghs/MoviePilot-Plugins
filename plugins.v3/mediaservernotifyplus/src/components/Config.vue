@@ -95,7 +95,7 @@ function enabledFieldCount(action) {
       <div>
         <div class="eyebrow">MEDIA LIBRARY NOTIFICATIONS</div>
         <h1>媒体库通知</h1>
-        <p>选择通知类型，设置需要展示的内容和顺序。</p>
+            <p>选择通知类型，设置需要展示的字段和顺序。</p>
       </div>
       <VBtn class="settings-button" variant="tonal" prepend-icon="mdi-tune-variant" @click="settingsOpen = true">
         设置
@@ -103,7 +103,7 @@ function enabledFieldCount(action) {
     </header>
 
     <VAlert v-if="!draft.enabled" class="mb-5" type="warning" variant="tonal" icon="mdi-bell-off-outline">
-      插件当前未启用。你仍可编辑模板，启用后才会发送通知。
+      插件当前未启用。你仍可编辑通知字段，启用后才会发送通知。
     </VAlert>
 
     <section class="card-grid" aria-label="通知类型">
@@ -263,15 +263,14 @@ function enabledFieldCount(action) {
             <small>选择需要接收通知的 Emby、Jellyfin 或 Plex 实例。</small>
           </div>
 
-          <div class="msnp-note-card webhook-guide" role="note">
-            <div class="msnp-note-card__icon"><VIcon icon="mdi-webhook" size="22" /></div>
-            <div class="msnp-note-card__content">
+          <VAlert class="webhook-guide" type="info" variant="tonal">
+            <div>
               <strong>媒体服务器 Webhook 配置</strong>
               <span>回调地址为：</span>
               <code>http://localhost:3000/api/v1/webhook?token=API_TOKEN&amp;source=媒体服务器名:3001</code>
               <span>其中 <code>API_TOKEN</code> 替换为 MoviePilot 设置中的 API Token，<code>source</code> 按“媒体服务器名:3001”填写。如果媒体服务器与 MoviePilot 不在同一台主机，请将 <code>localhost</code> 换成 MoviePilot 的实际 IP 或域名。</span>
             </div>
-          </div>
+          </VAlert>
 
           <div class="setting-row">
             <div><strong>聚合剧集入库</strong><span>同一剧集在窗口内只发送一条通知</span></div>
@@ -294,10 +293,9 @@ function enabledFieldCount(action) {
             </div>
           </div>
 
-          <div class="msnp-note-card" role="note">
-            <div class="msnp-note-card__icon"><VIcon icon="mdi-message-badge-outline" size="22" /></div>
-            <div class="msnp-note-card__content">消息渠道遵循 MoviePilot 全局设置，通知类型固定为“媒体服务器”。</div>
-          </div>
+          <VAlert type="info" variant="tonal">
+            消息渠道遵循 MoviePilot 全局设置，通知类型固定为“媒体服务器”。
+          </VAlert>
         </VCardText>
         <VCardActions class="dialog-actions"><span>设置随主页面一起保存</span><VBtn color="primary" variant="flat" @click="settingsOpen = false">完成</VBtn></VCardActions>
       </VCard>
@@ -355,9 +353,6 @@ h1 { margin: 3px 0 4px; font-size: clamp(28px, 4vw, 38px); line-height: 1.15; le
 .setting-block { display: grid; gap: 8px; padding: 15px 16px; border: 1px solid var(--line); border-radius: 14px; }
 .setting-block label { font-size: 14px; font-weight: 650; }
 .setting-block small { color: rgba(var(--v-theme-on-surface), .5); }
-.msnp-note-card { box-sizing: border-box; display: flex; align-items: flex-start; gap: 12px; width: 100%; height: auto !important; min-height: 64px; padding: 14px 16px; overflow: visible; border: 1px solid rgba(var(--v-theme-info), .3); border-radius: 12px; background: rgba(var(--v-theme-info), .1); color: rgb(var(--v-theme-info)); }
-.msnp-note-card__icon { display: grid; flex: 0 0 34px; place-items: center; width: 34px; height: 34px; border-radius: 9px; background: rgba(var(--v-theme-info), .12); }
-.msnp-note-card__content { flex: 1 1 auto; min-width: 0; overflow: visible; line-height: 1.55; }
 .webhook-guide strong, .webhook-guide span, .webhook-guide code { display: block; }
 .webhook-guide span { margin-top: 5px; line-height: 1.55; }
 .webhook-guide code { margin-top: 9px; padding: 9px 10px; white-space: normal; overflow-wrap: anywhere; border-radius: 8px; background: rgba(var(--v-theme-on-surface), .07); color: rgb(var(--v-theme-info)); font-size: 12px; }

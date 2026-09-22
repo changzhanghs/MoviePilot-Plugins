@@ -6,10 +6,9 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
 from app.schemas.types import EventType, MediaImageType, MediaSource, MediaType, MessageType
-from app.sdk.classification import classify_media
 from app.sdk.events import Event, eventmanager
 from app.sdk.logging import logger
-from app.sdk.media import MediaInfo, MetaInfoPath, resolve_media_identity
+from app.sdk.media import MetaInfoPath, resolve_media_identity
 from app.sdk.network import WebUtils
 from app.sdk.plugin import _PluginBase
 from app.sdk.services import MediaServerHelper
@@ -18,12 +17,12 @@ from .core import MediaServerNotifyCore, build_library_records, merge_ip_locatio
 
 
 class MediaServerNotifyPlus(MediaServerNotifyCore, _PluginBase):
-    """支持按事件类型自定义模板的媒体服务器通知。"""
+    """支持按事件类型自定义字段的媒体服务器通知。"""
 
     plugin_name = "媒体库通知"
     plugin_desc = "极简配置可自定义的媒体库通知消息"
     plugin_icon = "mediaplay.png"
-    plugin_version = "3.0.8"
+    plugin_version = "3.0.9"
     plugin_author = "cz"
     author_url = "https://github.com/changzhanghs"
     plugin_config_prefix = "mediaservernotifyplus_"
@@ -35,9 +34,6 @@ class MediaServerNotifyPlus(MediaServerNotifyCore, _PluginBase):
     def __init__(self) -> None:
         _PluginBase.__init__(self)
         self._initialize_core()
-
-    def _host_initialize(self) -> None:
-        pass
 
     @eventmanager.register(EventType.WebhookMessage)
     def send(self, event: Event) -> None:
@@ -146,14 +142,13 @@ class MediaServerNotifyPlus(MediaServerNotifyCore, _PluginBase):
         context["media_id"] = media_id
         if source != MediaSource.TMDB:
             return
-        context["tmdb_id"] = media_id
         kind = MediaType.MOVIE if str(getattr(info, "item_type", "")) == "MOV" else MediaType.TV
         context["tmdb_url"] = (
             f"https://www.themoviedb.org/movie/{media_id}"
             if kind == MediaType.MOVIE else f"https://www.themoviedb.org/tv/{media_id}"
         )
         if not any(self._field_enabled(action, field) for field in (
-            "year", "category", "rating", "region", "status", "genres", "actors", "overview",
+            "rating", "region", "actors", "overview",
         )):
             return
 
@@ -171,18 +166,11 @@ class MediaServerNotifyPlus(MediaServerNotifyCore, _PluginBase):
         vote = tmdb.get("vote_average")
         if vote not in (None, "", 0):
             context["rating"] = f"{float(vote):.1f}/10"
-        context["genres"] = self._names(tmdb.get("genres"), 4)
         credits = tmdb.get("credits") or {}
         context["actors"] = self._names(credits.get("cast") if isinstance(credits, dict) else [], 5)
-        context["status"] = tmdb.get("status") or ""
         context["region"] = self._names(
             tmdb.get("production_countries") or tmdb.get("origin_country") or [], 3
         )
-        try:
-            classified = classify_media(MediaInfo(tmdb_info=dict(tmdb)))
-            context["category"] = str(classified.library_category or "")
-        except Exception as error:
-            logger.debug(f"媒体分类失败：{error}")
         if not context.get("_image"):
             context["_image"] = self.chain.obtain_specific_image(
                 mediaid=media_id,
@@ -195,10 +183,6 @@ class MediaServerNotifyPlus(MediaServerNotifyCore, _PluginBase):
     @staticmethod
     def _log_debug(message: str) -> None:
         logger.debug(message)
-
-    @staticmethod
-    def _log_warning(message: str) -> None:
-        logger.warning(message)
 
     @staticmethod
     def _log_error(message: str) -> None:

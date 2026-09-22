@@ -2,21 +2,22 @@
 import { ref } from 'vue'
 import Config from './components/Config.vue'
 
+const mediaFields = ['season_episode', 'user', 'device', 'progress', 'server', 'library', 'rating', 'actors', 'region', 'ip', 'time', 'overview']
 const fields = {
-  library_added: ['season_episode', 'library', 'category', 'file_count', 'media_type', 'rating', 'region', 'status', 'genres', 'actors', 'overview', 'server', 'time', 'media_source', 'media_id', 'album', 'artist'],
-  library_deleted: ['season_episode', 'library', 'media_type', 'overview', 'server', 'time', 'media_source', 'media_id', 'album', 'artist'],
-  playback_started: ['season_episode', 'user', 'device', 'progress', 'ip', 'library', 'region', 'rating', 'actors', 'time', 'overview', 'server'],
-  playback_stopped: ['season_episode', 'user', 'device', 'progress', 'ip', 'library', 'region', 'rating', 'actors', 'time', 'overview', 'server'],
-  playback_paused: ['season_episode', 'user', 'device', 'progress', 'ip', 'library', 'region', 'rating', 'actors', 'time', 'overview', 'server'],
-  playback_resumed: ['season_episode', 'user', 'device', 'progress', 'ip', 'library', 'region', 'rating', 'actors', 'time', 'overview', 'server'],
+  library_added: [...mediaFields],
+  library_deleted: [...mediaFields],
+  playback_started: [...mediaFields],
+  playback_stopped: [...mediaFields],
+  playback_paused: [...mediaFields],
+  playback_resumed: [...mediaFields],
   auth_success: ['user', 'device', 'ip', 'server', 'time'],
   auth_failed: ['user', 'device', 'ip', 'server', 'time'],
-  rated: ['season_episode', 'user', 'library', 'media_type', 'rating', 'overview', 'server', 'time', 'media_source', 'media_id'],
+  rated: [...mediaFields],
   test: ['server', 'time'],
 }
-const labels = { season_episode: '季集', library: '媒体库分类', category: '媒体类别', file_count: '文件数量', media_type: '媒体类型', rating: '评分', region: '地区', status: '状态', genres: '类型', actors: '演员', overview: '剧情简介', server: '服务器', time: '时间', media_source: '媒体来源', media_id: '媒体 ID', album: '专辑', artist: '歌手', user: '用户', device: '设备', ip: 'IP', progress: '播放进度' }
+const labels = { season_episode: '季集', user: '用户', device: '设备', progress: '播放进度', ip: 'IP', server: '服务器', library: '媒体库分类', rating: '评分', actors: '演员', region: '地区', time: '时间', overview: '剧情简介' }
 const actions = { library_added: ['已入库', '媒体文件加入媒体库时通知'], library_deleted: ['已删除', '媒体文件从媒体库移除时通知'], playback_started: ['开始播放', '用户开始播放媒体时通知'], playback_stopped: ['停止播放', '用户停止播放媒体时通知'], playback_paused: ['暂停播放', '用户暂停播放媒体时通知'], playback_resumed: ['继续播放', '用户继续播放媒体时通知'], auth_success: ['登录成功', '用户成功登录媒体服务器时通知'], auth_failed: ['登录失败', '媒体服务器登录失败时通知'], rated: ['已标记', '用户标记已看、未看或评分时通知'], test: ['测试', '用于检查当前通知样式'] }
-const defaultEnabled = new Set(['season_episode', 'category', 'file_count', 'rating', 'server', 'time', 'overview', 'user', 'device', 'ip', 'progress'])
+const defaultEnabled = new Set(['season_episode', 'rating', 'server', 'time', 'overview', 'user', 'device', 'ip', 'progress'])
 const config = ref({
   enabled: true,
   types: Object.keys(actions),

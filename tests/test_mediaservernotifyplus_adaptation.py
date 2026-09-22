@@ -20,9 +20,9 @@ class AdaptationTests(unittest.TestCase):
     def test_versions_and_manifests_match(self):
         v2_package = json.loads((ROOT / "package.v2.json").read_text(encoding="utf-8"))
         v3_package = json.loads((ROOT / "package.v3.json").read_text(encoding="utf-8"))
-        self.assertEqual(v2_package["MediaServerNotifyPlus"]["version"], "2.0.8")
+        self.assertEqual(v2_package["MediaServerNotifyPlus"]["version"], "2.0.9")
         self.assertFalse(v2_package["MediaServerNotifyPlus"]["v3"])
-        self.assertEqual(v3_package["MediaServerNotifyPlus"]["version"], "3.0.8")
+        self.assertEqual(v3_package["MediaServerNotifyPlus"]["version"], "3.0.9")
         self.assertEqual(v3_package["MediaServerNotifyPlus"]["system_version"], ">=3.0.0")
         for package in (v2_package, v3_package):
             metadata = package["MediaServerNotifyPlus"]
@@ -34,7 +34,7 @@ class AdaptationTests(unittest.TestCase):
         modules = imports(source)
         self.assertIn("app.core.event", modules)
         self.assertIn("app.helper.mediaserver", modules)
-        self.assertIn("app.modules.themoviedb", modules)
+        self.assertNotIn("app.modules.themoviedb", modules)
         self.assertNotIn("app.sdk.media", modules)
 
     def test_v3_uses_public_sdk_and_unified_identity(self):
@@ -43,7 +43,7 @@ class AdaptationTests(unittest.TestCase):
         self.assertIn("app.sdk.events", modules)
         self.assertIn("app.sdk.media", modules)
         self.assertIn("app.sdk.plugin", modules)
-        self.assertIn("app.sdk.classification", modules)
+        self.assertNotIn("app.sdk.classification", modules)
         self.assertFalse(any(module.startswith("app.db.") for module in modules))
         text = source.read_text(encoding="utf-8")
         self.assertIn("resolve_media_identity", text)
@@ -66,14 +66,16 @@ class AdaptationTests(unittest.TestCase):
             self.assertIn("可通知内容", source)
             self.assertIn("媒体服务器", source)
             self.assertIn("repeat(4", source)
+            app_source = (plugin / "src/App.vue").read_text(encoding="utf-8")
+            self.assertEqual(app_source.count("[...mediaFields]"), 7)
             self.assertNotIn("查询媒体元数据", source)
             self.assertNotIn("查询 IP 归属地", source)
             self.assertIn("消息渠道遵循 MoviePilot 全局设置", source)
             self.assertIn("通知类型固定为“媒体服务器”", source)
             self.assertIn("http://localhost:3000/api/v1/webhook?token=API_TOKEN&amp;source=媒体服务器名:3001", source)
             self.assertNotIn("localhost:3001", source)
-            self.assertGreaterEqual(source.count('class="msnp-note-card'), 2)
-            self.assertNotIn('class="info-card', source)
+            self.assertGreaterEqual(source.count('<VAlert'), 3)
+            self.assertNotIn('msnp-note-card', source)
             self.assertIn('v-if="row.key === \'server\'"', source)
             self.assertIn('v-model="draft.mediaservers"', source)
             self.assertIn('label="选择媒体服务器"', source)

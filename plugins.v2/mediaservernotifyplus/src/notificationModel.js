@@ -37,7 +37,6 @@ export function normalizeNotificationModel(value) {
       const row = clone(source)
       if (row.key === 'device' && ['设备 / 客户端', '设备/客户端'].includes(row.label)) row.label = '设备'
       if (row.key === 'library' && ['媒体库', '媒体类别'].includes(row.label)) row.label = '媒体库分类'
-      if (row.key === 'category' && row.label === '分类') row.label = '媒体类别'
       rows.push(row)
       seen.add(row.key)
     }
