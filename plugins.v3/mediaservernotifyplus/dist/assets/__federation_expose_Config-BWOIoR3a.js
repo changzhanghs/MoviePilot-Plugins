@@ -1,12 +1,5 @@
 import { importShared } from './__federation_fn_import-JrT3xvdd.js';
-
-const _export_sfc = (sfc, props) => {
-  const target = sfc.__vccOpts || sfc;
-  for (const [key, val] of props) {
-    target[key] = val;
-  }
-  return target;
-};
+import { _ as _export_sfc } from './_plugin-vue_export-helper-pcqpp-6-.js';
 
 const {createElementVNode:_createElementVNode,createTextVNode:_createTextVNode,resolveComponent:_resolveComponent,withCtx:_withCtx,createVNode:_createVNode,openBlock:_openBlock,createBlock:_createBlock,createCommentVNode:_createCommentVNode,renderList:_renderList,Fragment:_Fragment,createElementBlock:_createElementBlock,withModifiers:_withModifiers,toDisplayString:_toDisplayString,normalizeClass:_normalizeClass,withKeys:_withKeys} = await importShared('vue');
 
@@ -44,10 +37,8 @@ const _hoisted_24 = { class: "setting-block" };
 const _hoisted_25 = { class: "setting-row" };
 const _hoisted_26 = { class: "settings-grid" };
 const _hoisted_27 = { class: "setting-row" };
-const _hoisted_28 = { class: "setting-row" };
-const _hoisted_29 = { class: "setting-row" };
-const _hoisted_30 = { class: "setting-block test-block" };
-const _hoisted_31 = { class: "settings-grid settings-grid--test" };
+const _hoisted_28 = { class: "setting-block test-block" };
+const _hoisted_29 = { class: "settings-grid settings-grid--test" };
 
 const {computed,onMounted,ref,watch} = await importShared('vue');
 
@@ -111,7 +102,7 @@ const fieldMeta = key => draft.value._field_catalog?.[key] || { label: key };
 const activeFields = computed(() => draft.value.field_configs?.[activeAction.value] || []);
 const activeMeta = computed(() => actionMeta(activeAction.value));
 const enabledTypes = computed(() => new Set(draft.value.types || []));
-const libraryOptions = computed(() => draft.value._library_options || []);
+const serverOptions = computed(() => draft.value._server_options || []);
 
 function isEnabled(action) {
   return enabledTypes.value.has(action)
@@ -146,6 +137,9 @@ function resetFields() {
 function cleanPayload() {
   const payload = clone(draft.value);
   Object.keys(payload).filter(key => key.startsWith('_')).forEach(key => delete payload[key]);
+  delete payload.libraries;
+  delete payload.fetch_metadata;
+  delete payload.lookup_ip;
   payload.types = actionOrder.filter(action => (payload.types || []).includes(action));
   return payload
 }
@@ -174,7 +168,7 @@ return (_ctx, _cache) => {
 
   return (_openBlock(), _createElementBlock("div", _hoisted_1, [
     _createElementVNode("header", _hoisted_2, [
-      _cache[23] || (_cache[23] = _createElementVNode("div", null, [
+      _cache[21] || (_cache[21] = _createElementVNode("div", null, [
         _createElementVNode("div", { class: "eyebrow" }, "MEDIA LIBRARY NOTIFICATIONS"),
         _createElementVNode("h1", null, "通知模板"),
         _createElementVNode("p", null, "选择通知类型，设置需要展示的内容和顺序。")
@@ -185,7 +179,7 @@ return (_ctx, _cache) => {
         "prepend-icon": "mdi-tune-variant",
         onClick: _cache[0] || (_cache[0] = $event => (settingsOpen.value = true))
       }, {
-        default: _withCtx(() => [...(_cache[22] || (_cache[22] = [
+        default: _withCtx(() => [...(_cache[20] || (_cache[20] = [
           _createTextVNode(" 设置 ", -1)
         ]))]),
         _: 1
@@ -199,7 +193,7 @@ return (_ctx, _cache) => {
           variant: "tonal",
           icon: "mdi-bell-off-outline"
         }, {
-          default: _withCtx(() => [...(_cache[24] || (_cache[24] = [
+          default: _withCtx(() => [...(_cache[22] || (_cache[22] = [
             _createTextVNode(" 插件当前未启用。你仍可编辑模板，启用后才会发送通知。 ", -1)
           ]))]),
           _: 1
@@ -264,14 +258,14 @@ return (_ctx, _cache) => {
           icon: "mdi-information-outline",
           size: "18"
         }),
-        _cache[25] || (_cache[25] = _createTextVNode(" 字段没有数据时会自动隐藏整行", -1))
+        _cache[23] || (_cache[23] = _createTextVNode(" 字段没有数据时会自动隐藏整行", -1))
       ]),
       _createElementVNode("div", _hoisted_10, [
         _createVNode(_component_VBtn, {
           variant: "text",
           onClick: _cache[2] || (_cache[2] = $event => (_ctx.$emit('close')))
         }, {
-          default: _withCtx(() => [...(_cache[26] || (_cache[26] = [
+          default: _withCtx(() => [...(_cache[24] || (_cache[24] = [
             _createTextVNode("取消", -1)
           ]))]),
           _: 1
@@ -306,7 +300,7 @@ return (_ctx, _cache) => {
                   }, null, 8, ["icon"])
                 ]),
                 _createElementVNode("div", null, [
-                  _cache[27] || (_cache[27] = _createElementVNode("div", { class: "dialog-kicker" }, "通知内容", -1)),
+                  _cache[25] || (_cache[25] = _createElementVNode("div", { class: "dialog-kicker" }, "通知内容", -1)),
                   _createElementVNode("div", null, _toDisplayString(activeMeta.value.label), 1)
                 ]),
                 _createVNode(_component_VBtn, {
@@ -325,10 +319,10 @@ return (_ctx, _cache) => {
                   (!['auth_success', 'auth_failed', 'test'].includes(activeAction.value))
                     ? (_openBlock(), _createElementBlock("div", _hoisted_14, "示例影片 (2026)"))
                     : _createCommentVNode("", true),
-                  _cache[28] || (_cache[28] = _createElementVNode("div", { class: "message-preview__note" }, "下方勾选的字段将按当前顺序继续展示", -1))
+                  _cache[26] || (_cache[26] = _createElementVNode("div", { class: "message-preview__note" }, "下方勾选的字段将按当前顺序继续展示", -1))
                 ]),
                 _createElementVNode("div", _hoisted_15, [
-                  _cache[30] || (_cache[30] = _createElementVNode("div", null, [
+                  _cache[28] || (_cache[28] = _createElementVNode("div", null, [
                     _createElementVNode("strong", null, "可通知内容"),
                     _createElementVNode("span", null, "拖动左侧手柄排序，只能修改展示名称")
                   ], -1)),
@@ -338,7 +332,7 @@ return (_ctx, _cache) => {
                     "prepend-icon": "mdi-restore",
                     onClick: resetFields
                   }, {
-                    default: _withCtx(() => [...(_cache[29] || (_cache[29] = [
+                    default: _withCtx(() => [...(_cache[27] || (_cache[27] = [
                       _createTextVNode("恢复默认", -1)
                     ]))]),
                     _: 1
@@ -411,7 +405,7 @@ return (_ctx, _cache) => {
                   variant: "flat",
                   onClick: _cache[6] || (_cache[6] = $event => (editorOpen.value = false))
                 }, {
-                  default: _withCtx(() => [...(_cache[31] || (_cache[31] = [
+                  default: _withCtx(() => [...(_cache[29] || (_cache[29] = [
                     _createTextVNode("完成", -1)
                   ]))]),
                   _: 1
@@ -427,7 +421,7 @@ return (_ctx, _cache) => {
     }, 8, ["modelValue"]),
     _createVNode(_component_VDialog, {
       modelValue: settingsOpen.value,
-      "onUpdate:modelValue": _cache[21] || (_cache[21] = $event => ((settingsOpen).value = $event)),
+      "onUpdate:modelValue": _cache[19] || (_cache[19] = $event => ((settingsOpen).value = $event)),
       "max-width": "720",
       scrollable: ""
     }, {
@@ -439,7 +433,7 @@ return (_ctx, _cache) => {
                 _createElementVNode("div", _hoisted_22, [
                   _createVNode(_component_VIcon, { icon: "mdi-tune-variant" })
                 ]),
-                _cache[32] || (_cache[32] = _createElementVNode("div", null, [
+                _cache[30] || (_cache[30] = _createElementVNode("div", null, [
                   _createElementVNode("div", { class: "dialog-kicker" }, "GLOBAL SETTINGS"),
                   _createElementVNode("div", null, "通知设置")
                 ], -1)),
@@ -455,7 +449,7 @@ return (_ctx, _cache) => {
             _createVNode(_component_VCardText, { class: "dialog-body settings-stack" }, {
               default: _withCtx(() => [
                 _createElementVNode("div", _hoisted_23, [
-                  _cache[33] || (_cache[33] = _createElementVNode("div", null, [
+                  _cache[31] || (_cache[31] = _createElementVNode("div", null, [
                     _createElementVNode("strong", null, "启用插件"),
                     _createElementVNode("span", null, "接收媒体服务器事件并发送通知")
                   ], -1)),
@@ -467,14 +461,14 @@ return (_ctx, _cache) => {
                   }, null, 8, ["modelValue"])
                 ]),
                 _createElementVNode("div", _hoisted_24, [
-                  _cache[34] || (_cache[34] = _createElementVNode("label", null, "具体媒体库", -1)),
+                  _cache[32] || (_cache[32] = _createElementVNode("label", null, "媒体服务器", -1)),
                   _createVNode(_component_VSelect, {
-                    modelValue: draft.value.libraries,
-                    "onUpdate:modelValue": _cache[10] || (_cache[10] = $event => ((draft.value.libraries) = $event)),
-                    items: libraryOptions.value,
+                    modelValue: draft.value.mediaservers,
+                    "onUpdate:modelValue": _cache[10] || (_cache[10] = $event => ((draft.value.mediaservers) = $event)),
+                    items: serverOptions.value,
                     "item-title": "title",
                     "item-value": "value",
-                    placeholder: "未选择时监听全部媒体库",
+                    placeholder: "未选择时监听全部媒体服务器",
                     multiple: "",
                     chips: "",
                     "closable-chips": "",
@@ -482,10 +476,10 @@ return (_ctx, _cache) => {
                     variant: "outlined",
                     "hide-details": ""
                   }, null, 8, ["modelValue", "items"]),
-                  _cache[35] || (_cache[35] = _createElementVNode("small", null, "登录类通知不受媒体库筛选影响。", -1))
+                  _cache[33] || (_cache[33] = _createElementVNode("small", null, "选择需要接收通知的 Emby、Jellyfin 或 Plex 实例。", -1))
                 ]),
                 _createElementVNode("div", _hoisted_25, [
-                  _cache[36] || (_cache[36] = _createElementVNode("div", null, [
+                  _cache[34] || (_cache[34] = _createElementVNode("div", null, [
                     _createElementVNode("strong", null, "聚合剧集入库"),
                     _createElementVNode("span", null, "同一剧集在窗口内只发送一条通知")
                   ], -1)),
@@ -532,47 +526,23 @@ return (_ctx, _cache) => {
                   }, null, 8, ["modelValue"])
                 ]),
                 _createElementVNode("div", _hoisted_27, [
-                  _cache[37] || (_cache[37] = _createElementVNode("div", null, [
-                    _createElementVNode("strong", null, "查询媒体元数据"),
-                    _createElementVNode("span", null, "补充评分、演员、分类等内容")
-                  ], -1)),
-                  _createVNode(_component_VSwitch, {
-                    modelValue: draft.value.fetch_metadata,
-                    "onUpdate:modelValue": _cache[15] || (_cache[15] = $event => ((draft.value.fetch_metadata) = $event)),
-                    color: "primary",
-                    "hide-details": ""
-                  }, null, 8, ["modelValue"])
-                ]),
-                _createElementVNode("div", _hoisted_28, [
-                  _cache[38] || (_cache[38] = _createElementVNode("div", null, [
-                    _createElementVNode("strong", null, "查询 IP 归属地"),
-                    _createElementVNode("span", null, "仅在所选通知启用 IP 字段时展示")
-                  ], -1)),
-                  _createVNode(_component_VSwitch, {
-                    modelValue: draft.value.lookup_ip,
-                    "onUpdate:modelValue": _cache[16] || (_cache[16] = $event => ((draft.value.lookup_ip) = $event)),
-                    color: "primary",
-                    "hide-details": ""
-                  }, null, 8, ["modelValue"])
-                ]),
-                _createElementVNode("div", _hoisted_29, [
-                  _cache[39] || (_cache[39] = _createElementVNode("div", null, [
+                  _cache[35] || (_cache[35] = _createElementVNode("div", null, [
                     _createElementVNode("strong", null, "停止时发送待聚合消息"),
                     _createElementVNode("span", null, "插件重载或停止时不丢弃队列")
                   ], -1)),
                   _createVNode(_component_VSwitch, {
                     modelValue: draft.value.flush_on_stop,
-                    "onUpdate:modelValue": _cache[17] || (_cache[17] = $event => ((draft.value.flush_on_stop) = $event)),
+                    "onUpdate:modelValue": _cache[15] || (_cache[15] = $event => ((draft.value.flush_on_stop) = $event)),
                     color: "primary",
                     "hide-details": ""
                   }, null, 8, ["modelValue"])
                 ]),
-                _createElementVNode("div", _hoisted_30, [
-                  _cache[40] || (_cache[40] = _createElementVNode("label", null, "测试通知", -1)),
-                  _createElementVNode("div", _hoisted_31, [
+                _createElementVNode("div", _hoisted_28, [
+                  _cache[36] || (_cache[36] = _createElementVNode("label", null, "测试通知", -1)),
+                  _createElementVNode("div", _hoisted_29, [
                     _createVNode(_component_VSelect, {
                       modelValue: draft.value.preview_type,
-                      "onUpdate:modelValue": _cache[18] || (_cache[18] = $event => ((draft.value.preview_type) = $event)),
+                      "onUpdate:modelValue": _cache[16] || (_cache[16] = $event => ((draft.value.preview_type) = $event)),
                       items: actionOrder.map(value => ({ value, title: actionMeta(value).label })),
                       label: "通知类型",
                       variant: "outlined",
@@ -580,7 +550,7 @@ return (_ctx, _cache) => {
                     }, null, 8, ["modelValue", "items"]),
                     _createVNode(_component_VSwitch, {
                       modelValue: draft.value.send_test,
-                      "onUpdate:modelValue": _cache[19] || (_cache[19] = $event => ((draft.value.send_test) = $event)),
+                      "onUpdate:modelValue": _cache[17] || (_cache[17] = $event => ((draft.value.send_test) = $event)),
                       label: "保存时发送",
                       color: "primary",
                       "hide-details": ""
@@ -592,7 +562,7 @@ return (_ctx, _cache) => {
                   variant: "tonal",
                   icon: "mdi-message-badge-outline"
                 }, {
-                  default: _withCtx(() => [...(_cache[41] || (_cache[41] = [
+                  default: _withCtx(() => [...(_cache[37] || (_cache[37] = [
                     _createTextVNode(" 消息渠道遵循 MoviePilot 全局设置，通知类型固定为“媒体库”。 ", -1)
                   ]))]),
                   _: 1
@@ -602,13 +572,13 @@ return (_ctx, _cache) => {
             }),
             _createVNode(_component_VCardActions, { class: "dialog-actions" }, {
               default: _withCtx(() => [
-                _cache[43] || (_cache[43] = _createElementVNode("span", null, "设置随主页面一起保存", -1)),
+                _cache[39] || (_cache[39] = _createElementVNode("span", null, "设置随主页面一起保存", -1)),
                 _createVNode(_component_VBtn, {
                   color: "primary",
                   variant: "flat",
-                  onClick: _cache[20] || (_cache[20] = $event => (settingsOpen.value = false))
+                  onClick: _cache[18] || (_cache[18] = $event => (settingsOpen.value = false))
                 }, {
-                  default: _withCtx(() => [...(_cache[42] || (_cache[42] = [
+                  default: _withCtx(() => [...(_cache[38] || (_cache[38] = [
                     _createTextVNode("完成", -1)
                   ]))]),
                   _: 1
@@ -627,6 +597,6 @@ return (_ctx, _cache) => {
 }
 
 };
-const Config = /*#__PURE__*/_export_sfc(_sfc_main, [['__scopeId',"data-v-471e77b7"]]);
+const Config = /*#__PURE__*/_export_sfc(_sfc_main, [['__scopeId',"data-v-1ed0edc4"]]);
 
 export { Config as default };

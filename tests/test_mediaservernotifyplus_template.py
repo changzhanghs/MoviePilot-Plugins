@@ -61,6 +61,9 @@ class TemplateTests(unittest.TestCase):
         self.assertIn("library_added", defaults["field_configs"])
         self.assertIn("library_added", defaults["_action_meta"])
         self.assertIn("ip", defaults["_field_catalog"])
+        self.assertIn("ip_location", defaults["_field_catalog"])
+        self.assertIn("_server_options", defaults)
+        self.assertTrue(plugin.get_page())
         self.assertNotIn("notification_type", defaults)
 
     def test_arbitrary_layout_and_field_order(self):

@@ -72,6 +72,7 @@ FIELD_CATALOG: Dict[str, Dict[str, str]] = {
     "device": {"label": "设备", "icon": "📱"},
     "client": {"label": "客户端", "icon": "💻"},
     "ip": {"label": "IP", "icon": "🌐"},
+    "ip_location": {"label": "IP 归属地", "icon": "📍"},
     "progress": {"label": "播放进度", "icon": "⏱️"},
     "media_source": {"label": "媒体来源", "icon": "🔎"},
     "media_id": {"label": "媒体 ID", "icon": "🆔"},
@@ -91,23 +92,23 @@ ACTION_FIELDS: Dict[str, Tuple[str, ...]] = {
         "media_source", "media_id", "album", "artist",
     ),
     "playback_started": (
-        "season_episode", "user", "device", "client", "ip", "progress", "library",
+        "season_episode", "user", "device", "client", "ip", "ip_location", "progress", "library",
         "media_type", "year", "server", "channel", "time", "play_link",
     ),
     "playback_stopped": (
-        "season_episode", "user", "device", "client", "ip", "progress", "library",
+        "season_episode", "user", "device", "client", "ip", "ip_location", "progress", "library",
         "media_type", "year", "server", "channel", "time", "play_link",
     ),
     "playback_paused": (
-        "season_episode", "user", "device", "client", "ip", "progress", "library",
+        "season_episode", "user", "device", "client", "ip", "ip_location", "progress", "library",
         "server", "channel", "time", "play_link",
     ),
     "playback_resumed": (
-        "season_episode", "user", "device", "client", "ip", "progress", "library",
+        "season_episode", "user", "device", "client", "ip", "ip_location", "progress", "library",
         "server", "channel", "time", "play_link",
     ),
-    "auth_success": ("user", "device", "client", "ip", "server", "channel", "time"),
-    "auth_failed": ("user", "device", "client", "ip", "server", "channel", "time"),
+    "auth_success": ("user", "device", "client", "ip", "ip_location", "server", "channel", "time"),
+    "auth_failed": ("user", "device", "client", "ip", "ip_location", "server", "channel", "time"),
     "rated": (
         "season_episode", "user", "library", "media_type", "year", "rating", "server",
         "channel", "time", "media_source", "media_id",
@@ -433,10 +434,11 @@ class MediaServerNotifyCore:
                     if bool(config.get(f"event_enabled_{action}", True))
                 ]
             self._mediaservers = list(config.get("mediaservers") or [])
-            self._libraries = list(config.get("libraries") or [])
+            # 新版界面按媒体服务器筛选；旧版具体媒体库配置不再参与过滤。
+            self._libraries = []
             self._add_play_link = bool(config.get("add_play_link", True))
-            self._lookup_ip = bool(config.get("lookup_ip", False))
-            self._fetch_metadata = bool(config.get("fetch_metadata", True))
+            self._lookup_ip = True
+            self._fetch_metadata = True
             self._aggregate_enabled = bool(config.get("aggregate_enabled", True))
             self._aggregate_time = max(1, int(config.get("aggregate_time") or self.DEFAULT_AGGREGATE_TIME))
             self._dedupe_library = max(0, int(config.get("dedupe_library") or self.DEFAULT_DEDUPE_TIME))
@@ -463,7 +465,8 @@ class MediaServerNotifyCore:
         return []
 
     def get_page(self) -> List[dict]:
-        return []
+        # 非空返回值兼容通过页面内容判断插件卡片是否可点击的 V2 前端。
+        return [{"component": "div", "text": "媒体库通知"}]
 
     @staticmethod
     def get_render_mode() -> Tuple[str, str]:
@@ -471,13 +474,11 @@ class MediaServerNotifyCore:
         return "vue", "dist/assets"
 
     def get_form(self) -> Tuple[List[dict], Dict[str, Any]]:
-        """Vue 配置组件读取默认值、字段元数据和具体媒体库列表。"""
-        self._refresh_library_records()
+        """Vue 配置组件读取默认值、字段元数据和媒体服务器列表。"""
         defaults: Dict[str, Any] = {
             "enabled": False,
             "mediaservers": [],
             "types": list(ACTION_LABELS),
-            "libraries": [],
             "field_configs": default_field_configs(),
             "_default_field_configs": default_field_configs(),
             "add_play_link": True,
@@ -490,7 +491,7 @@ class MediaServerNotifyCore:
             "flush_on_stop": False,
             "preview_type": "library_added",
             "send_test": False,
-            "_library_options": [dict(record) for record in self._library_records],
+            "_server_options": self._server_options(),
             "_action_meta": {
                 action: {
                     "label": label,
@@ -677,6 +678,7 @@ class MediaServerNotifyCore:
             "device": str(device_name).strip(),
             "client": client,
             "ip": getattr(info, "ip", "") or raw.get("RemoteEndPoint") or "",
+            "ip_location": "",
             "progress": progress,
             "tmdb_id": "",
             "tmdb_url": "",
@@ -819,6 +821,7 @@ class MediaServerNotifyCore:
             "genres": "剧情、科幻", "actors": "演员甲、演员乙",
             "overview": "这是一段用于检查自定义通知排版的示例简介。", "user": "测试用户",
             "device": "MoviePilot 测试设备", "client": "Emby", "ip": "192.0.2.1",
+            "ip_location": "中国 上海",
             "progress": "36%", "tmdb_id": "1", "tmdb_url": "https://www.themoviedb.org/movie/1",
             "media_source": "themoviedb", "media_id": "1", "file_count": "3",
             "library": "电影库", "album": "示例专辑", "artist": "示例歌手",

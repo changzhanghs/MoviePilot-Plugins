@@ -20,9 +20,9 @@ class AdaptationTests(unittest.TestCase):
     def test_versions_and_manifests_match(self):
         v2_package = json.loads((ROOT / "package.v2.json").read_text(encoding="utf-8"))
         v3_package = json.loads((ROOT / "package.v3.json").read_text(encoding="utf-8"))
-        self.assertEqual(v2_package["MediaServerNotifyPlus"]["version"], "2.0.1")
+        self.assertEqual(v2_package["MediaServerNotifyPlus"]["version"], "2.0.2")
         self.assertFalse(v2_package["MediaServerNotifyPlus"]["v3"])
-        self.assertEqual(v3_package["MediaServerNotifyPlus"]["version"], "3.0.1")
+        self.assertEqual(v3_package["MediaServerNotifyPlus"]["version"], "3.0.2")
         self.assertEqual(v3_package["MediaServerNotifyPlus"]["system_version"], ">=3.0.0")
 
     def test_v2_uses_v2_host_contracts(self):
@@ -60,7 +60,10 @@ class AdaptationTests(unittest.TestCase):
             self.assertTrue((plugin / "dist/assets/remoteEntry.js").is_file())
             source = (plugin / "src/components/Config.vue").read_text(encoding="utf-8")
             self.assertIn("可通知内容", source)
-            self.assertIn("具体媒体库", source)
+            self.assertIn("媒体服务器", source)
+            self.assertIn("repeat(4", source)
+            self.assertNotIn("查询媒体元数据", source)
+            self.assertNotIn("查询 IP 归属地", source)
             self.assertIn("消息渠道遵循 MoviePilot 全局设置", source)
 
     def test_notification_type_is_fixed_to_media_server(self):

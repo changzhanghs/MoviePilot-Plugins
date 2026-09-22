@@ -53,7 +53,7 @@ const fieldMeta = key => draft.value._field_catalog?.[key] || { label: key }
 const activeFields = computed(() => draft.value.field_configs?.[activeAction.value] || [])
 const activeMeta = computed(() => actionMeta(activeAction.value))
 const enabledTypes = computed(() => new Set(draft.value.types || []))
-const libraryOptions = computed(() => draft.value._library_options || [])
+const serverOptions = computed(() => draft.value._server_options || [])
 
 function isEnabled(action) {
   return enabledTypes.value.has(action)
@@ -88,6 +88,9 @@ function resetFields() {
 function cleanPayload() {
   const payload = clone(draft.value)
   Object.keys(payload).filter(key => key.startsWith('_')).forEach(key => delete payload[key])
+  delete payload.libraries
+  delete payload.fetch_metadata
+  delete payload.lookup_ip
   payload.types = actionOrder.filter(action => (payload.types || []).includes(action))
   return payload
 }
@@ -241,13 +244,13 @@ function enabledFieldCount(action) {
           </div>
 
           <div class="setting-block">
-            <label>具体媒体库</label>
+            <label>媒体服务器</label>
             <VSelect
-              v-model="draft.libraries"
-              :items="libraryOptions"
+              v-model="draft.mediaservers"
+              :items="serverOptions"
               item-title="title"
               item-value="value"
-              placeholder="未选择时监听全部媒体库"
+              placeholder="未选择时监听全部媒体服务器"
               multiple
               chips
               closable-chips
@@ -255,7 +258,7 @@ function enabledFieldCount(action) {
               variant="outlined"
               hide-details
             />
-            <small>登录类通知不受媒体库筛选影响。</small>
+            <small>选择需要接收通知的 Emby、Jellyfin 或 Plex 实例。</small>
           </div>
 
           <div class="setting-row">
@@ -269,8 +272,6 @@ function enabledFieldCount(action) {
             <VTextField v-model.number="draft.dedupe_playback" label="播放事件去重（秒）" type="number" min="0" variant="outlined" hide-details />
           </div>
 
-          <div class="setting-row"><div><strong>查询媒体元数据</strong><span>补充评分、演员、分类等内容</span></div><VSwitch v-model="draft.fetch_metadata" color="primary" hide-details /></div>
-          <div class="setting-row"><div><strong>查询 IP 归属地</strong><span>仅在所选通知启用 IP 字段时展示</span></div><VSwitch v-model="draft.lookup_ip" color="primary" hide-details /></div>
           <div class="setting-row"><div><strong>停止时发送待聚合消息</strong><span>插件重载或停止时不丢弃队列</span></div><VSwitch v-model="draft.flush_on_stop" color="primary" hide-details /></div>
 
           <div class="setting-block test-block">
@@ -298,17 +299,17 @@ function enabledFieldCount(action) {
 h1 { margin: 3px 0 4px; font-size: clamp(28px, 4vw, 38px); line-height: 1.15; letter-spacing: -.035em; }
 .page-header p { margin: 0; color: rgba(var(--v-theme-on-surface), .62); }
 .settings-button { margin-top: 8px; }
-.card-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
+.card-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
 .event-card { cursor: pointer; border-color: var(--line); border-radius: 18px; overflow: hidden; transition: border-color .18s ease, transform .18s ease, background-color .18s ease; }
 .event-card:hover, .event-card:focus-visible { border-color: rgba(var(--v-theme-primary), .66); background: rgba(var(--v-theme-primary), .035); transform: translateY(-1px); outline: none; }
 .event-card--disabled { opacity: .68; }
-.event-card__body { min-height: 154px; padding: 18px 18px 14px; }
+.event-card__body { min-height: 136px; padding: 14px 14px 10px; }
 .event-card__top { display: flex; align-items: center; justify-content: space-between; }
-.event-icon, .dialog-title-icon { display: grid; place-items: center; width: 46px; height: 46px; color: rgb(var(--v-theme-primary)); background: rgba(var(--v-theme-primary), .12); border-radius: 14px; }
-.event-card__copy { margin-top: 20px; }
-.event-card__copy h2 { margin: 0 0 5px; font-size: 18px; line-height: 1.3; }
+.event-icon, .dialog-title-icon { display: grid; place-items: center; width: 40px; height: 40px; color: rgb(var(--v-theme-primary)); background: rgba(var(--v-theme-primary), .12); border-radius: 12px; }
+.event-card__copy { margin-top: 14px; }
+.event-card__copy h2 { margin: 0 0 4px; font-size: 16px; line-height: 1.3; }
 .event-card__copy p { margin: 0; min-height: 42px; color: rgba(var(--v-theme-on-surface), .58); font-size: 13px; line-height: 1.55; }
-.event-card__status { display: flex; align-items: center; gap: 8px; min-height: 42px; padding: 0 18px; border-top: 1px solid var(--line); background: var(--surface-soft); color: rgba(var(--v-theme-on-surface), .65); font-size: 12px; }
+.event-card__status { display: flex; align-items: center; gap: 7px; min-height: 38px; padding: 0 14px; border-top: 1px solid var(--line); background: var(--surface-soft); color: rgba(var(--v-theme-on-surface), .65); font-size: 11px; }
 .status-dot { width: 7px; height: 7px; border-radius: 50%; background: rgb(var(--v-theme-success)); box-shadow: 0 0 0 3px rgba(var(--v-theme-success), .12); }
 .status-dot--off { background: rgba(var(--v-theme-on-surface), .36); box-shadow: none; }
 .page-actions { position: sticky; bottom: 0; z-index: 3; display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-top: 22px; padding: 14px 0 6px; background: rgb(var(--v-theme-surface)); }
@@ -343,6 +344,9 @@ h1 { margin: 3px 0 4px; font-size: clamp(28px, 4vw, 38px); line-height: 1.15; le
 .setting-block small { color: rgba(var(--v-theme-on-surface), .5); }
 .settings-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
 .settings-grid--test { align-items: center; }
+@media (max-width: 1040px) {
+  .card-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
 @media (max-width: 680px) {
   .notify-config { padding-top: 0; }
   .page-header { align-items: center; }

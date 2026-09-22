@@ -23,7 +23,7 @@ class MediaServerNotifyPlus(MediaServerNotifyCore, _PluginBase):
     plugin_name = "媒体库通知"
     plugin_desc = "Emby/Jellyfin/Plex 媒体库通知；按事件选择、排序并命名通知字段。"
     plugin_icon = "mediaplay.png"
-    plugin_version = "3.0.1"
+    plugin_version = "3.0.2"
     plugin_author = "cz"
     author_url = "https://github.com/changzhanghs/MoviePilot-Plugins"
     plugin_config_prefix = "mediaservernotifyplus_"
@@ -139,14 +139,12 @@ class MediaServerNotifyPlus(MediaServerNotifyCore, _PluginBase):
         return None, None
 
     def _enrich_context(self, info: Any, context: Dict[str, Any]) -> None:
-        if (
-            self._lookup_ip and context.get("ip")
-            and self._field_enabled(str(context.get("_action") or ""), "ip")
-        ):
+        action = str(context.get("_action") or "")
+        if context.get("ip") and self._field_enabled(action, "ip_location"):
             try:
                 location = WebUtils.get_location(str(context["ip"]))
                 if location:
-                    context["ip"] = f"{context['ip']} {location}"
+                    context["ip_location"] = str(location)
             except Exception as error:
                 logger.debug(f"查询 IP 归属地失败：{error}")
 
@@ -163,7 +161,9 @@ class MediaServerNotifyPlus(MediaServerNotifyCore, _PluginBase):
             f"https://www.themoviedb.org/movie/{media_id}"
             if kind == MediaType.MOVIE else f"https://www.themoviedb.org/tv/{media_id}"
         )
-        if not self._fetch_metadata:
+        if not any(self._field_enabled(action, field) for field in (
+            "year", "category", "rating", "region", "status", "genres", "actors", "overview",
+        )):
             return
 
         season = getattr(info, "season_id", None)
