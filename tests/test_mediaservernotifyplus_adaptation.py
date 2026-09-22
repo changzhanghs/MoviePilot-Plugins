@@ -20,9 +20,9 @@ class AdaptationTests(unittest.TestCase):
     def test_versions_and_manifests_match(self):
         v2_package = json.loads((ROOT / "package.v2.json").read_text(encoding="utf-8"))
         v3_package = json.loads((ROOT / "package.v3.json").read_text(encoding="utf-8"))
-        self.assertEqual(v2_package["MediaServerNotifyPlus"]["version"], "2.0.4")
+        self.assertEqual(v2_package["MediaServerNotifyPlus"]["version"], "2.0.5")
         self.assertFalse(v2_package["MediaServerNotifyPlus"]["v3"])
-        self.assertEqual(v3_package["MediaServerNotifyPlus"]["version"], "3.0.4")
+        self.assertEqual(v3_package["MediaServerNotifyPlus"]["version"], "3.0.5")
         self.assertEqual(v3_package["MediaServerNotifyPlus"]["system_version"], ">=3.0.0")
 
     def test_v2_uses_v2_host_contracts(self):
@@ -68,12 +68,13 @@ class AdaptationTests(unittest.TestCase):
             self.assertIn("<h1>媒体库通知</h1>", source)
             page = (plugin / "src/components/Page.vue").read_text(encoding="utf-8")
             self.assertIn("emit('switch')", page)
-            self.assertIn("sessionStorage.setItem", page)
+            self.assertIn("onMounted(() => emit('switch'))", page)
+            self.assertNotIn("plugin/form/", page)
+            self.assertNotIn("detail-grid", page)
             self.assertNotIn("@click=\"$emit('action')\"", page)
             shared = (plugin / "src/notificationModel.js").read_text(encoding="utf-8")
             self.assertIn("normalizeNotificationModel", source)
-            self.assertIn("normalizeNotificationModel", page)
-            self.assertIn("['client', 'year', 'channel']", shared)
+            self.assertIn("['client', 'year', 'channel', 'ip_location']", shared)
 
     def test_notification_type_is_fixed_to_media_server(self):
         v2 = (ROOT / "plugins.v2/mediaservernotifyplus/__init__.py").read_text(encoding="utf-8")

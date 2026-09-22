@@ -14,7 +14,7 @@ from app.sdk.network import WebUtils
 from app.sdk.plugin import _PluginBase
 from app.sdk.services import MediaServerHelper
 
-from .core import MediaServerNotifyCore
+from .core import MediaServerNotifyCore, merge_ip_location
 
 
 class MediaServerNotifyPlus(MediaServerNotifyCore, _PluginBase):
@@ -23,7 +23,7 @@ class MediaServerNotifyPlus(MediaServerNotifyCore, _PluginBase):
     plugin_name = "媒体库通知"
     plugin_desc = "Emby/Jellyfin/Plex 媒体库通知；按事件选择、排序并命名通知字段。"
     plugin_icon = "mediaplay.png"
-    plugin_version = "3.0.4"
+    plugin_version = "3.0.5"
     plugin_author = "cz"
     author_url = "https://github.com/changzhanghs/MoviePilot-Plugins"
     plugin_config_prefix = "mediaservernotifyplus_"
@@ -140,11 +140,11 @@ class MediaServerNotifyPlus(MediaServerNotifyCore, _PluginBase):
 
     def _enrich_context(self, info: Any, context: Dict[str, Any]) -> None:
         action = str(context.get("_action") or "")
-        if context.get("ip") and self._field_enabled(action, "ip_location"):
+        if context.get("ip") and self._field_enabled(action, "ip"):
             try:
                 location = WebUtils.get_location(str(context["ip"]))
                 if location:
-                    context["ip_location"] = str(location)
+                    context["ip"] = merge_ip_location(context["ip"], location)
             except Exception as error:
                 logger.debug(f"查询 IP 归属地失败：{error}")
 

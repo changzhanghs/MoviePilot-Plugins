@@ -69,7 +69,6 @@ FIELD_CATALOG: Dict[str, Dict[str, str]] = {
     "user": {"label": "用户", "icon": "👤"},
     "device": {"label": "设备", "icon": "📱"},
     "ip": {"label": "IP", "icon": "🌐"},
-    "ip_location": {"label": "IP 归属地", "icon": "📍"},
     "progress": {"label": "播放进度", "icon": "⏱️"},
     "media_source": {"label": "媒体来源", "icon": "🔎"},
     "media_id": {"label": "媒体 ID", "icon": "🆔"},
@@ -89,23 +88,23 @@ ACTION_FIELDS: Dict[str, Tuple[str, ...]] = {
         "media_source", "media_id", "album", "artist",
     ),
     "playback_started": (
-        "season_episode", "user", "device", "ip", "ip_location", "progress", "overview", "library",
+        "season_episode", "user", "device", "ip", "progress", "overview", "library",
         "media_type", "server", "time", "play_link",
     ),
     "playback_stopped": (
-        "season_episode", "user", "device", "ip", "ip_location", "progress", "overview", "library",
+        "season_episode", "user", "device", "ip", "progress", "overview", "library",
         "media_type", "server", "time", "play_link",
     ),
     "playback_paused": (
-        "season_episode", "user", "device", "ip", "ip_location", "progress", "overview", "library",
+        "season_episode", "user", "device", "ip", "progress", "overview", "library",
         "server", "time", "play_link",
     ),
     "playback_resumed": (
-        "season_episode", "user", "device", "ip", "ip_location", "progress", "overview", "library",
+        "season_episode", "user", "device", "ip", "progress", "overview", "library",
         "server", "time", "play_link",
     ),
-    "auth_success": ("user", "device", "ip", "ip_location", "server", "time"),
-    "auth_failed": ("user", "device", "ip", "ip_location", "server", "time"),
+    "auth_success": ("user", "device", "ip", "server", "time"),
+    "auth_failed": ("user", "device", "ip", "server", "time"),
     "rated": (
         "season_episode", "user", "library", "media_type", "rating", "overview", "server",
         "time", "media_source", "media_id",
@@ -260,6 +259,17 @@ def normalize_field_configs(value: Any) -> Dict[str, List[Dict[str, Any]]]:
     return normalized
 
 
+def merge_ip_location(ip: Any, location: Any) -> str:
+    """把 IP 与归属地合成一个可通知字段，避免界面出现两个重复选项。"""
+    address = str(ip or "").strip()
+    place = str(location or "").strip()
+    if not address:
+        return ""
+    if not place or place in address:
+        return address
+    return f"{address} {place}"
+
+
 class FieldTemplateRenderer:
     """按照用户选择的字段顺序生成通知正文。"""
 
@@ -270,10 +280,11 @@ class FieldTemplateRenderer:
         if action not in ACTION_LABELS:
             raise TemplateError(f"未知通知类型：{action}")
         title = self._event_heading(action, context)
-        lines: List[str] = []
         display_name = str(context.get("display_name") or "").strip()
         if display_name and action not in {"auth_success", "auth_failed", "test"}:
-            lines.append(display_name)
+            # MoviePilot 会以大号标题样式渲染 title；媒体名放在第二行即可
+            # 获得与事件标题一致的醒目层级，同时保留正文的自定义字段布局。
+            title = f"{title}\n{display_name}"
         detail_lines: List[str] = []
         for row in self._field_configs[action]:
             if not row.get("enabled"):
@@ -290,11 +301,7 @@ class FieldTemplateRenderer:
                 detail_lines.append(f"{meta['icon']} [{label}]({value})")
             else:
                 detail_lines.append(f"{meta['icon']} {label}：{value}")
-        if detail_lines:
-            if lines:
-                lines.append("")
-            lines.extend(detail_lines)
-        return title, "\n".join(lines).strip()
+        return title, "\n".join(detail_lines).strip()
 
     @staticmethod
     def _event_heading(action: str, context: Mapping[str, Any]) -> str:
@@ -679,7 +686,6 @@ class MediaServerNotifyCore:
             ),
             "client": client,
             "ip": getattr(info, "ip", "") or raw.get("RemoteEndPoint") or "",
-            "ip_location": "",
             "progress": progress,
             "tmdb_id": "",
             "tmdb_url": "",
@@ -825,8 +831,8 @@ class MediaServerNotifyCore:
             "rating": "8.6/10", "region": "中国大陆", "status": "连载中",
             "genres": "剧情、科幻", "actors": "演员甲、演员乙",
             "overview": "这是一段用于检查自定义通知排版的示例简介。", "user": "测试用户",
-            "device": "MoviePilot 测试设备 · Emby", "client": "Emby", "ip": "192.0.2.1",
-            "ip_location": "中国 上海",
+            "device": "MoviePilot 测试设备 · Emby", "client": "Emby",
+            "ip": "192.0.2.1 中国 上海",
             "progress": "36%", "tmdb_id": "1", "tmdb_url": "https://www.themoviedb.org/movie/1",
             "media_source": "themoviedb", "media_id": "1", "file_count": "3",
             "library": "电影库", "album": "示例专辑", "artist": "示例歌手",
