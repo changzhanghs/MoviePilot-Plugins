@@ -246,6 +246,13 @@ function enabledFieldCount(action) {
             <small>选择需要接收通知的 Emby、Jellyfin 或 Plex 实例。</small>
           </div>
 
+          <VAlert class="webhook-guide" type="info" variant="tonal" icon="mdi-webhook">
+            <strong>媒体服务器 Webhook 配置</strong>
+            <span>回调地址为：</span>
+            <code>http://localhost:3000/api/v1/webhook?token=API_TOKEN&amp;source=媒体服务器名</code>
+            <span>其中 <code>API_TOKEN</code> 替换为 MoviePilot 设置中的 API Token，<code>source</code> 必须与上方媒体服务器名称一致。如果媒体服务器与 MoviePilot 不在同一台主机，请将 <code>localhost</code> 换成 MoviePilot 的实际 IP 或域名。</span>
+          </VAlert>
+
           <div class="setting-row">
             <div><strong>聚合剧集入库</strong><span>同一剧集在窗口内只发送一条通知</span></div>
             <VSwitch v-model="draft.aggregate_enabled" color="primary" hide-details />
@@ -327,6 +334,10 @@ h1 { margin: 3px 0 4px; font-size: clamp(28px, 4vw, 38px); line-height: 1.15; le
 .setting-block { display: grid; gap: 8px; padding: 15px 16px; border: 1px solid var(--line); border-radius: 14px; }
 .setting-block label { font-size: 14px; font-weight: 650; }
 .setting-block small { color: rgba(var(--v-theme-on-surface), .5); }
+.webhook-guide strong, .webhook-guide span, .webhook-guide code { display: block; }
+.webhook-guide span { margin-top: 5px; line-height: 1.55; }
+.webhook-guide code { margin-top: 9px; padding: 9px 10px; overflow-wrap: anywhere; border-radius: 8px; background: rgba(var(--v-theme-on-surface), .07); font-size: 12px; }
+.webhook-guide span code { display: inline; margin: 0; padding: 0; background: transparent; }
 .settings-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
 .settings-grid--test { align-items: center; }
 @media (max-width: 1040px) {

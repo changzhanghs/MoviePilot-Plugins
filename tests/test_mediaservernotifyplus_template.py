@@ -126,6 +126,7 @@ class TemplateTests(unittest.TestCase):
         self.assertEqual(plugin.messages[-1]["title"], "▶️ 开始播放\n示例影片 (2026)")
         self.assertNotIn("示例影片 (2026)", plugin.messages[-1]["text"])
         self.assertIn("36%", plugin.messages[-1]["text"])
+        self.assertTrue(plugin.messages[-1]["image"].startswith("https://image.tmdb.org/"))
         self.assertFalse(plugin.saved_config["send_test"])
 
     def test_library_added_uses_fixed_heading_and_clickable_tmdb_card(self):

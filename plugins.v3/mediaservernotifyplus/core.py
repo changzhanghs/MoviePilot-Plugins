@@ -836,7 +836,9 @@ class MediaServerNotifyCore:
             "progress": "36%", "tmdb_id": "1", "tmdb_url": "https://www.themoviedb.org/movie/1",
             "media_source": "themoviedb", "media_id": "1", "file_count": "3",
             "library": "电影库", "album": "示例专辑", "artist": "示例歌手",
-            "play_link": "https://media.example/item/1", "_image": None, "_link": None,
+            "play_link": "https://media.example/item/1",
+            "_image": "https://image.tmdb.org/t/p/w500/1E5baAaEse26fej7uHcjOgEE2t2.jpg",
+            "_link": None,
             "_item_id": None,
         }
         self._send_context(action, sample)

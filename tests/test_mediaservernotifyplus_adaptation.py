@@ -20,10 +20,14 @@ class AdaptationTests(unittest.TestCase):
     def test_versions_and_manifests_match(self):
         v2_package = json.loads((ROOT / "package.v2.json").read_text(encoding="utf-8"))
         v3_package = json.loads((ROOT / "package.v3.json").read_text(encoding="utf-8"))
-        self.assertEqual(v2_package["MediaServerNotifyPlus"]["version"], "2.0.5")
+        self.assertEqual(v2_package["MediaServerNotifyPlus"]["version"], "2.0.6")
         self.assertFalse(v2_package["MediaServerNotifyPlus"]["v3"])
-        self.assertEqual(v3_package["MediaServerNotifyPlus"]["version"], "3.0.5")
+        self.assertEqual(v3_package["MediaServerNotifyPlus"]["version"], "3.0.6")
         self.assertEqual(v3_package["MediaServerNotifyPlus"]["system_version"], ">=3.0.0")
+        for package in (v2_package, v3_package):
+            metadata = package["MediaServerNotifyPlus"]
+            self.assertEqual(metadata["description"], "极简配置可自定义的媒体库通知消息")
+            self.assertEqual(metadata["author"], "cz")
 
     def test_v2_uses_v2_host_contracts(self):
         source = ROOT / "plugins.v2" / "mediaservernotifyplus" / "__init__.py"
@@ -65,6 +69,8 @@ class AdaptationTests(unittest.TestCase):
             self.assertNotIn("查询媒体元数据", source)
             self.assertNotIn("查询 IP 归属地", source)
             self.assertIn("消息渠道遵循 MoviePilot 全局设置", source)
+            self.assertIn("http://localhost:3000/api/v1/webhook", source)
+            self.assertNotIn("localhost:3001", source)
             self.assertIn("<h1>媒体库通知</h1>", source)
             page = (plugin / "src/components/Page.vue").read_text(encoding="utf-8")
             self.assertIn("emit('switch')", page)
