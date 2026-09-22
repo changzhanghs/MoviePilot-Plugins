@@ -8,7 +8,7 @@
 
 ## 安装
 
-将仓库地址加入 MoviePilot 的插件市场设置，刷新插件市场后可搜索“PT数据统计”或“媒体库通知”：
+同步插件市场的插件源或手动添加地址，刷新插件市场后搜索对应插件名
 
 ```text
 https://github.com/changzhanghs/MoviePilot-Plugins
