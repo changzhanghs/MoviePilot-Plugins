@@ -55,10 +55,8 @@ ACTION_DESCRIPTIONS: Dict[str, str] = {
 FIELD_CATALOG: Dict[str, Dict[str, str]] = {
     "time": {"label": "时间", "icon": "🕐"},
     "server": {"label": "服务器", "icon": "🖥️"},
-    "channel": {"label": "媒体服务", "icon": "📡"},
     "library": {"label": "媒体库", "icon": "🗂️"},
     "media_type": {"label": "媒体类型", "icon": "🎞️"},
-    "year": {"label": "年份", "icon": "📅"},
     "category": {"label": "分类", "icon": "📁"},
     "season_episode": {"label": "季集", "icon": "📺"},
     "file_count": {"label": "文件数量", "icon": "📄"},
@@ -69,8 +67,7 @@ FIELD_CATALOG: Dict[str, Dict[str, str]] = {
     "actors": {"label": "演员", "icon": "🎬"},
     "overview": {"label": "剧情简介", "icon": "📖", "style": "block"},
     "user": {"label": "用户", "icon": "👤"},
-    "device": {"label": "设备 / 客户端", "icon": "📱"},
-    "client": {"label": "客户端", "icon": "💻"},
+    "device": {"label": "设备", "icon": "📱"},
     "ip": {"label": "IP", "icon": "🌐"},
     "ip_location": {"label": "IP 归属地", "icon": "📍"},
     "progress": {"label": "播放进度", "icon": "⏱️"},
@@ -83,37 +80,37 @@ FIELD_CATALOG: Dict[str, Dict[str, str]] = {
 
 ACTION_FIELDS: Dict[str, Tuple[str, ...]] = {
     "library_added": (
-        "season_episode", "library", "category", "file_count", "media_type", "year",
+        "season_episode", "library", "category", "file_count", "media_type",
         "rating", "region", "status", "genres", "actors", "overview", "server",
-        "channel", "time", "media_source", "media_id", "album", "artist",
+        "time", "media_source", "media_id", "album", "artist",
     ),
     "library_deleted": (
-        "season_episode", "library", "media_type", "year", "server", "channel", "time",
+        "season_episode", "library", "media_type", "overview", "server", "time",
         "media_source", "media_id", "album", "artist",
     ),
     "playback_started": (
         "season_episode", "user", "device", "ip", "ip_location", "progress", "overview", "library",
-        "media_type", "year", "server", "channel", "time", "play_link",
+        "media_type", "server", "time", "play_link",
     ),
     "playback_stopped": (
         "season_episode", "user", "device", "ip", "ip_location", "progress", "overview", "library",
-        "media_type", "year", "server", "channel", "time", "play_link",
+        "media_type", "server", "time", "play_link",
     ),
     "playback_paused": (
         "season_episode", "user", "device", "ip", "ip_location", "progress", "overview", "library",
-        "server", "channel", "time", "play_link",
+        "server", "time", "play_link",
     ),
     "playback_resumed": (
         "season_episode", "user", "device", "ip", "ip_location", "progress", "overview", "library",
-        "server", "channel", "time", "play_link",
+        "server", "time", "play_link",
     ),
-    "auth_success": ("user", "device", "ip", "ip_location", "server", "channel", "time"),
-    "auth_failed": ("user", "device", "ip", "ip_location", "server", "channel", "time"),
+    "auth_success": ("user", "device", "ip", "ip_location", "server", "time"),
+    "auth_failed": ("user", "device", "ip", "ip_location", "server", "time"),
     "rated": (
-        "season_episode", "user", "library", "media_type", "year", "rating", "server",
-        "channel", "time", "media_source", "media_id",
+        "season_episode", "user", "library", "media_type", "rating", "overview", "server",
+        "time", "media_source", "media_id",
     ),
-    "test": ("server", "channel", "time"),
+    "test": ("server", "time"),
 }
 
 DEFAULT_ENABLED_FIELDS: Dict[str, Tuple[str, ...]] = {
@@ -126,7 +123,7 @@ DEFAULT_ENABLED_FIELDS: Dict[str, Tuple[str, ...]] = {
     "auth_success": ("user", "device", "ip", "server", "time"),
     "auth_failed": ("user", "device", "ip", "server", "time"),
     "rated": ("season_episode", "user", "rating", "server", "time"),
-    "test": ("server", "channel", "time"),
+    "test": ("server", "time"),
 }
 
 ACTION_ALIASES: Dict[str, str] = {
@@ -248,6 +245,8 @@ def normalize_field_configs(value: Any) -> Dict[str, List[Dict[str, Any]]]:
             if key not in allowed or key in seen:
                 continue
             label = str(row.get("label") or FIELD_CATALOG[key]["label"]).strip()
+            if key == "device" and label in {"设备 / 客户端", "设备/客户端"}:
+                label = FIELD_CATALOG[key]["label"]
             rows.append({
                 "key": key,
                 "label": (label or FIELD_CATALOG[key]["label"])[:30],
@@ -799,8 +798,12 @@ class MediaServerNotifyCore:
             except Exception as error:
                 self._log_debug(f"生成播放链接失败：{error}")
         title, body = self._renderer.render(action, context)
-        # MoviePilot 的 link 会让整张消息卡片可点击；优先跳转 TMDB。
-        context["_link"] = context.get("tmdb_url") or context.get("_link")
+        # 登录和测试通知不属于媒体卡片，不附带 TMDB 跳转。
+        if action in {"auth_success", "auth_failed", "test"}:
+            context["_link"] = None
+        else:
+            # MoviePilot 的 link 会让整张消息卡片可点击；优先跳转 TMDB。
+            context["_link"] = context.get("tmdb_url") or context.get("_link")
         self.post_message(
             mtype=self._notification_type,
             title=title,

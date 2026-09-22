@@ -1,7 +1,7 @@
 import { importShared } from './__federation_fn_import-JrT3xvdd.js';
-import { _ as _export_sfc } from './_plugin-vue_export-helper-pcqpp-6-.js';
+import { _ as _export_sfc, a as actionOrder, b as actionMetaFallback, n as normalizeNotificationModel } from './_plugin-vue_export-helper-DIfCoLzf.js';
 
-const {resolveComponent:_resolveComponent,createVNode:_createVNode,withCtx:_withCtx,createElementVNode:_createElementVNode,createTextVNode:_createTextVNode,openBlock:_openBlock,createElementBlock:_createElementBlock,createCommentVNode:_createCommentVNode,toDisplayString:_toDisplayString,createBlock:_createBlock,renderList:_renderList,Fragment:_Fragment,normalizeClass:_normalizeClass,withKeys:_withKeys} = await importShared('vue');
+const {resolveComponent:_resolveComponent,createVNode:_createVNode,withCtx:_withCtx,createElementVNode:_createElementVNode,createTextVNode:_createTextVNode,openBlock:_openBlock,createElementBlock:_createElementBlock,createCommentVNode:_createCommentVNode,toDisplayString:_toDisplayString,createBlock:_createBlock,unref:_unref,renderList:_renderList,Fragment:_Fragment,normalizeClass:_normalizeClass,withKeys:_withKeys} = await importShared('vue');
 
 
 const _hoisted_1 = {
@@ -17,7 +17,6 @@ const _hoisted_3 = { class: "detail-card__top" };
 const {computed,onMounted,ref} = await importShared('vue');
 
 
-
 const _sfc_main = {
   __name: 'Page',
   props: {
@@ -29,17 +28,6 @@ const _sfc_main = {
 
 const props = __props;
 const emit = __emit;
-const actionOrder = [
-  'library_added', 'library_deleted', 'playback_started', 'playback_stopped',
-  'playback_paused', 'playback_resumed', 'auth_success', 'auth_failed', 'rated', 'test',
-];
-const fallbacks = {
-  library_added: ['已入库', 'mdi-folder-arrow-down'], library_deleted: ['已删除', 'mdi-delete-outline'],
-  playback_started: ['开始播放', 'mdi-play-circle-outline'], playback_stopped: ['停止播放', 'mdi-stop-circle-outline'],
-  playback_paused: ['暂停播放', 'mdi-pause-circle-outline'], playback_resumed: ['继续播放', 'mdi-play-circle'],
-  auth_success: ['登录成功', 'mdi-login-variant'], auth_failed: ['登录失败', 'mdi-shield-alert-outline'],
-  rated: ['已标记', 'mdi-star-circle-outline'], test: ['测试', 'mdi-flask-outline'],
-};
 const loading = ref(true);
 const loadError = ref('');
 const model = ref({ types: [] });
@@ -56,7 +44,7 @@ function unwrap(value) {
   return current
 }
 function actionLabel(action) {
-  return model.value._action_meta?.[action]?.label || fallbacks[action][0]
+  return model.value._action_meta?.[action]?.label || actionMetaFallback[action].label
 }
 function fieldCount(action) {
   return (model.value.field_configs?.[action] || []).filter(row => row.enabled).length
@@ -66,7 +54,7 @@ async function load() {
   loadError.value = '';
   try {
     const response = unwrap(await props.api.get(`plugin/form/${props.pluginId}`, { feedback: 'silent' }));
-    model.value = response?.model || response || { types: [] };
+    model.value = normalizeNotificationModel(response?.model || response || { types: [] });
   } catch (error) {
     loadError.value = error?.message || '读取插件配置失败';
   } finally {
@@ -156,8 +144,8 @@ return (_ctx, _cache) => {
                   _: 1
                 }))
               : (_openBlock(), _createElementBlock("div", _hoisted_2, [
-                  (_openBlock(), _createElementBlock(_Fragment, null, _renderList(actionOrder, (action) => {
-                    return _createVNode(_component_VCard, {
+                  (_openBlock(true), _createElementBlock(_Fragment, null, _renderList(_unref(actionOrder), (action) => {
+                    return (_openBlock(), _createBlock(_component_VCard, {
                       key: action,
                       class: "detail-card",
                       variant: "outlined",
@@ -170,7 +158,7 @@ return (_ctx, _cache) => {
                           default: _withCtx(() => [
                             _createElementVNode("div", _hoisted_3, [
                               _createVNode(_component_VIcon, {
-                                icon: fallbacks[action][1],
+                                icon: _unref(actionMetaFallback)[action].icon,
                                 color: "primary"
                               }, null, 8, ["icon"]),
                               _createElementVNode("span", {
@@ -184,8 +172,8 @@ return (_ctx, _cache) => {
                         }, 1024)
                       ]),
                       _: 2
-                    }, 1032, ["onClick", "onKeydown"])
-                  }), 64))
+                    }, 1032, ["onClick", "onKeydown"]))
+                  }), 128))
                 ]))
         ]),
         _: 1
@@ -197,6 +185,6 @@ return (_ctx, _cache) => {
 }
 
 };
-const Page = /*#__PURE__*/_export_sfc(_sfc_main, [['__scopeId',"data-v-9ba991cd"]]);
+const Page = /*#__PURE__*/_export_sfc(_sfc_main, [['__scopeId',"data-v-5480d056"]]);
 
 export { Page as default };
