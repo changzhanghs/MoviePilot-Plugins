@@ -514,8 +514,30 @@ return (_ctx, _cache) => {
                   }, null, 8, ["modelValue", "items"]),
                   _cache[33] || (_cache[33] = _createElementVNode("small", null, "选择需要接收通知的 Emby、Jellyfin 或 Plex 实例。", -1))
                 ]),
+                _createVNode(_component_VAlert, {
+                  class: "webhook-guide",
+                  type: "info",
+                  variant: "tonal",
+                  icon: "mdi-webhook"
+                }, {
+                  default: _withCtx(() => [...(_cache[34] || (_cache[34] = [
+                    _createElementVNode("strong", null, "媒体服务器 Webhook 配置", -1),
+                    _createElementVNode("span", null, "回调地址为：", -1),
+                    _createElementVNode("code", null, "http://localhost:3000/api/v1/webhook?token=API_TOKEN&source=媒体服务器名", -1),
+                    _createElementVNode("span", null, [
+                      _createTextVNode("其中 "),
+                      _createElementVNode("code", null, "API_TOKEN"),
+                      _createTextVNode(" 替换为 MoviePilot 设置中的 API Token，"),
+                      _createElementVNode("code", null, "source"),
+                      _createTextVNode(" 必须与上方媒体服务器名称一致。如果媒体服务器与 MoviePilot 不在同一台主机，请将 "),
+                      _createElementVNode("code", null, "localhost"),
+                      _createTextVNode(" 换成 MoviePilot 的实际 IP 或域名。")
+                    ], -1)
+                  ]))]),
+                  _: 1
+                }),
                 _createElementVNode("div", _hoisted_25, [
-                  _cache[34] || (_cache[34] = _createElementVNode("div", null, [
+                  _cache[35] || (_cache[35] = _createElementVNode("div", null, [
                     _createElementVNode("strong", null, "聚合剧集入库"),
                     _createElementVNode("span", null, "同一剧集在窗口内只发送一条通知")
                   ], -1)),
@@ -562,7 +584,7 @@ return (_ctx, _cache) => {
                   }, null, 8, ["modelValue"])
                 ]),
                 _createElementVNode("div", _hoisted_27, [
-                  _cache[35] || (_cache[35] = _createElementVNode("div", null, [
+                  _cache[36] || (_cache[36] = _createElementVNode("div", null, [
                     _createElementVNode("strong", null, "停止时发送待聚合消息"),
                     _createElementVNode("span", null, "插件重载或停止时不丢弃队列")
                   ], -1)),
@@ -574,7 +596,7 @@ return (_ctx, _cache) => {
                   }, null, 8, ["modelValue"])
                 ]),
                 _createElementVNode("div", _hoisted_28, [
-                  _cache[36] || (_cache[36] = _createElementVNode("label", null, "测试通知", -1)),
+                  _cache[37] || (_cache[37] = _createElementVNode("label", null, "测试通知", -1)),
                   _createElementVNode("div", _hoisted_29, [
                     _createVNode(_component_VSelect, {
                       modelValue: draft.value.preview_type,
@@ -598,7 +620,7 @@ return (_ctx, _cache) => {
                   variant: "tonal",
                   icon: "mdi-message-badge-outline"
                 }, {
-                  default: _withCtx(() => [...(_cache[37] || (_cache[37] = [
+                  default: _withCtx(() => [...(_cache[38] || (_cache[38] = [
                     _createTextVNode(" 消息渠道遵循 MoviePilot 全局设置，通知类型固定为“媒体库”。 ", -1)
                   ]))]),
                   _: 1
@@ -608,13 +630,13 @@ return (_ctx, _cache) => {
             }),
             _createVNode(_component_VCardActions, { class: "dialog-actions" }, {
               default: _withCtx(() => [
-                _cache[39] || (_cache[39] = _createElementVNode("span", null, "设置随主页面一起保存", -1)),
+                _cache[40] || (_cache[40] = _createElementVNode("span", null, "设置随主页面一起保存", -1)),
                 _createVNode(_component_VBtn, {
                   color: "primary",
                   variant: "flat",
                   onClick: _cache[18] || (_cache[18] = $event => (settingsOpen.value = false))
                 }, {
-                  default: _withCtx(() => [...(_cache[38] || (_cache[38] = [
+                  default: _withCtx(() => [...(_cache[39] || (_cache[39] = [
                     _createTextVNode("完成", -1)
                   ]))]),
                   _: 1
@@ -633,6 +655,6 @@ return (_ctx, _cache) => {
 }
 
 };
-const Config = /*#__PURE__*/_export_sfc(_sfc_main, [['__scopeId',"data-v-ac9de21e"]]);
+const Config = /*#__PURE__*/_export_sfc(_sfc_main, [['__scopeId',"data-v-76b61aa8"]]);
 
 export { Config as default };

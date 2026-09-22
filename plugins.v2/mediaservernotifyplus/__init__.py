@@ -20,11 +20,11 @@ class MediaServerNotifyPlus(MediaServerNotifyCore, _PluginBase):
     """支持按事件类型自定义模板的媒体服务器通知。"""
 
     plugin_name = "媒体库通知"
-    plugin_desc = "Emby/Jellyfin/Plex 媒体库通知；按事件选择、排序并命名通知字段。"
+    plugin_desc = "极简配置可自定义的媒体库通知消息"
     plugin_icon = "mediaplay.png"
-    plugin_version = "2.0.5"
+    plugin_version = "2.0.6"
     plugin_author = "cz"
-    author_url = "https://github.com/changzhanghs/MoviePilot-Plugins"
+    author_url = "https://github.com/changzhanghs"
     plugin_config_prefix = "mediaservernotifyplus_"
     plugin_order = 14
     auth_level = 1

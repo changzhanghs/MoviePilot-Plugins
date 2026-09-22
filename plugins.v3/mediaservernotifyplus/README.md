@@ -4,8 +4,8 @@
 
 ## 版本
 
-- MoviePilot V2：`2.0.5`
-- MoviePilot V3：`3.0.5`
+- MoviePilot V2：`2.0.6`
+- MoviePilot V3：`3.0.6`
 - 插件 ID：`MediaServerNotifyPlus`
 - MoviePilot 通知类型固定为“媒体库”，消息渠道遵循 MoviePilot 全局设置。
 
