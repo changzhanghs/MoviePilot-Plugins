@@ -20,9 +20,9 @@ class AdaptationTests(unittest.TestCase):
     def test_versions_and_manifests_match(self):
         v2_package = json.loads((ROOT / "package.v2.json").read_text(encoding="utf-8"))
         v3_package = json.loads((ROOT / "package.v3.json").read_text(encoding="utf-8"))
-        self.assertEqual(v2_package["MediaServerNotifyPlus"]["version"], "2.0.0")
+        self.assertEqual(v2_package["MediaServerNotifyPlus"]["version"], "2.0.1")
         self.assertFalse(v2_package["MediaServerNotifyPlus"]["v3"])
-        self.assertEqual(v3_package["MediaServerNotifyPlus"]["version"], "3.0.0")
+        self.assertEqual(v3_package["MediaServerNotifyPlus"]["version"], "3.0.1")
         self.assertEqual(v3_package["MediaServerNotifyPlus"]["system_version"], ">=3.0.0")
 
     def test_v2_uses_v2_host_contracts(self):
