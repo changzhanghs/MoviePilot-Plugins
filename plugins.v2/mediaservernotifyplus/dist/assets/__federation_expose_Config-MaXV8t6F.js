@@ -1,7 +1,7 @@
 import { importShared } from './__federation_fn_import-JrT3xvdd.js';
-import { _ as _export_sfc } from './_plugin-vue_export-helper-pcqpp-6-.js';
+import { _ as _export_sfc, n as normalizeNotificationModel, a as actionOrder, b as actionMetaFallback } from './_plugin-vue_export-helper-DIfCoLzf.js';
 
-const {createElementVNode:_createElementVNode,createTextVNode:_createTextVNode,resolveComponent:_resolveComponent,withCtx:_withCtx,createVNode:_createVNode,openBlock:_openBlock,createBlock:_createBlock,createCommentVNode:_createCommentVNode,renderList:_renderList,Fragment:_Fragment,createElementBlock:_createElementBlock,withModifiers:_withModifiers,toDisplayString:_toDisplayString,normalizeClass:_normalizeClass,withKeys:_withKeys} = await importShared('vue');
+const {createElementVNode:_createElementVNode,createTextVNode:_createTextVNode,resolveComponent:_resolveComponent,withCtx:_withCtx,createVNode:_createVNode,openBlock:_openBlock,createBlock:_createBlock,createCommentVNode:_createCommentVNode,unref:_unref,renderList:_renderList,Fragment:_Fragment,createElementBlock:_createElementBlock,withModifiers:_withModifiers,toDisplayString:_toDisplayString,normalizeClass:_normalizeClass,withKeys:_withKeys} = await importShared('vue');
 
 
 const _hoisted_1 = { class: "notify-config" };
@@ -43,7 +43,6 @@ const _hoisted_29 = { class: "settings-grid settings-grid--test" };
 const {computed,onMounted,ref,watch} = await importShared('vue');
 
 
-
 const _sfc_main = {
   __name: 'Config',
   props: {
@@ -59,39 +58,15 @@ const _sfc_main = {
 const props = __props;
 const emit = __emit;
 
-const actionOrder = [
-  'library_added', 'library_deleted', 'playback_started', 'playback_stopped',
-  'playback_paused', 'playback_resumed', 'auth_success', 'auth_failed', 'rated', 'test',
-];
-const actionIcons = {
-  library_added: 'mdi-folder-arrow-down', library_deleted: 'mdi-delete-outline',
-  playback_started: 'mdi-play-circle-outline', playback_stopped: 'mdi-stop-circle-outline',
-  playback_paused: 'mdi-pause-circle-outline', playback_resumed: 'mdi-play-circle',
-  auth_success: 'mdi-login-variant', auth_failed: 'mdi-shield-alert-outline',
-  rated: 'mdi-star-circle-outline', test: 'mdi-flask-outline',
-};
-const fallbackMeta = {
-  library_added: ['已入库', '媒体文件加入媒体库时通知'],
-  library_deleted: ['已删除', '媒体文件从媒体库移除时通知'],
-  playback_started: ['开始播放', '用户开始播放媒体时通知'],
-  playback_stopped: ['停止播放', '用户停止播放媒体时通知'],
-  playback_paused: ['暂停播放', '用户暂停播放媒体时通知'],
-  playback_resumed: ['继续播放', '用户继续播放媒体时通知'],
-  auth_success: ['登录成功', '用户成功登录媒体服务器时通知'],
-  auth_failed: ['登录失败', '媒体服务器登录失败时通知'],
-  rated: ['已标记', '用户标记已看、未看或评分时通知'],
-  test: ['测试', '用于检查当前通知样式'],
-};
-
 const clone = value => JSON.parse(JSON.stringify(value || {}));
-const draft = ref(clone(props.initialConfig));
+const draft = ref(normalizeNotificationModel(props.initialConfig));
 const settingsOpen = ref(false);
 const editorOpen = ref(false);
 const activeAction = ref('library_added');
 const draggingIndex = ref(-1);
 const saved = ref(false);
 
-watch(() => props.initialConfig, value => { draft.value = clone(value); }, { deep: true });
+watch(() => props.initialConfig, value => { draft.value = normalizeNotificationModel(value); }, { deep: true });
 onMounted(() => {
   emit('layout', { maxWidth: '76rem' });
   try {
@@ -104,7 +79,7 @@ onMounted(() => {
 
 const actionMeta = action => {
   const supplied = draft.value._action_meta?.[action];
-  return supplied || { label: fallbackMeta[action][0], description: fallbackMeta[action][1] }
+  return supplied || actionMetaFallback[action]
 };
 const fieldMeta = key => draft.value._field_catalog?.[key] || { label: key };
 const activeFields = computed(() => draft.value.field_configs?.[activeAction.value] || []);
@@ -178,7 +153,7 @@ return (_ctx, _cache) => {
     _createElementVNode("header", _hoisted_2, [
       _cache[21] || (_cache[21] = _createElementVNode("div", null, [
         _createElementVNode("div", { class: "eyebrow" }, "MEDIA LIBRARY NOTIFICATIONS"),
-        _createElementVNode("h1", null, "通知模板"),
+        _createElementVNode("h1", null, "媒体库通知"),
         _createElementVNode("p", null, "选择通知类型，设置需要展示的内容和顺序。")
       ], -1)),
       _createVNode(_component_VBtn, {
@@ -208,8 +183,8 @@ return (_ctx, _cache) => {
         }))
       : _createCommentVNode("", true),
     _createElementVNode("section", _hoisted_3, [
-      (_openBlock(), _createElementBlock(_Fragment, null, _renderList(actionOrder, (action) => {
-        return _createVNode(_component_VCard, {
+      (_openBlock(true), _createElementBlock(_Fragment, null, _renderList(_unref(actionOrder), (action) => {
+        return (_openBlock(), _createBlock(_component_VCard, {
           key: action,
           class: _normalizeClass(["event-card", { 'event-card--disabled': !isEnabled(action) }]),
           variant: "outlined",
@@ -223,7 +198,7 @@ return (_ctx, _cache) => {
                 _createElementVNode("div", _hoisted_4, [
                   _createElementVNode("div", _hoisted_5, [
                     _createVNode(_component_VIcon, {
-                      icon: actionIcons[action],
+                      icon: _unref(actionMetaFallback)[action].icon,
                       size: "26"
                     }, null, 8, ["icon"])
                   ]),
@@ -257,8 +232,8 @@ return (_ctx, _cache) => {
             ])
           ]),
           _: 2
-        }, 1032, ["class", "onClick", "onKeydown"])
-      }), 64))
+        }, 1032, ["class", "onClick", "onKeydown"]))
+      }), 128))
     ]),
     _createElementVNode("footer", _hoisted_8, [
       _createElementVNode("span", _hoisted_9, [
@@ -304,7 +279,7 @@ return (_ctx, _cache) => {
               default: _withCtx(() => [
                 _createElementVNode("div", _hoisted_11, [
                   _createVNode(_component_VIcon, {
-                    icon: actionIcons[activeAction.value]
+                    icon: _unref(actionMetaFallback)[activeAction.value].icon
                   }, null, 8, ["icon"])
                 ]),
                 _createElementVNode("div", null, [
@@ -551,7 +526,7 @@ return (_ctx, _cache) => {
                     _createVNode(_component_VSelect, {
                       modelValue: draft.value.preview_type,
                       "onUpdate:modelValue": _cache[16] || (_cache[16] = $event => ((draft.value.preview_type) = $event)),
-                      items: actionOrder.map(value => ({ value, title: actionMeta(value).label })),
+                      items: _unref(actionOrder).map(value => ({ value, title: actionMeta(value).label })),
                       label: "通知类型",
                       variant: "outlined",
                       "hide-details": ""
@@ -605,6 +580,6 @@ return (_ctx, _cache) => {
 }
 
 };
-const Config = /*#__PURE__*/_export_sfc(_sfc_main, [['__scopeId',"data-v-14af9958"]]);
+const Config = /*#__PURE__*/_export_sfc(_sfc_main, [['__scopeId',"data-v-ac9de21e"]]);
 
 export { Config as default };

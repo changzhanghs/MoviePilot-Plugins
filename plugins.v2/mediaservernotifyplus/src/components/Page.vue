@@ -1,22 +1,12 @@
 <script setup>
 import { computed, onMounted, ref } from 'vue'
+import { actionMetaFallback, actionOrder, normalizeNotificationModel } from '../notificationModel.js'
 
 const props = defineProps({
   api: { type: Object, default: () => ({}) },
   pluginId: { type: String, default: 'MediaServerNotifyPlus' },
 })
 const emit = defineEmits(['action', 'switch', 'close'])
-const actionOrder = [
-  'library_added', 'library_deleted', 'playback_started', 'playback_stopped',
-  'playback_paused', 'playback_resumed', 'auth_success', 'auth_failed', 'rated', 'test',
-]
-const fallbacks = {
-  library_added: ['已入库', 'mdi-folder-arrow-down'], library_deleted: ['已删除', 'mdi-delete-outline'],
-  playback_started: ['开始播放', 'mdi-play-circle-outline'], playback_stopped: ['停止播放', 'mdi-stop-circle-outline'],
-  playback_paused: ['暂停播放', 'mdi-pause-circle-outline'], playback_resumed: ['继续播放', 'mdi-play-circle'],
-  auth_success: ['登录成功', 'mdi-login-variant'], auth_failed: ['登录失败', 'mdi-shield-alert-outline'],
-  rated: ['已标记', 'mdi-star-circle-outline'], test: ['测试', 'mdi-flask-outline'],
-}
 const loading = ref(true)
 const loadError = ref('')
 const model = ref({ types: [] })
@@ -33,7 +23,7 @@ function unwrap(value) {
   return current
 }
 function actionLabel(action) {
-  return model.value._action_meta?.[action]?.label || fallbacks[action][0]
+  return model.value._action_meta?.[action]?.label || actionMetaFallback[action].label
 }
 function fieldCount(action) {
   return (model.value.field_configs?.[action] || []).filter(row => row.enabled).length
@@ -43,7 +33,7 @@ async function load() {
   loadError.value = ''
   try {
     const response = unwrap(await props.api.get(`plugin/form/${props.pluginId}`, { feedback: 'silent' }))
-    model.value = response?.model || response || { types: [] }
+    model.value = normalizeNotificationModel(response?.model || response || { types: [] })
   } catch (error) {
     loadError.value = error?.message || '读取插件配置失败'
   } finally {
@@ -83,7 +73,7 @@ function openConfig(action = '') {
           @keydown.enter="openConfig(action)"
         >
           <VCardText>
-            <div class="detail-card__top"><VIcon :icon="fallbacks[action][1]" color="primary" /><span class="detail-state" :class="{ 'detail-state--off': !enabledTypes.has(action) }" /></div>
+            <div class="detail-card__top"><VIcon :icon="actionMetaFallback[action].icon" color="primary" /><span class="detail-state" :class="{ 'detail-state--off': !enabledTypes.has(action) }" /></div>
             <strong>{{ actionLabel(action) }}</strong>
             <small>{{ enabledTypes.has(action) ? `已启用 · ${fieldCount(action)} 个字段` : '已停用' }}</small>
           </VCardText>

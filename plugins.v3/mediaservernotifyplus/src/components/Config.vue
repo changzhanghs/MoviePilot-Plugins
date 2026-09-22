@@ -1,5 +1,6 @@
 <script setup>
 import { computed, onMounted, ref, watch } from 'vue'
+import { actionMetaFallback, actionOrder, normalizeNotificationModel } from '../notificationModel.js'
 
 const props = defineProps({
   initialConfig: { type: Object, default: () => ({}) },
@@ -10,39 +11,15 @@ const props = defineProps({
 })
 const emit = defineEmits(['layout', 'save', 'close', 'switch'])
 
-const actionOrder = [
-  'library_added', 'library_deleted', 'playback_started', 'playback_stopped',
-  'playback_paused', 'playback_resumed', 'auth_success', 'auth_failed', 'rated', 'test',
-]
-const actionIcons = {
-  library_added: 'mdi-folder-arrow-down', library_deleted: 'mdi-delete-outline',
-  playback_started: 'mdi-play-circle-outline', playback_stopped: 'mdi-stop-circle-outline',
-  playback_paused: 'mdi-pause-circle-outline', playback_resumed: 'mdi-play-circle',
-  auth_success: 'mdi-login-variant', auth_failed: 'mdi-shield-alert-outline',
-  rated: 'mdi-star-circle-outline', test: 'mdi-flask-outline',
-}
-const fallbackMeta = {
-  library_added: ['已入库', '媒体文件加入媒体库时通知'],
-  library_deleted: ['已删除', '媒体文件从媒体库移除时通知'],
-  playback_started: ['开始播放', '用户开始播放媒体时通知'],
-  playback_stopped: ['停止播放', '用户停止播放媒体时通知'],
-  playback_paused: ['暂停播放', '用户暂停播放媒体时通知'],
-  playback_resumed: ['继续播放', '用户继续播放媒体时通知'],
-  auth_success: ['登录成功', '用户成功登录媒体服务器时通知'],
-  auth_failed: ['登录失败', '媒体服务器登录失败时通知'],
-  rated: ['已标记', '用户标记已看、未看或评分时通知'],
-  test: ['测试', '用于检查当前通知样式'],
-}
-
 const clone = value => JSON.parse(JSON.stringify(value || {}))
-const draft = ref(clone(props.initialConfig))
+const draft = ref(normalizeNotificationModel(props.initialConfig))
 const settingsOpen = ref(false)
 const editorOpen = ref(false)
 const activeAction = ref('library_added')
 const draggingIndex = ref(-1)
 const saved = ref(false)
 
-watch(() => props.initialConfig, value => { draft.value = clone(value) }, { deep: true })
+watch(() => props.initialConfig, value => { draft.value = normalizeNotificationModel(value) }, { deep: true })
 onMounted(() => {
   emit('layout', { maxWidth: '76rem' })
   try {
@@ -55,7 +32,7 @@ onMounted(() => {
 
 const actionMeta = action => {
   const supplied = draft.value._action_meta?.[action]
-  return supplied || { label: fallbackMeta[action][0], description: fallbackMeta[action][1] }
+  return supplied || actionMetaFallback[action]
 }
 const fieldMeta = key => draft.value._field_catalog?.[key] || { label: key }
 const activeFields = computed(() => draft.value.field_configs?.[activeAction.value] || [])
@@ -117,7 +94,7 @@ function enabledFieldCount(action) {
     <header class="page-header">
       <div>
         <div class="eyebrow">MEDIA LIBRARY NOTIFICATIONS</div>
-        <h1>通知模板</h1>
+        <h1>媒体库通知</h1>
         <p>选择通知类型，设置需要展示的内容和顺序。</p>
       </div>
       <VBtn class="settings-button" variant="tonal" prepend-icon="mdi-tune-variant" @click="settingsOpen = true">
@@ -142,7 +119,7 @@ function enabledFieldCount(action) {
       >
         <VCardText class="event-card__body">
           <div class="event-card__top">
-            <div class="event-icon"><VIcon :icon="actionIcons[action]" size="26" /></div>
+            <div class="event-icon"><VIcon :icon="actionMetaFallback[action].icon" size="26" /></div>
             <VSwitch
               :model-value="isEnabled(action)"
               color="primary"
@@ -179,7 +156,7 @@ function enabledFieldCount(action) {
     <VDialog v-model="editorOpen" max-width="760" scrollable>
       <VCard class="editor-dialog">
         <VCardTitle class="dialog-header">
-          <div class="dialog-title-icon"><VIcon :icon="actionIcons[activeAction]" /></div>
+          <div class="dialog-title-icon"><VIcon :icon="actionMetaFallback[activeAction].icon" /></div>
           <div><div class="dialog-kicker">通知内容</div><div>{{ activeMeta.label }}</div></div>
           <VBtn class="ml-auto" icon="mdi-close" variant="text" @click="editorOpen = false" />
         </VCardTitle>

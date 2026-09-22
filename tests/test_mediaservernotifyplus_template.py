@@ -148,7 +148,7 @@ class TemplateTests(unittest.TestCase):
         self.assertIn("overview", playback_keys)
         self.assertIn("device", playback_keys)
         self.assertNotIn("client", playback_keys)
-        self.assertEqual(CORE.FIELD_CATALOG["device"]["label"], "设备 / 客户端")
+        self.assertEqual(CORE.FIELD_CATALOG["device"]["label"], "设备")
 
         info = SimpleNamespace(
             json_object={"Item": {"SeriesName": "兰香如故", "Name": "交个朋友吧?"}},
@@ -158,6 +158,44 @@ class TemplateTests(unittest.TestCase):
         self.assertEqual(context["display_name"], "兰香如故")
         self.assertEqual(context["device"], "Apple TV · VidHub")
         self.assertEqual(context["season_episode"], "S01E12 - 交个朋友吧?")
+
+    def test_retired_fields_are_removed_and_media_events_offer_overview(self):
+        configs = CORE.default_field_configs()
+        for rows in configs.values():
+            keys = {row["key"] for row in rows}
+            self.assertTrue(keys.isdisjoint({"client", "year", "channel"}))
+        for action in (
+            "library_added", "library_deleted", "playback_started", "playback_stopped",
+            "playback_paused", "playback_resumed", "rated",
+        ):
+            self.assertIn("overview", {row["key"] for row in configs[action]})
+        self.assertNotIn("client", CORE.FIELD_CATALOG)
+        self.assertNotIn("year", CORE.FIELD_CATALOG)
+        self.assertNotIn("channel", CORE.FIELD_CATALOG)
+
+    def test_legacy_field_config_is_migrated_before_sending(self):
+        normalized = CORE.normalize_field_configs({
+            "playback_started": [
+                {"key": "device", "label": "设备 / 客户端", "enabled": True},
+                {"key": "client", "label": "客户端", "enabled": True},
+                {"key": "year", "label": "年份", "enabled": True},
+                {"key": "channel", "label": "媒体服务", "enabled": True},
+            ]
+        })
+        rows = normalized["playback_started"]
+        self.assertEqual(next(row for row in rows if row["key"] == "device")["label"], "设备")
+        self.assertTrue({row["key"] for row in rows}.isdisjoint({"client", "year", "channel"}))
+        self.assertIn("overview", {row["key"] for row in rows})
+
+    def test_login_and_test_notifications_never_link_to_tmdb(self):
+        plugin = FakePlugin()
+        plugin.init_plugin({"enabled": True})
+        for action in ("auth_success", "auth_failed", "test"):
+            plugin._send_context(action, {
+                "user": "alice", "server": "Emby", "time": "12:00",
+                "tmdb_url": "https://www.themoviedb.org/tv/1",
+            })
+            self.assertIsNone(plugin.messages[-1]["link"])
 
 
 if __name__ == "__main__":
