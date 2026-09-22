@@ -20,7 +20,7 @@ class MediaServerNotifyPlus(MediaServerNotifyCore, _PluginBase):
     """支持按事件类型自定义模板的媒体服务器通知。"""
 
     plugin_name = "媒体库通知"
-    plugin_desc = "Emby/Jellyfin/Plex 通知；每种事件可独立自定义标题和正文。"
+    plugin_desc = "Emby/Jellyfin/Plex 媒体库通知；按事件选择、排序并命名通知字段。"
     plugin_icon = "mediaplay.png"
     plugin_version = "2.0.0"
     plugin_author = "cz"
@@ -53,12 +53,10 @@ class MediaServerNotifyPlus(MediaServerNotifyCore, _PluginBase):
             return []
 
     def _services(self, channel: Optional[str] = None) -> dict:
-        if not self._mediaservers:
-            return {}
         try:
             return MediaServerHelper().get_services(
                 type_filter=channel,
-                name_filters=self._mediaservers,
+                name_filters=self._mediaservers or None,
             ) or {}
         except Exception as error:
             logger.debug(f"读取媒体服务器实例失败：{error}")
@@ -74,6 +72,33 @@ class MediaServerNotifyPlus(MediaServerNotifyCore, _PluginBase):
         if server_name and server_name in services:
             return services[server_name]
         return next(iter(services.values()), None)
+
+    def _discover_libraries(self) -> List[Dict[str, Any]]:
+        records: List[Dict[str, Any]] = []
+        for server_name, service_info in self._services().items():
+            try:
+                libraries = service_info.instance.get_librarys() or []
+            except Exception as error:
+                logger.debug(f"读取 {server_name} 媒体库失败：{error}")
+                continue
+            for library in libraries:
+                library_id = getattr(library, "id", None) or getattr(library, "item_id", None)
+                if library_id in (None, ""):
+                    continue
+                name = str(getattr(library, "name", None) or library_id)
+                paths = getattr(library, "path", None) or []
+                if not isinstance(paths, list):
+                    paths = [paths]
+                records.append({
+                    "title": f"{server_name} · {name}",
+                    "value": f"{server_name}::{library_id}",
+                    "server": server_name,
+                    "id": str(library_id),
+                    "name": name,
+                    "type": str(getattr(library, "type", None) or ""),
+                    "paths": [str(path) for path in paths if path],
+                })
+        return records
 
     @staticmethod
     def _names(values: Any, limit: int = 5) -> str:
@@ -112,7 +137,10 @@ class MediaServerNotifyPlus(MediaServerNotifyCore, _PluginBase):
         return None
 
     def _enrich_context(self, info: Any, context: Dict[str, Any]) -> None:
-        if self._lookup_ip and context.get("ip"):
+        if (
+            self._lookup_ip and context.get("ip")
+            and self._field_enabled(str(context.get("_action") or ""), "ip")
+        ):
             try:
                 location = WebUtils.get_location(str(context["ip"]))
                 if location:

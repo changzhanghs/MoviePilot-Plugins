@@ -53,6 +53,22 @@ class AdaptationTests(unittest.TestCase):
         v3 = (ROOT / "plugins.v3" / "mediaservernotifyplus" / "core.py").read_bytes()
         self.assertEqual(v2, v3)
 
+    def test_both_versions_ship_vue_config_runtime(self):
+        for generation in ("plugins.v2", "plugins.v3"):
+            plugin = ROOT / generation / "mediaservernotifyplus"
+            self.assertTrue((plugin / "src/components/Config.vue").is_file())
+            self.assertTrue((plugin / "dist/assets/remoteEntry.js").is_file())
+            source = (plugin / "src/components/Config.vue").read_text(encoding="utf-8")
+            self.assertIn("可通知内容", source)
+            self.assertIn("具体媒体库", source)
+            self.assertIn("消息渠道遵循 MoviePilot 全局设置", source)
+
+    def test_notification_type_is_fixed_to_media_server(self):
+        v2 = (ROOT / "plugins.v2/mediaservernotifyplus/__init__.py").read_text(encoding="utf-8")
+        v3 = (ROOT / "plugins.v3/mediaservernotifyplus/__init__.py").read_text(encoding="utf-8")
+        self.assertIn("NotificationType.MediaServer", v2)
+        self.assertIn("MessageType.MediaServer", v3)
+
 
 if __name__ == "__main__":
     unittest.main()

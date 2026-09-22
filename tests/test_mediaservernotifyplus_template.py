@@ -53,33 +53,15 @@ class FakePlugin(CORE.MediaServerNotifyCore):
 
 
 class TemplateTests(unittest.TestCase):
-    def test_template_settings_have_a_separate_tab(self):
+    def test_vue_config_exposes_card_editor_metadata(self):
         plugin = FakePlugin()
         form, defaults = plugin.get_form()
-
-        def walk(nodes):
-            for node in nodes if isinstance(nodes, list) else [nodes]:
-                if not isinstance(node, dict):
-                    continue
-                yield node
-                yield from walk(node.get("content", []))
-
-        nodes = list(walk(form))
-        tabs = [node for node in nodes if node.get("component") == "VTab"]
-        self.assertEqual([node.get("text") for node in tabs], ["基础设置", "通知模板设置"])
-        template_window = next(
-            node for node in nodes
-            if node.get("component") == "VWindowItem"
-            and node.get("props", {}).get("value") == "templates"
-        )
-        template_models = {
-            node.get("props", {}).get("model")
-            for node in walk(template_window.get("content", []))
-        }
-        self.assertIn("preview_type", template_models)
-        self.assertIn("send_test", template_models)
-        self.assertIn("title_template_library_added", template_models)
-        self.assertEqual(defaults["_settings_tab"], "basic")
+        self.assertEqual(form, [])
+        self.assertEqual(plugin.get_render_mode(), ("vue", "dist/assets"))
+        self.assertIn("library_added", defaults["field_configs"])
+        self.assertIn("library_added", defaults["_action_meta"])
+        self.assertIn("ip", defaults["_field_catalog"])
+        self.assertNotIn("notification_type", defaults)
 
     def test_arbitrary_layout_and_field_order(self):
         renderer = CORE.SafeTemplateRenderer({
@@ -115,16 +97,20 @@ class TemplateTests(unittest.TestCase):
                 "library_added": {"title": "{unknown}", "body": "x"}
             })
 
-    def test_custom_template_is_loaded_per_event(self):
+    def test_custom_field_order_label_and_switch_are_loaded_per_event(self):
         plugin = FakePlugin()
+        configs = CORE.default_field_configs()
+        configs["auth_failed"] = [
+            {"key": "ip", "label": "IP地址", "enabled": True},
+            {"key": "user", "label": "用户", "enabled": False},
+        ]
         plugin.init_plugin({
             "enabled": True,
-            "title_template_auth_failed": "警告：{user}",
-            "body_template_auth_failed": "来自 {ip}",
+            "field_configs": configs,
         })
         plugin._send_context("auth_failed", {"user": "alice", "ip": "192.0.2.1"})
-        self.assertEqual(plugin.messages[-1]["title"], "警告：alice")
-        self.assertEqual(plugin.messages[-1]["text"], "来自 192.0.2.1")
+        self.assertEqual(plugin.messages[-1]["title"], "⚠️ 登录失败")
+        self.assertEqual(plugin.messages[-1]["text"], "🌐 IP地址：192.0.2.1")
 
     def test_save_time_preview_uses_selected_type_and_resets_switch(self):
         plugin = FakePlugin()
@@ -132,12 +118,25 @@ class TemplateTests(unittest.TestCase):
             "enabled": True,
             "preview_type": "playback_started",
             "send_test": True,
-            "title_template_playback_started": "预览 {user}",
-            "body_template_playback_started": "进度 {progress}",
         })
-        self.assertEqual(plugin.messages[-1]["title"], "预览 测试用户")
-        self.assertEqual(plugin.messages[-1]["text"], "进度 36%")
+        self.assertEqual(plugin.messages[-1]["title"], "▶️ 开始播放")
+        self.assertIn("示例影片 (2026)", plugin.messages[-1]["text"])
+        self.assertIn("36%", plugin.messages[-1]["text"])
         self.assertFalse(plugin.saved_config["send_test"])
+
+    def test_library_added_uses_fixed_heading_and_clickable_tmdb_card(self):
+        plugin = FakePlugin()
+        plugin.init_plugin({"enabled": True})
+        plugin._send_context("library_added", {
+            "display_name": "兰香如故 (2026)",
+            "file_count": "1",
+            "season_episode": "S01E21",
+            "tmdb_url": "https://www.themoviedb.org/tv/1",
+        })
+        message = plugin.messages[-1]
+        self.assertEqual(message["title"], "📂 已入库 1 个文件")
+        self.assertTrue(message["text"].startswith("兰香如故 (2026)"))
+        self.assertEqual(message["link"], "https://www.themoviedb.org/tv/1")
 
 
 if __name__ == "__main__":

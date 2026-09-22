@@ -1,42 +1,47 @@
 # 媒体库通知
 
-这是一个面向 MoviePilot V2/V3 的媒体服务器通知插件骨架。通知样式没有固定布局：每种事件都可分别编辑标题与正文。
+面向 MoviePilot V2/V3 的 Emby、Jellyfin、Plex 媒体服务器通知插件。
 
-## 目录
+## 版本
 
-- `plugins.v2/mediaservernotifyplus`：MoviePilot V2 版本
-- `plugins.v3/mediaservernotifyplus`：MoviePilot V3 版本
-- `package.v2.json` / `package.v3.json`：对应插件市场清单
+- MoviePilot V2：`2.0.0`
+- MoviePilot V3：`3.0.0`
+- 插件 ID：`MediaServerNotifyPlus`
+- MoviePilot 通知类型固定为“媒体库”，消息渠道遵循 MoviePilot 全局设置。
 
-## 可独立配置的事件
+## 配置界面
 
-已入库、已删除、开始播放、停止播放、暂停播放、继续播放、登录成功、登录失败、用户标记和系统测试。
+通知类型使用独立卡片展示。每张卡片可以启用或停用，点击后打开字段配置弹窗：
 
-每种事件都有自己的：
+- 展示当前事件真实可能取得的全部字段；
+- 勾选需要展示的字段；
+- 拖动调整字段顺序，触摸设备也可以使用上下移动按钮；
+- 只允许修改字段展示名称，例如 `IP` 改为 `IP地址`；
+- 字段没有真实值时自动隐藏整行。
 
-- 标题模板
-- 正文模板（支持多行、Markdown、Emoji 和任意字段顺序）
+右上角“设置”包含插件开关、具体媒体库、剧集入库聚合、去重、元数据、IP 归属地及测试通知等全局选项。
 
-配置页分为“基础设置”和“通知模板设置”两个独立分类。模板分类中可选择一个事件类型，并打开“保存时发送模板测试”即时查看效果。
+## 通知结构
 
-## 占位符
-
-`{action}`、`{event}`、`{channel}`、`{server}`、`{title}`、`{item_name}`、`{display_name}`、`{title_link}`、`{media_type}`、`{year}`、`{time}`、`{category}`、`{season_episode}`、`{rating}`、`{region}`、`{status}`、`{genres}`、`{actors}`、`{overview}`、`{user}`、`{device}`、`{client}`、`{ip}`、`{progress}`、`{tmdb_id}`、`{tmdb_url}`、`{media_source}`、`{media_id}`、`{file_count}`、`{album}`、`{artist}`。
-
-含有空占位符的正文行会自动隐藏。例如没有评分时，`⭐ {rating}` 整行不会出现。
-
-如需只在字段有值时显示一段不含占位符的固定文字，可在行首加条件：
+事件标题和媒体名称为固定头部，不参与字段排序。例如：
 
 ```text
-[[overview]]━━━━━━━━━━━━━━━━━━
-[[overview]]📖 剧情简介
-{overview}
+📂 已入库 1 个文件
+兰香如故 (2026)
+
+📺 季集：S01E21
+📁 分类：国产剧集
+⭐ 评分：6.8/10
 ```
 
-模板解析器不执行 Python、Jinja 或表达式，只接受上述简单占位符，避免配置内容执行代码。
+成功解析 TMDB ID 时，整张通知卡片跳转对应的 TMDB 电影或电视剧页面，不再单独展示 TMDB ID 和 TMDB 链接。
 
-## V2/V3 适配差异
+## 媒体库筛选
 
-- V2 使用 `app.core`、`app.helper`、`CategoryHelper` 和兼容的 `tmdb_id`。
-- V3 使用 `app.sdk`，通过 `media_source + media_id` 解析媒体身份，并使用宿主分类 SDK。
-- 两版共用相同模板、去重、剧集聚合和生命周期逻辑，但各自打包，互不交叉导入。
+配置页从已启用的媒体服务器读取具体媒体库。插件优先通过 Webhook 的媒体库 ID 识别归属；缺少库 ID 时，通过媒体文件路径匹配。登录和测试通知不受媒体库筛选影响。
+
+## V2/V3 适配
+
+- V2 使用 `NotificationType.MediaServer`、兼容 `tmdb_id` 以及 V2 媒体服务器帮助类。
+- V3 使用公开 SDK、`MessageType.MediaServer` 以及 `media_source + media_id` 统一媒体身份。
+- 两版共用通知字段、去重、聚合和媒体库筛选逻辑，并分别发布各自的 Vue 联邦配置界面。

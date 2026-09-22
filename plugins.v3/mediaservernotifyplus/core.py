@@ -26,6 +26,108 @@ ACTION_LABELS: Dict[str, str] = {
     "test": "测试",
 }
 
+ACTION_ICONS: Dict[str, str] = {
+    "library_added": "📂",
+    "library_deleted": "🗑️",
+    "playback_started": "▶️",
+    "playback_stopped": "⏹️",
+    "playback_paused": "⏸️",
+    "playback_resumed": "▶️",
+    "auth_success": "🔐",
+    "auth_failed": "⚠️",
+    "rated": "⭐",
+    "test": "🧪",
+}
+
+ACTION_DESCRIPTIONS: Dict[str, str] = {
+    "library_added": "媒体文件加入媒体库时通知",
+    "library_deleted": "媒体文件从媒体库移除时通知",
+    "playback_started": "用户开始播放媒体时通知",
+    "playback_stopped": "用户停止播放媒体时通知",
+    "playback_paused": "用户暂停播放媒体时通知",
+    "playback_resumed": "用户继续播放媒体时通知",
+    "auth_success": "用户成功登录媒体服务器时通知",
+    "auth_failed": "媒体服务器登录失败时通知",
+    "rated": "用户标记已看、未看或评分时通知",
+    "test": "用于检查当前通知样式",
+}
+
+FIELD_CATALOG: Dict[str, Dict[str, str]] = {
+    "time": {"label": "时间", "icon": "🕐"},
+    "server": {"label": "服务器", "icon": "🖥️"},
+    "channel": {"label": "媒体服务", "icon": "📡"},
+    "library": {"label": "媒体库", "icon": "🗂️"},
+    "media_type": {"label": "媒体类型", "icon": "🎞️"},
+    "year": {"label": "年份", "icon": "📅"},
+    "category": {"label": "分类", "icon": "📁"},
+    "season_episode": {"label": "季集", "icon": "📺"},
+    "file_count": {"label": "文件数量", "icon": "📄"},
+    "rating": {"label": "评分", "icon": "⭐"},
+    "region": {"label": "地区", "icon": "🏳️"},
+    "status": {"label": "状态", "icon": "📌"},
+    "genres": {"label": "类型", "icon": "🎭"},
+    "actors": {"label": "演员", "icon": "🎬"},
+    "overview": {"label": "剧情简介", "icon": "📖", "style": "block"},
+    "user": {"label": "用户", "icon": "👤"},
+    "device": {"label": "设备", "icon": "📱"},
+    "client": {"label": "客户端", "icon": "💻"},
+    "ip": {"label": "IP", "icon": "🌐"},
+    "progress": {"label": "播放进度", "icon": "⏱️"},
+    "media_source": {"label": "媒体来源", "icon": "🔎"},
+    "media_id": {"label": "媒体 ID", "icon": "🆔"},
+    "album": {"label": "专辑", "icon": "💿"},
+    "artist": {"label": "歌手", "icon": "🎤"},
+    "play_link": {"label": "播放链接", "icon": "🔗", "style": "link"},
+}
+
+ACTION_FIELDS: Dict[str, Tuple[str, ...]] = {
+    "library_added": (
+        "season_episode", "library", "category", "file_count", "media_type", "year",
+        "rating", "region", "status", "genres", "actors", "overview", "server",
+        "channel", "time", "media_source", "media_id", "album", "artist",
+    ),
+    "library_deleted": (
+        "season_episode", "library", "media_type", "year", "server", "channel", "time",
+        "media_source", "media_id", "album", "artist",
+    ),
+    "playback_started": (
+        "season_episode", "user", "device", "client", "ip", "progress", "library",
+        "media_type", "year", "server", "channel", "time", "play_link",
+    ),
+    "playback_stopped": (
+        "season_episode", "user", "device", "client", "ip", "progress", "library",
+        "media_type", "year", "server", "channel", "time", "play_link",
+    ),
+    "playback_paused": (
+        "season_episode", "user", "device", "client", "ip", "progress", "library",
+        "server", "channel", "time", "play_link",
+    ),
+    "playback_resumed": (
+        "season_episode", "user", "device", "client", "ip", "progress", "library",
+        "server", "channel", "time", "play_link",
+    ),
+    "auth_success": ("user", "device", "client", "ip", "server", "channel", "time"),
+    "auth_failed": ("user", "device", "client", "ip", "server", "channel", "time"),
+    "rated": (
+        "season_episode", "user", "library", "media_type", "year", "rating", "server",
+        "channel", "time", "media_source", "media_id",
+    ),
+    "test": ("server", "channel", "time"),
+}
+
+DEFAULT_ENABLED_FIELDS: Dict[str, Tuple[str, ...]] = {
+    "library_added": ("season_episode", "category", "file_count", "rating", "server", "time", "overview"),
+    "library_deleted": ("season_episode", "library", "server", "time"),
+    "playback_started": ("season_episode", "user", "device", "client", "ip", "progress", "server", "time"),
+    "playback_stopped": ("season_episode", "user", "device", "client", "ip", "progress", "server", "time"),
+    "playback_paused": ("season_episode", "user", "device", "ip", "progress", "time"),
+    "playback_resumed": ("season_episode", "user", "device", "ip", "progress", "time"),
+    "auth_success": ("user", "device", "client", "ip", "server", "time"),
+    "auth_failed": ("user", "device", "client", "ip", "server", "time"),
+    "rated": ("season_episode", "user", "rating", "server", "time"),
+    "test": ("server", "channel", "time"),
+}
+
 ACTION_ALIASES: Dict[str, str] = {
     "library.new": "library_added",
     "itemadded": "library_added",
@@ -108,6 +210,99 @@ DEFAULT_TEMPLATES: Dict[str, Dict[str, str]] = {
         "body": "服务器：{server}\n状态：连接正常\n时间：{time}",
     },
 }
+
+
+def default_field_configs() -> Dict[str, List[Dict[str, Any]]]:
+    """返回可直接序列化的默认字段顺序、名称和启用状态。"""
+    result: Dict[str, List[Dict[str, Any]]] = {}
+    for action, fields in ACTION_FIELDS.items():
+        enabled = set(DEFAULT_ENABLED_FIELDS[action])
+        result[action] = [
+            {
+                "key": field,
+                "label": FIELD_CATALOG[field]["label"],
+                "enabled": field in enabled,
+            }
+            for field in fields
+        ]
+    return result
+
+
+def normalize_field_configs(value: Any) -> Dict[str, List[Dict[str, Any]]]:
+    """清洗前端字段配置，拒绝未知字段并补齐新版本增加的字段。"""
+    defaults = default_field_configs()
+    if not isinstance(value, dict):
+        return defaults
+    normalized: Dict[str, List[Dict[str, Any]]] = {}
+    for action, default_rows in defaults.items():
+        allowed = {row["key"] for row in default_rows}
+        source_rows = value.get(action)
+        source_rows = source_rows if isinstance(source_rows, list) else []
+        rows: List[Dict[str, Any]] = []
+        seen = set()
+        for row in source_rows:
+            if not isinstance(row, dict):
+                continue
+            key = str(row.get("key") or "")
+            if key not in allowed or key in seen:
+                continue
+            label = str(row.get("label") or FIELD_CATALOG[key]["label"]).strip()
+            rows.append({
+                "key": key,
+                "label": (label or FIELD_CATALOG[key]["label"])[:30],
+                "enabled": bool(row.get("enabled")),
+            })
+            seen.add(key)
+        for row in default_rows:
+            if row["key"] not in seen:
+                rows.append(dict(row))
+        normalized[action] = rows
+    return normalized
+
+
+class FieldTemplateRenderer:
+    """按照用户选择的字段顺序生成通知正文。"""
+
+    def __init__(self, field_configs: Mapping[str, List[Mapping[str, Any]]]) -> None:
+        self._field_configs = normalize_field_configs(dict(field_configs))
+
+    def render(self, action: str, context: Mapping[str, Any]) -> Tuple[str, str]:
+        if action not in ACTION_LABELS:
+            raise TemplateError(f"未知通知类型：{action}")
+        title = self._event_heading(action, context)
+        lines: List[str] = []
+        display_name = str(context.get("display_name") or "").strip()
+        if display_name and action not in {"auth_success", "auth_failed", "test"}:
+            lines.append(display_name)
+        detail_lines: List[str] = []
+        for row in self._field_configs[action]:
+            if not row.get("enabled"):
+                continue
+            key = str(row["key"])
+            value = str(context.get(key) or "").strip()
+            if not value:
+                continue
+            meta = FIELD_CATALOG[key]
+            label = str(row.get("label") or meta["label"]).strip()
+            if meta.get("style") == "block":
+                detail_lines.append(f"{meta['icon']} {label}\n{value}")
+            elif meta.get("style") == "link":
+                detail_lines.append(f"{meta['icon']} [{label}]({value})")
+            else:
+                detail_lines.append(f"{meta['icon']} {label}：{value}")
+        if detail_lines:
+            if lines:
+                lines.append("")
+            lines.extend(detail_lines)
+        return title, "\n".join(lines).strip()
+
+    @staticmethod
+    def _event_heading(action: str, context: Mapping[str, Any]) -> str:
+        label = ACTION_LABELS[action]
+        if action == "library_added":
+            count = str(context.get("file_count") or "1").strip()
+            label = f"已入库 {count} 个文件"
+        return f"{ACTION_ICONS[action]} {label}"
 
 
 class TemplateError(ValueError):
@@ -217,30 +412,29 @@ class MediaServerNotifyCore:
         self._enabled = False
         self._types: List[str] = []
         self._mediaservers: List[str] = []
-        self._renderer = SafeTemplateRenderer(DEFAULT_TEMPLATES)
+        self._libraries: List[str] = []
+        self._library_records: List[Dict[str, Any]] = []
+        self._field_configs = default_field_configs()
+        self._renderer = FieldTemplateRenderer(self._field_configs)
         self._host_initialize()
 
     def init_plugin(self, config: Optional[dict] = None) -> None:
         """可重复调用地读取配置并重建运行状态。"""
         self._quiesce(flush=False)
         config = config or {}
-        templates: Dict[str, Dict[str, str]] = {}
-        for action, defaults in DEFAULT_TEMPLATES.items():
-            title_key = f"title_template_{action}"
-            body_key = f"body_template_{action}"
-            title = str(config[title_key]) if title_key in config else defaults["title"]
-            body = str(config[body_key]) if body_key in config else defaults["body"]
-            try:
-                renderer = SafeTemplateRenderer({action: {"title": title, "body": body}})
-                templates[action] = renderer._templates[action]
-            except TemplateError as error:
-                self._log_warning(f"{ACTION_LABELS[action]} 模板无效，已回退默认模板：{error}")
-                templates[action] = dict(defaults)
+        field_configs = normalize_field_configs(config.get("field_configs"))
         with self._condition:
             self._enabled = bool(config.get("enabled"))
-            self._types = list(config.get("types") or [])
+            if "types" in config:
+                self._types = [item for item in list(config.get("types") or []) if item in ACTION_LABELS]
+            else:
+                self._types = [
+                    action for action in ACTION_LABELS
+                    if bool(config.get(f"event_enabled_{action}", True))
+                ]
             self._mediaservers = list(config.get("mediaservers") or [])
-            self._add_play_link = bool(config.get("add_play_link", False))
+            self._libraries = list(config.get("libraries") or [])
+            self._add_play_link = bool(config.get("add_play_link", True))
             self._lookup_ip = bool(config.get("lookup_ip", False))
             self._fetch_metadata = bool(config.get("fetch_metadata", True))
             self._aggregate_enabled = bool(config.get("aggregate_enabled", True))
@@ -248,8 +442,10 @@ class MediaServerNotifyCore:
             self._dedupe_library = max(0, int(config.get("dedupe_library") or self.DEFAULT_DEDUPE_TIME))
             self._dedupe_playback = max(0, int(config.get("dedupe_playback") or self.DEFAULT_DEDUPE_TIME))
             self._flush_on_stop = bool(config.get("flush_on_stop", False))
-            self._renderer = SafeTemplateRenderer(templates)
+            self._field_configs = field_configs
+            self._renderer = FieldTemplateRenderer(field_configs)
             self._accepting_events = True
+        self._refresh_library_records()
         if config.get("send_test"):
             self._send_template_test(str(config.get("preview_type") or "library_added"))
             saved_config = dict(config)
@@ -267,166 +463,24 @@ class MediaServerNotifyCore:
         return []
 
     def get_page(self) -> List[dict]:
-        return [{
-            "component": "VAlert",
-            "props": {
-                "type": "info",
-                "variant": "tonal",
-                "text": "可在配置页中为每种事件分别设置标题和正文模板。",
-            },
-        }]
+        return []
+
+    @staticmethod
+    def get_render_mode() -> Tuple[str, str]:
+        """使用 Vue 联邦组件实现卡片、弹窗和拖动排序。"""
+        return "vue", "dist/assets"
 
     def get_form(self) -> Tuple[List[dict], Dict[str, Any]]:
-        """构建通用配置页，模板使用展开面板按事件分类。"""
-        type_items = [{"title": label, "value": action} for action, label in ACTION_LABELS.items()]
-        panels = []
-        for action, label in ACTION_LABELS.items():
-            panels.append({
-                "component": "VExpansionPanel",
-                "content": [
-                    {"component": "VExpansionPanelTitle", "text": label},
-                    {
-                        "component": "VExpansionPanelText",
-                        "content": [
-                            {
-                                "component": "VTextField",
-                                "props": {
-                                    "model": f"title_template_{action}",
-                                    "label": f"{label}标题模板",
-                                    "clearable": True,
-                                },
-                            },
-                            {
-                                "component": "VTextarea",
-                                "props": {
-                                    "model": f"body_template_{action}",
-                                    "label": f"{label}正文模板",
-                                    "rows": 8,
-                                    "auto-grow": True,
-                                    "clearable": True,
-                                },
-                            },
-                        ],
-                    },
-                ],
-            })
-        base_settings = [
-            {
-                "component": "VRow",
-                "content": [
-                    {"component": "VCol", "props": {"cols": 12, "md": 3}, "content": [
-                        {"component": "VSwitch", "props": {"model": "enabled", "label": "启用插件"}},
-                    ]},
-                    {"component": "VCol", "props": {"cols": 12, "md": 3}, "content": [
-                        {"component": "VSwitch", "props": {"model": "add_play_link", "label": "添加播放链接"}},
-                    ]},
-                    {"component": "VCol", "props": {"cols": 12, "md": 3}, "content": [
-                        {"component": "VSwitch", "props": {"model": "fetch_metadata", "label": "查询媒体元数据"}},
-                    ]},
-                    {"component": "VCol", "props": {"cols": 12, "md": 3}, "content": [
-                        {"component": "VSwitch", "props": {"model": "lookup_ip", "label": "查询 IP 归属地"}},
-                    ]},
-                ],
-            },
-            {
-                "component": "VSelect",
-                "props": {
-                    "model": "mediaservers", "label": "媒体服务器", "multiple": True,
-                    "chips": True, "clearable": True, "items": self._server_options(),
-                },
-            },
-            {
-                "component": "VSelect",
-                "props": {
-                    "model": "types", "label": "通知类型", "multiple": True,
-                    "chips": True, "clearable": True, "items": type_items,
-                },
-            },
-            {
-                "component": "VRow",
-                "content": [
-                    {"component": "VCol", "props": {"cols": 12, "md": 4}, "content": [
-                        {"component": "VSwitch", "props": {"model": "aggregate_enabled", "label": "聚合剧集入库"}},
-                    ]},
-                    {"component": "VCol", "props": {"cols": 12, "md": 4}, "content": [
-                        {"component": "VTextField", "props": {"model": "aggregate_time", "label": "聚合窗口（秒）", "type": "number", "min": 1}},
-                    ]},
-                    {"component": "VCol", "props": {"cols": 12, "md": 4}, "content": [
-                        {"component": "VSwitch", "props": {"model": "flush_on_stop", "label": "停止时发送待聚合消息"}},
-                    ]},
-                ],
-            },
-            {
-                "component": "VRow",
-                "content": [
-                    {"component": "VCol", "props": {"cols": 12, "md": 6}, "content": [
-                        {"component": "VTextField", "props": {"model": "dedupe_library", "label": "入库/删除去重窗口（秒）", "type": "number", "min": 0}},
-                    ]},
-                    {"component": "VCol", "props": {"cols": 12, "md": 6}, "content": [
-                        {"component": "VTextField", "props": {"model": "dedupe_playback", "label": "播放事件去重窗口（秒）", "type": "number", "min": 0}},
-                    ]},
-                ],
-            },
-        ]
-        template_settings = [
-            {
-                "component": "VAlert",
-                "props": {
-                    "type": "info", "variant": "tonal",
-                    "text": "标题和正文均可自由排版。支持 Markdown、Emoji 和换行；正文中含空占位符的整行会自动隐藏。",
-                },
-            },
-            {
-                "component": "VRow",
-                "content": [
-                    {"component": "VCol", "props": {"cols": 12, "md": 8}, "content": [
-                        {"component": "VSelect", "props": {
-                            "model": "preview_type", "label": "测试模板类型", "items": type_items,
-                        }},
-                    ]},
-                    {"component": "VCol", "props": {"cols": 12, "md": 4}, "content": [
-                        {"component": "VSwitch", "props": {
-                            "model": "send_test", "label": "保存时发送模板测试",
-                        }},
-                    ]},
-                ],
-            },
-            {
-                "component": "VAlert",
-                "props": {
-                    "type": "info", "variant": "outlined",
-                    "text": "占位符：" + "、".join(f"{{{field}}}" for field in TEMPLATE_FIELDS)
-                            + "。条件行示例：[[overview]]剧情简介。",
-                },
-            },
-            {"component": "VExpansionPanels", "props": {"multiple": True}, "content": panels},
-        ]
-        form = [{
-            "component": "VForm",
-            "content": [
-                {
-                    "component": "VTabs",
-                    "props": {"model": "_settings_tab", "fixed-tabs": True},
-                    "content": [
-                        {"component": "VTab", "props": {"value": "basic"}, "text": "基础设置"},
-                        {"component": "VTab", "props": {"value": "templates"}, "text": "通知模板设置"},
-                    ],
-                },
-                {
-                    "component": "VWindow",
-                    "props": {"model": "_settings_tab"},
-                    "content": [
-                        {"component": "VWindowItem", "props": {"value": "basic"}, "content": base_settings},
-                        {"component": "VWindowItem", "props": {"value": "templates"}, "content": template_settings},
-                    ],
-                },
-            ],
-        }]
+        """Vue 配置组件读取默认值、字段元数据和具体媒体库列表。"""
+        self._refresh_library_records()
         defaults: Dict[str, Any] = {
             "enabled": False,
             "mediaservers": [],
             "types": list(ACTION_LABELS),
-            "add_play_link": False,
+            "libraries": [],
+            "field_configs": default_field_configs(),
+            "_default_field_configs": default_field_configs(),
+            "add_play_link": True,
             "lookup_ip": False,
             "fetch_metadata": True,
             "aggregate_enabled": True,
@@ -436,12 +490,74 @@ class MediaServerNotifyCore:
             "flush_on_stop": False,
             "preview_type": "library_added",
             "send_test": False,
-            "_settings_tab": "basic",
+            "_library_options": [dict(record) for record in self._library_records],
+            "_action_meta": {
+                action: {
+                    "label": label,
+                    "description": ACTION_DESCRIPTIONS[action],
+                    "icon": ACTION_ICONS[action],
+                }
+                for action, label in ACTION_LABELS.items()
+            },
+            "_field_catalog": {key: dict(value) for key, value in FIELD_CATALOG.items()},
         }
-        for action, template in DEFAULT_TEMPLATES.items():
-            defaults[f"title_template_{action}"] = template["title"]
-            defaults[f"body_template_{action}"] = template["body"]
-        return form, defaults
+        return [], defaults
+
+    def _refresh_library_records(self) -> None:
+        try:
+            records = self._discover_libraries()
+            if isinstance(records, list):
+                self._library_records = records
+        except Exception as error:
+            self._log_debug(f"读取具体媒体库失败：{error}")
+
+    def _match_library(self, info: Any, context: Dict[str, Any]) -> Optional[str]:
+        """从事件中的库 ID 或文件路径匹配配置页列出的具体媒体库。"""
+        raw = self._raw_object(info)
+        item = self._raw_item(info)
+        candidates = {
+            str(value)
+            for value in (
+                item.get("CollectionFolderId"), item.get("LibrarySectionId"),
+                item.get("librarySectionID"), item.get("topParentId"),
+                raw.get("CollectionFolderId"), raw.get("LibrarySectionId"),
+                raw.get("librarySectionID"), raw.get("topParentId"),
+            )
+            if value not in (None, "")
+        }
+        item_path = str(
+            getattr(info, "item_path", "") or item.get("Path") or raw.get("Path") or ""
+        ).replace("\\", "/").rstrip("/").lower()
+        server_name = str(context.get("server") or "")
+        for record in self._library_records:
+            if server_name and str(record.get("server") or "") != server_name:
+                continue
+            if str(record.get("id") or "") in candidates:
+                context["library"] = str(record.get("name") or "")
+                return str(record.get("value") or "")
+            paths = record.get("paths") or []
+            if isinstance(paths, str):
+                paths = [paths]
+            for path in paths:
+                normalized = str(path or "").replace("\\", "/").rstrip("/").lower()
+                if item_path and normalized and (
+                    item_path == normalized or item_path.startswith(normalized + "/")
+                ):
+                    context["library"] = str(record.get("name") or "")
+                    return str(record.get("value") or "")
+        return None
+
+    def _library_allowed(self, info: Any, action: str, context: Dict[str, Any]) -> bool:
+        if action in {"auth_success", "auth_failed", "test"}:
+            return True
+        matched = self._match_library(info, context)
+        return not self._libraries or bool(matched and matched in self._libraries)
+
+    def _field_enabled(self, action: str, field: str) -> bool:
+        return any(
+            row.get("key") == field and row.get("enabled")
+            for row in self._field_configs.get(action, [])
+        )
 
     def handle_webhook(self, event: Any) -> None:
         """标准化并处理 MoviePilot WebhookMessage 事件。"""
@@ -458,6 +574,8 @@ class MediaServerNotifyCore:
             if not self._service_allowed(info):
                 return
             context = self._base_context(info, action)
+            if not self._library_allowed(info, action, context):
+                return
             if self._is_duplicate(info, action, context):
                 return
             try:
@@ -502,12 +620,13 @@ class MediaServerNotifyCore:
         raw = cls._raw_object(info)
         item = cls._raw_item(info)
         title = (
-            item.get("SeriesName") or raw.get("SeriesName") or item.get("Name")
-            or raw.get("Name") or getattr(info, "item_name", None) or "未知媒体"
+            item.get("SeriesName") or item.get("grandparentTitle") or raw.get("SeriesName")
+            or item.get("Name") or item.get("title") or raw.get("Name")
+            or getattr(info, "item_name", None) or "未知媒体"
         )
         year = item.get("ProductionYear") or raw.get("Year") or item.get("year") or ""
-        season = item.get("ParentIndexNumber")
-        episode = item.get("IndexNumber")
+        season = item.get("ParentIndexNumber", item.get("parentIndex"))
+        episode = item.get("IndexNumber", item.get("index"))
         season = season if season is not None else getattr(info, "season_id", None)
         episode = episode if episode is not None else getattr(info, "episode_id", None)
         season_episode = ""
@@ -516,12 +635,11 @@ class MediaServerNotifyCore:
                 season_episode = f"S{int(season):02d}E{int(episode):02d}"
             except (TypeError, ValueError):
                 season_episode = f"S{season}E{episode}"
-            episode_name = item.get("Name") or raw.get("Name")
+            episode_name = item.get("Name") or item.get("title") or raw.get("Name")
             if episode_name and str(episode_name) not in str(title):
                 season_episode += f" - {episode_name}"
         client = getattr(info, "client", None) or raw.get("ClientName") or ""
         device_name = getattr(info, "device_name", None) or raw.get("DeviceName") or ""
-        device = " ".join(str(value).strip() for value in (client, device_name) if value).strip()
         percentage = getattr(info, "percentage", None)
         progress = ""
         if percentage is not None:
@@ -534,6 +652,7 @@ class MediaServerNotifyCore:
         raw_server = raw.get("Server")
         raw_server_name = raw_server.get("Name", "") if isinstance(raw_server, dict) else ""
         return {
+            "_action": action,
             "action": ACTION_LABELS[action],
             "event": getattr(info, "event", ""),
             "channel": getattr(info, "channel", ""),
@@ -545,6 +664,7 @@ class MediaServerNotifyCore:
             "media_type": media_type,
             "year": year,
             "time": time.strftime("%Y-%m-%d %H:%M:%S", time.localtime()),
+            "library": "",
             "category": "",
             "season_episode": season_episode,
             "rating": "",
@@ -554,7 +674,7 @@ class MediaServerNotifyCore:
             "actors": "",
             "overview": getattr(info, "overview", "") or raw.get("Overview") or item.get("Overview") or "",
             "user": getattr(info, "user_name", "") or raw.get("NotificationUsername") or "",
-            "device": device,
+            "device": str(device_name).strip(),
             "client": client,
             "ip": getattr(info, "ip", "") or raw.get("RemoteEndPoint") or "",
             "progress": progress,
@@ -563,8 +683,13 @@ class MediaServerNotifyCore:
             "media_source": "",
             "media_id": "",
             "file_count": "",
-            "album": item.get("Album") or raw.get("Album") or "",
-            "artist": ", ".join(item.get("Artists") or []) if isinstance(item.get("Artists"), list) else item.get("Artist", ""),
+            "album": item.get("Album") or item.get("parentTitle") or raw.get("Album") or "",
+            "artist": (
+                ", ".join(item.get("Artists") or [])
+                if isinstance(item.get("Artists"), list)
+                else item.get("Artist") or item.get("grandparentTitle") or ""
+            ),
+            "play_link": "",
             "_image": getattr(info, "image_url", None),
             "_link": None,
             "_item_id": getattr(info, "item_id", None),
@@ -664,12 +789,14 @@ class MediaServerNotifyCore:
         self._send_context("library_added", context)
 
     def _send_context(self, action: str, context: Dict[str, Any]) -> None:
-        title, body = self._renderer.render(action, context)
-        if self._add_play_link and not context.get("_link"):
+        if self._add_play_link and not context.get("play_link"):
             try:
-                context["_link"] = self._play_link(context)
+                context["play_link"] = self._play_link(context) or ""
             except Exception as error:
                 self._log_debug(f"生成播放链接失败：{error}")
+        title, body = self._renderer.render(action, context)
+        # MoviePilot 的 link 会让整张消息卡片可点击；优先跳转 TMDB。
+        context["_link"] = context.get("tmdb_url") or context.get("_link")
         self.post_message(
             mtype=self._notification_type,
             title=title,
@@ -694,7 +821,8 @@ class MediaServerNotifyCore:
             "device": "MoviePilot 测试设备", "client": "Emby", "ip": "192.0.2.1",
             "progress": "36%", "tmdb_id": "1", "tmdb_url": "https://www.themoviedb.org/movie/1",
             "media_source": "themoviedb", "media_id": "1", "file_count": "3",
-            "album": "示例专辑", "artist": "示例歌手", "_image": None, "_link": None,
+            "library": "电影库", "album": "示例专辑", "artist": "示例歌手",
+            "play_link": "https://media.example/item/1", "_image": None, "_link": None,
             "_item_id": None,
         }
         self._send_context(action, sample)
@@ -748,6 +876,9 @@ class MediaServerNotifyCore:
 
     def _server_options(self) -> List[Dict[str, str]]:
         raise NotImplementedError
+
+    def _discover_libraries(self) -> List[Dict[str, Any]]:
+        return []
 
     def _service_allowed(self, info: Any) -> bool:
         raise NotImplementedError
