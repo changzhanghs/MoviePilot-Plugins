@@ -87,20 +87,20 @@ ACTION_FIELDS: Dict[str, Tuple[str, ...]] = {
         "media_source", "media_id", "album", "artist",
     ),
     "playback_started": (
-        "season_episode", "user", "device", "ip", "progress", "rating", "actors", "overview", "library",
-        "media_type", "server", "time",
+        "season_episode", "user", "device", "progress", "ip", "library", "region",
+        "rating", "actors", "time", "overview", "server",
     ),
     "playback_stopped": (
-        "season_episode", "user", "device", "ip", "progress", "rating", "actors", "overview", "library",
-        "media_type", "server", "time",
+        "season_episode", "user", "device", "progress", "ip", "library", "region",
+        "rating", "actors", "time", "overview", "server",
     ),
     "playback_paused": (
-        "season_episode", "user", "device", "ip", "progress", "rating", "actors", "overview", "library",
-        "server", "time",
+        "season_episode", "user", "device", "progress", "ip", "library", "region",
+        "rating", "actors", "time", "overview", "server",
     ),
     "playback_resumed": (
-        "season_episode", "user", "device", "ip", "progress", "rating", "actors", "overview", "library",
-        "server", "time",
+        "season_episode", "user", "device", "progress", "ip", "library", "region",
+        "rating", "actors", "time", "overview", "server",
     ),
     "auth_success": ("user", "device", "ip", "server", "time"),
     "auth_failed": ("user", "device", "ip", "server", "time"),
@@ -271,6 +271,65 @@ def merge_ip_location(ip: Any, location: Any) -> str:
     if not place or place in address:
         return address
     return f"{address} {place}"
+
+
+def build_library_records(
+    server_name: str,
+    libraries: Any,
+    virtual_libraries: Any = None,
+) -> List[Dict[str, Any]]:
+    """合并媒体库概要与 VirtualFolders 路径，生成稳定的库匹配记录。"""
+
+    def value(item: Any, *names: str) -> Any:
+        if isinstance(item, Mapping):
+            for name in names:
+                if item.get(name) not in (None, ""):
+                    return item.get(name)
+            return None
+        for name in names:
+            current = getattr(item, name, None)
+            if current not in (None, ""):
+                return current
+        return None
+
+    def paths(item: Any) -> List[str]:
+        raw_paths = value(item, "path", "Path", "paths", "Paths") or []
+        if not isinstance(raw_paths, (list, tuple, set)):
+            raw_paths = [raw_paths]
+        return [str(path) for path in raw_paths if path]
+
+    virtual_by_id: Dict[str, List[str]] = {}
+    virtual_by_name: Dict[str, List[str]] = {}
+    for folder in virtual_libraries if isinstance(virtual_libraries, list) else []:
+        folder_paths = paths(folder)
+        folder_id = str(value(folder, "id", "Id", "item_id", "ItemId") or "")
+        folder_name = str(value(folder, "name", "Name") or "").strip().casefold()
+        if folder_id:
+            virtual_by_id.setdefault(folder_id, []).extend(folder_paths)
+        if folder_name:
+            virtual_by_name.setdefault(folder_name, []).extend(folder_paths)
+
+    records: List[Dict[str, Any]] = []
+    for library in libraries if isinstance(libraries, list) else []:
+        library_id = value(library, "id", "Id", "item_id", "ItemId")
+        if library_id in (None, ""):
+            continue
+        library_id = str(library_id)
+        name = str(value(library, "name", "Name") or library_id)
+        merged_paths = paths(library)
+        merged_paths.extend(virtual_by_id.get(library_id, []))
+        merged_paths.extend(virtual_by_name.get(name.strip().casefold(), []))
+        merged_paths = list(dict.fromkeys(path for path in merged_paths if path))
+        records.append({
+            "title": f"{server_name} · {name}",
+            "value": f"{server_name}::{library_id}",
+            "server": server_name,
+            "id": library_id,
+            "name": name,
+            "type": str(value(library, "type", "Type") or ""),
+            "paths": merged_paths,
+        })
+    return records
 
 
 class FieldTemplateRenderer:
@@ -533,6 +592,15 @@ class MediaServerNotifyCore:
             )
             if value not in (None, "")
         }
+        names = {
+            str(value).strip().casefold()
+            for value in (
+                item.get("CollectionName"), item.get("LibraryName"),
+                item.get("librarySectionTitle"), raw.get("CollectionName"),
+                raw.get("LibraryName"), raw.get("librarySectionTitle"),
+            )
+            if value not in (None, "")
+        }
         item_path = str(
             getattr(info, "item_path", "") or item.get("Path") or raw.get("Path") or ""
         ).replace("\\", "/").rstrip("/").lower()
@@ -541,6 +609,9 @@ class MediaServerNotifyCore:
             if server_name and str(record.get("server") or "") != server_name:
                 continue
             if str(record.get("id") or "") in candidates:
+                context["library"] = str(record.get("name") or "")
+                return str(record.get("value") or "")
+            if str(record.get("name") or "").strip().casefold() in names:
                 context["library"] = str(record.get("name") or "")
                 return str(record.get("value") or "")
             paths = record.get("paths") or []

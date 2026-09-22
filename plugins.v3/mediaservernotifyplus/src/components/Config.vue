@@ -263,9 +263,9 @@ function enabledFieldCount(action) {
             <small>选择需要接收通知的 Emby、Jellyfin 或 Plex 实例。</small>
           </div>
 
-          <div class="info-card webhook-guide" role="note">
-            <div class="info-card__icon"><VIcon icon="mdi-webhook" size="22" /></div>
-            <div class="info-card__content">
+          <div class="msnp-note-card webhook-guide" role="note">
+            <div class="msnp-note-card__icon"><VIcon icon="mdi-webhook" size="22" /></div>
+            <div class="msnp-note-card__content">
               <strong>媒体服务器 Webhook 配置</strong>
               <span>回调地址为：</span>
               <code>http://localhost:3000/api/v1/webhook?token=API_TOKEN&amp;source=媒体服务器名:3001</code>
@@ -294,9 +294,9 @@ function enabledFieldCount(action) {
             </div>
           </div>
 
-          <div class="info-card" role="note">
-            <div class="info-card__icon"><VIcon icon="mdi-message-badge-outline" size="22" /></div>
-            <div class="info-card__content">消息渠道遵循 MoviePilot 全局设置，通知类型固定为“媒体服务器”。</div>
+          <div class="msnp-note-card" role="note">
+            <div class="msnp-note-card__icon"><VIcon icon="mdi-message-badge-outline" size="22" /></div>
+            <div class="msnp-note-card__content">消息渠道遵循 MoviePilot 全局设置，通知类型固定为“媒体服务器”。</div>
           </div>
         </VCardText>
         <VCardActions class="dialog-actions"><span>设置随主页面一起保存</span><VBtn color="primary" variant="flat" @click="settingsOpen = false">完成</VBtn></VCardActions>
@@ -355,9 +355,9 @@ h1 { margin: 3px 0 4px; font-size: clamp(28px, 4vw, 38px); line-height: 1.15; le
 .setting-block { display: grid; gap: 8px; padding: 15px 16px; border: 1px solid var(--line); border-radius: 14px; }
 .setting-block label { font-size: 14px; font-weight: 650; }
 .setting-block small { color: rgba(var(--v-theme-on-surface), .5); }
-.info-card { display: grid; grid-template-columns: 38px minmax(0, 1fr); align-items: start; gap: 12px; min-height: 0; padding: 14px 16px; overflow: visible; border: 1px solid rgba(var(--v-theme-info), .3); border-radius: 12px; background: rgba(var(--v-theme-info), .1); color: rgb(var(--v-theme-info)); }
-.info-card__icon { display: grid; place-items: center; width: 34px; height: 34px; border-radius: 9px; background: rgba(var(--v-theme-info), .12); }
-.info-card__content { min-width: 0; overflow: visible; line-height: 1.55; }
+.msnp-note-card { box-sizing: border-box; display: flex; align-items: flex-start; gap: 12px; width: 100%; height: auto !important; min-height: 64px; padding: 14px 16px; overflow: visible; border: 1px solid rgba(var(--v-theme-info), .3); border-radius: 12px; background: rgba(var(--v-theme-info), .1); color: rgb(var(--v-theme-info)); }
+.msnp-note-card__icon { display: grid; flex: 0 0 34px; place-items: center; width: 34px; height: 34px; border-radius: 9px; background: rgba(var(--v-theme-info), .12); }
+.msnp-note-card__content { flex: 1 1 auto; min-width: 0; overflow: visible; line-height: 1.55; }
 .webhook-guide strong, .webhook-guide span, .webhook-guide code { display: block; }
 .webhook-guide span { margin-top: 5px; line-height: 1.55; }
 .webhook-guide code { margin-top: 9px; padding: 9px 10px; white-space: normal; overflow-wrap: anywhere; border-radius: 8px; background: rgba(var(--v-theme-on-surface), .07); color: rgb(var(--v-theme-info)); font-size: 12px; }

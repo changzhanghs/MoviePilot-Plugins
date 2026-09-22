@@ -13,7 +13,7 @@ from app.plugins import _PluginBase
 from app.schemas.types import EventType, MediaImageType, MediaType, NotificationType
 from app.utils.web import WebUtils
 
-from .core import MediaServerNotifyCore, merge_ip_location
+from .core import MediaServerNotifyCore, build_library_records, merge_ip_location
 
 
 class MediaServerNotifyPlus(MediaServerNotifyCore, _PluginBase):
@@ -22,7 +22,7 @@ class MediaServerNotifyPlus(MediaServerNotifyCore, _PluginBase):
     plugin_name = "媒体库通知"
     plugin_desc = "极简配置可自定义的媒体库通知消息"
     plugin_icon = "mediaplay.png"
-    plugin_version = "2.0.7"
+    plugin_version = "2.0.8"
     plugin_author = "cz"
     author_url = "https://github.com/changzhanghs"
     plugin_config_prefix = "mediaservernotifyplus_"
@@ -77,27 +77,18 @@ class MediaServerNotifyPlus(MediaServerNotifyCore, _PluginBase):
         records: List[Dict[str, Any]] = []
         for server_name, service_info in self._services().items():
             try:
-                libraries = service_info.instance.get_librarys() or []
+                instance = service_info.instance
+                libraries = instance.get_librarys() or []
+                virtual_libraries = []
+                for method_name in ("get_emby_virtual_folders", "get_jellyfin_virtual_folders"):
+                    method = getattr(instance, method_name, None)
+                    if callable(method):
+                        virtual_libraries = method() or []
+                        break
             except Exception as error:
                 logger.debug(f"读取 {server_name} 媒体库失败：{error}")
                 continue
-            for library in libraries:
-                library_id = getattr(library, "id", None) or getattr(library, "item_id", None)
-                if library_id in (None, ""):
-                    continue
-                name = str(getattr(library, "name", None) or library_id)
-                paths = getattr(library, "path", None) or []
-                if not isinstance(paths, list):
-                    paths = [paths]
-                records.append({
-                    "title": f"{server_name} · {name}",
-                    "value": f"{server_name}::{library_id}",
-                    "server": server_name,
-                    "id": str(library_id),
-                    "name": name,
-                    "type": str(getattr(library, "type", None) or ""),
-                    "paths": [str(path) for path in paths if path],
-                })
+            records.extend(build_library_records(server_name, libraries, virtual_libraries))
         return records
 
     @staticmethod

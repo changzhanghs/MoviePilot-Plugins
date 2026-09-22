@@ -20,9 +20,9 @@ class AdaptationTests(unittest.TestCase):
     def test_versions_and_manifests_match(self):
         v2_package = json.loads((ROOT / "package.v2.json").read_text(encoding="utf-8"))
         v3_package = json.loads((ROOT / "package.v3.json").read_text(encoding="utf-8"))
-        self.assertEqual(v2_package["MediaServerNotifyPlus"]["version"], "2.0.7")
+        self.assertEqual(v2_package["MediaServerNotifyPlus"]["version"], "2.0.8")
         self.assertFalse(v2_package["MediaServerNotifyPlus"]["v3"])
-        self.assertEqual(v3_package["MediaServerNotifyPlus"]["version"], "3.0.7")
+        self.assertEqual(v3_package["MediaServerNotifyPlus"]["version"], "3.0.8")
         self.assertEqual(v3_package["MediaServerNotifyPlus"]["system_version"], ">=3.0.0")
         for package in (v2_package, v3_package):
             metadata = package["MediaServerNotifyPlus"]
@@ -72,7 +72,8 @@ class AdaptationTests(unittest.TestCase):
             self.assertIn("通知类型固定为“媒体服务器”", source)
             self.assertIn("http://localhost:3000/api/v1/webhook?token=API_TOKEN&amp;source=媒体服务器名:3001", source)
             self.assertNotIn("localhost:3001", source)
-            self.assertGreaterEqual(source.count('class="info-card'), 2)
+            self.assertGreaterEqual(source.count('class="msnp-note-card'), 2)
+            self.assertNotIn('class="info-card', source)
             self.assertIn('v-if="row.key === \'server\'"', source)
             self.assertIn('v-model="draft.mediaservers"', source)
             self.assertIn('label="选择媒体服务器"', source)

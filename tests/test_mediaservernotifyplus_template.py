@@ -145,12 +145,17 @@ class TemplateTests(unittest.TestCase):
 
     def test_playback_fields_merge_device_client_and_offer_overview(self):
         configs = CORE.default_field_configs()
+        expected = [
+            "season_episode", "user", "device", "progress", "ip", "library",
+            "region", "rating", "actors", "time", "overview", "server",
+        ]
+        for action in (
+            "playback_started", "playback_stopped", "playback_paused", "playback_resumed",
+        ):
+            self.assertEqual([row["key"] for row in configs[action]], expected)
         playback_keys = [row["key"] for row in configs["playback_started"]]
-        self.assertIn("overview", playback_keys)
-        self.assertIn("rating", playback_keys)
-        self.assertIn("actors", playback_keys)
-        self.assertIn("device", playback_keys)
         self.assertNotIn("client", playback_keys)
+        self.assertNotIn("media_type", playback_keys)
         self.assertNotIn("play_link", playback_keys)
         self.assertEqual(CORE.FIELD_CATALOG["device"]["label"], "设备")
 
@@ -162,6 +167,31 @@ class TemplateTests(unittest.TestCase):
         self.assertEqual(context["display_name"], "兰香如故")
         self.assertEqual(context["device"], "Apple TV · VidHub")
         self.assertEqual(context["season_episode"], "S01E12 - 交个朋友吧?")
+
+    def test_library_records_merge_virtual_paths_and_match_real_library(self):
+        libraries = [SimpleNamespace(id="lib-tv", name="动漫", path=None, type="TV")]
+        virtual_libraries = [{
+            "Id": "lib-tv", "Name": "动漫", "Path": ["/media/anime", "/mnt/anime"],
+        }]
+        records = CORE.build_library_records("cz", libraries, virtual_libraries)
+        self.assertEqual(records[0]["paths"], ["/media/anime", "/mnt/anime"])
+
+        plugin = FakePlugin()
+        plugin._library_records = records
+        context = {"server": "cz"}
+        info = SimpleNamespace(
+            item_path="/media/anime/Show/Season 01/episode.mkv",
+            json_object={"Item": {"Path": "/media/anime/Show/Season 01/episode.mkv"}},
+        )
+        self.assertEqual(plugin._match_library(info, context), "cz::lib-tv")
+        self.assertEqual(context["library"], "动漫")
+
+        name_context = {"server": "cz"}
+        name_info = SimpleNamespace(
+            item_path="", json_object={"Item": {"librarySectionTitle": "动漫"}},
+        )
+        self.assertEqual(plugin._match_library(name_info, name_context), "cz::lib-tv")
+        self.assertEqual(name_context["library"], "动漫")
 
     def test_ip_field_also_contains_location_without_a_second_option(self):
         configs = CORE.default_field_configs()

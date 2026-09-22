@@ -90,20 +90,20 @@ const _hoisted_22 = { class: "dialog-title-icon" };
 const _hoisted_23 = { class: "setting-row setting-row--featured" };
 const _hoisted_24 = { class: "setting-block" };
 const _hoisted_25 = {
-  class: "info-card webhook-guide",
+  class: "msnp-note-card webhook-guide",
   role: "note"
 };
-const _hoisted_26 = { class: "info-card__icon" };
+const _hoisted_26 = { class: "msnp-note-card__icon" };
 const _hoisted_27 = { class: "setting-row" };
 const _hoisted_28 = { class: "settings-grid" };
 const _hoisted_29 = { class: "setting-row" };
 const _hoisted_30 = { class: "setting-block test-block" };
 const _hoisted_31 = { class: "settings-grid settings-grid--test" };
 const _hoisted_32 = {
-  class: "info-card",
+  class: "msnp-note-card",
   role: "note"
 };
-const _hoisted_33 = { class: "info-card__icon" };
+const _hoisted_33 = { class: "msnp-note-card__icon" };
 
 const {computed,onMounted,ref,watch} = await importShared('vue');
 
@@ -552,7 +552,7 @@ return (_ctx, _cache) => {
                       size: "22"
                     })
                   ]),
-                  _cache[35] || (_cache[35] = _createElementVNode("div", { class: "info-card__content" }, [
+                  _cache[35] || (_cache[35] = _createElementVNode("div", { class: "msnp-note-card__content" }, [
                     _createElementVNode("strong", null, "媒体服务器 Webhook 配置"),
                     _createElementVNode("span", null, "回调地址为："),
                     _createElementVNode("code", null, "http://localhost:3000/api/v1/webhook?token=API_TOKEN&source=媒体服务器名:3001"),
@@ -653,7 +653,7 @@ return (_ctx, _cache) => {
                       size: "22"
                     })
                   ]),
-                  _cache[39] || (_cache[39] = _createElementVNode("div", { class: "info-card__content" }, "消息渠道遵循 MoviePilot 全局设置，通知类型固定为“媒体服务器”。", -1))
+                  _cache[39] || (_cache[39] = _createElementVNode("div", { class: "msnp-note-card__content" }, "消息渠道遵循 MoviePilot 全局设置，通知类型固定为“媒体服务器”。", -1))
                 ])
               ]),
               _: 1
@@ -685,6 +685,6 @@ return (_ctx, _cache) => {
 }
 
 };
-const Config = /*#__PURE__*/_export_sfc(_sfc_main, [['__scopeId',"data-v-c5860a46"]]);
+const Config = /*#__PURE__*/_export_sfc(_sfc_main, [['__scopeId',"data-v-d5eed615"]]);
 
 export { Config as default };
