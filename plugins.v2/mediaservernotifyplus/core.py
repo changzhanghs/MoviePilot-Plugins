@@ -55,9 +55,9 @@ ACTION_DESCRIPTIONS: Dict[str, str] = {
 FIELD_CATALOG: Dict[str, Dict[str, str]] = {
     "time": {"label": "时间", "icon": "🕐"},
     "server": {"label": "服务器", "icon": "🖥️"},
-    "library": {"label": "媒体库", "icon": "🗂️"},
+    "library": {"label": "媒体库分类", "icon": "🗂️"},
     "media_type": {"label": "媒体类型", "icon": "🎞️"},
-    "category": {"label": "分类", "icon": "📁"},
+    "category": {"label": "媒体类别", "icon": "📁"},
     "season_episode": {"label": "季集", "icon": "📺"},
     "file_count": {"label": "文件数量", "icon": "📄"},
     "rating": {"label": "评分", "icon": "⭐"},
@@ -74,7 +74,6 @@ FIELD_CATALOG: Dict[str, Dict[str, str]] = {
     "media_id": {"label": "媒体 ID", "icon": "🆔"},
     "album": {"label": "专辑", "icon": "💿"},
     "artist": {"label": "歌手", "icon": "🎤"},
-    "play_link": {"label": "播放链接", "icon": "🔗", "style": "link"},
 }
 
 ACTION_FIELDS: Dict[str, Tuple[str, ...]] = {
@@ -88,20 +87,20 @@ ACTION_FIELDS: Dict[str, Tuple[str, ...]] = {
         "media_source", "media_id", "album", "artist",
     ),
     "playback_started": (
-        "season_episode", "user", "device", "ip", "progress", "overview", "library",
-        "media_type", "server", "time", "play_link",
+        "season_episode", "user", "device", "ip", "progress", "rating", "actors", "overview", "library",
+        "media_type", "server", "time",
     ),
     "playback_stopped": (
-        "season_episode", "user", "device", "ip", "progress", "overview", "library",
-        "media_type", "server", "time", "play_link",
+        "season_episode", "user", "device", "ip", "progress", "rating", "actors", "overview", "library",
+        "media_type", "server", "time",
     ),
     "playback_paused": (
-        "season_episode", "user", "device", "ip", "progress", "overview", "library",
-        "server", "time", "play_link",
+        "season_episode", "user", "device", "ip", "progress", "rating", "actors", "overview", "library",
+        "server", "time",
     ),
     "playback_resumed": (
-        "season_episode", "user", "device", "ip", "progress", "overview", "library",
-        "server", "time", "play_link",
+        "season_episode", "user", "device", "ip", "progress", "rating", "actors", "overview", "library",
+        "server", "time",
     ),
     "auth_success": ("user", "device", "ip", "server", "time"),
     "auth_failed": ("user", "device", "ip", "server", "time"),
@@ -245,6 +244,10 @@ def normalize_field_configs(value: Any) -> Dict[str, List[Dict[str, Any]]]:
                 continue
             label = str(row.get("label") or FIELD_CATALOG[key]["label"]).strip()
             if key == "device" and label in {"设备 / 客户端", "设备/客户端"}:
+                label = FIELD_CATALOG[key]["label"]
+            if key == "library" and label in {"媒体库", "媒体类别"}:
+                label = FIELD_CATALOG[key]["label"]
+            if key == "category" and label == "分类":
                 label = FIELD_CATALOG[key]["label"]
             rows.append({
                 "key": key,
@@ -442,7 +445,6 @@ class MediaServerNotifyCore:
             self._mediaservers = list(config.get("mediaservers") or [])
             # 新版界面按媒体服务器筛选；旧版具体媒体库配置不再参与过滤。
             self._libraries = []
-            self._add_play_link = bool(config.get("add_play_link", True))
             self._lookup_ip = True
             self._fetch_metadata = True
             self._aggregate_enabled = bool(config.get("aggregate_enabled", True))
@@ -487,7 +489,6 @@ class MediaServerNotifyCore:
             "types": list(ACTION_LABELS),
             "field_configs": default_field_configs(),
             "_default_field_configs": default_field_configs(),
-            "add_play_link": True,
             "lookup_ip": False,
             "fetch_metadata": True,
             "aggregate_enabled": True,
@@ -698,7 +699,6 @@ class MediaServerNotifyCore:
                 if isinstance(item.get("Artists"), list)
                 else item.get("Artist") or item.get("grandparentTitle") or ""
             ),
-            "play_link": "",
             "_image": getattr(info, "image_url", None),
             "_link": None,
             "_item_id": getattr(info, "item_id", None),
@@ -798,11 +798,6 @@ class MediaServerNotifyCore:
         self._send_context("library_added", context)
 
     def _send_context(self, action: str, context: Dict[str, Any]) -> None:
-        if self._add_play_link and not context.get("play_link"):
-            try:
-                context["play_link"] = self._play_link(context) or ""
-            except Exception as error:
-                self._log_debug(f"生成播放链接失败：{error}")
         title, body = self._renderer.render(action, context)
         # 登录和测试通知不属于媒体卡片，不附带 TMDB 跳转。
         if action in {"auth_success", "auth_failed", "test"}:
@@ -836,7 +831,6 @@ class MediaServerNotifyCore:
             "progress": "36%", "tmdb_id": "1", "tmdb_url": "https://www.themoviedb.org/movie/1",
             "media_source": "themoviedb", "media_id": "1", "file_count": "3",
             "library": "电影库", "album": "示例专辑", "artist": "示例歌手",
-            "play_link": "https://media.example/item/1",
             "_image": "https://image.tmdb.org/t/p/w500/1E5baAaEse26fej7uHcjOgEE2t2.jpg",
             "_link": None,
             "_item_id": None,
@@ -900,9 +894,6 @@ class MediaServerNotifyCore:
         raise NotImplementedError
 
     def _enrich_context(self, info: Any, context: Dict[str, Any]) -> None:
-        raise NotImplementedError
-
-    def _play_link(self, context: Mapping[str, Any]) -> Optional[str]:
         raise NotImplementedError
 
     def _log_debug(self, message: str) -> None:

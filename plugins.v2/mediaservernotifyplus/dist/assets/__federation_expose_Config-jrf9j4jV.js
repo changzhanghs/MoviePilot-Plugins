@@ -19,7 +19,7 @@ const actionMetaFallback = {
   test: { label: '测试', description: '用于检查当前通知样式', icon: 'mdi-flask-outline' },
 };
 
-const retiredFields = new Set(['client', 'year', 'channel', 'ip_location']);
+const retiredFields = new Set(['client', 'year', 'channel', 'ip_location', 'play_link']);
 const clone = value => JSON.parse(JSON.stringify(value || {}));
 
 function normalizeNotificationModel(value) {
@@ -39,6 +39,8 @@ function normalizeNotificationModel(value) {
       if (allowed.size && !allowed.has(source.key)) continue
       const row = clone(source);
       if (row.key === 'device' && ['设备 / 客户端', '设备/客户端'].includes(row.label)) row.label = '设备';
+      if (row.key === 'library' && ['媒体库', '媒体类别'].includes(row.label)) row.label = '媒体库分类';
+      if (row.key === 'category' && row.label === '分类') row.label = '媒体类别';
       rows.push(row);
       seen.add(row.key);
     }
@@ -87,11 +89,21 @@ const _hoisted_21 = { class: "field-order-buttons" };
 const _hoisted_22 = { class: "dialog-title-icon" };
 const _hoisted_23 = { class: "setting-row setting-row--featured" };
 const _hoisted_24 = { class: "setting-block" };
-const _hoisted_25 = { class: "setting-row" };
-const _hoisted_26 = { class: "settings-grid" };
+const _hoisted_25 = {
+  class: "info-card webhook-guide",
+  role: "note"
+};
+const _hoisted_26 = { class: "info-card__icon" };
 const _hoisted_27 = { class: "setting-row" };
-const _hoisted_28 = { class: "setting-block test-block" };
-const _hoisted_29 = { class: "settings-grid settings-grid--test" };
+const _hoisted_28 = { class: "settings-grid" };
+const _hoisted_29 = { class: "setting-row" };
+const _hoisted_30 = { class: "setting-block test-block" };
+const _hoisted_31 = { class: "settings-grid settings-grid--test" };
+const _hoisted_32 = {
+  class: "info-card",
+  role: "note"
+};
+const _hoisted_33 = { class: "info-card__icon" };
 
 const {computed,onMounted,ref,watch} = await importShared('vue');
 
@@ -196,15 +208,15 @@ return (_ctx, _cache) => {
   const _component_VCardText = _resolveComponent("VCardText");
   const _component_VCard = _resolveComponent("VCard");
   const _component_VCardTitle = _resolveComponent("VCardTitle");
+  const _component_VSelect = _resolveComponent("VSelect");
   const _component_VTextField = _resolveComponent("VTextField");
   const _component_VCheckbox = _resolveComponent("VCheckbox");
   const _component_VCardActions = _resolveComponent("VCardActions");
   const _component_VDialog = _resolveComponent("VDialog");
-  const _component_VSelect = _resolveComponent("VSelect");
 
   return (_openBlock(), _createElementBlock("div", _hoisted_1, [
     _createElementVNode("header", _hoisted_2, [
-      _cache[21] || (_cache[21] = _createElementVNode("div", null, [
+      _cache[22] || (_cache[22] = _createElementVNode("div", null, [
         _createElementVNode("div", { class: "eyebrow" }, "MEDIA LIBRARY NOTIFICATIONS"),
         _createElementVNode("h1", null, "媒体库通知"),
         _createElementVNode("p", null, "选择通知类型，设置需要展示的内容和顺序。")
@@ -215,7 +227,7 @@ return (_ctx, _cache) => {
         "prepend-icon": "mdi-tune-variant",
         onClick: _cache[0] || (_cache[0] = $event => (settingsOpen.value = true))
       }, {
-        default: _withCtx(() => [...(_cache[20] || (_cache[20] = [
+        default: _withCtx(() => [...(_cache[21] || (_cache[21] = [
           _createTextVNode(" 设置 ", -1)
         ]))]),
         _: 1
@@ -229,7 +241,7 @@ return (_ctx, _cache) => {
           variant: "tonal",
           icon: "mdi-bell-off-outline"
         }, {
-          default: _withCtx(() => [...(_cache[22] || (_cache[22] = [
+          default: _withCtx(() => [...(_cache[23] || (_cache[23] = [
             _createTextVNode(" 插件当前未启用。你仍可编辑模板，启用后才会发送通知。 ", -1)
           ]))]),
           _: 1
@@ -294,14 +306,14 @@ return (_ctx, _cache) => {
           icon: "mdi-information-outline",
           size: "18"
         }),
-        _cache[23] || (_cache[23] = _createTextVNode(" 字段没有数据时会自动隐藏整行", -1))
+        _cache[24] || (_cache[24] = _createTextVNode(" 字段没有数据时会自动隐藏整行", -1))
       ]),
       _createElementVNode("div", _hoisted_10, [
         _createVNode(_component_VBtn, {
           variant: "text",
           onClick: _cache[2] || (_cache[2] = $event => (_ctx.$emit('close')))
         }, {
-          default: _withCtx(() => [...(_cache[24] || (_cache[24] = [
+          default: _withCtx(() => [...(_cache[25] || (_cache[25] = [
             _createTextVNode("取消", -1)
           ]))]),
           _: 1
@@ -321,7 +333,7 @@ return (_ctx, _cache) => {
     ]),
     _createVNode(_component_VDialog, {
       modelValue: editorOpen.value,
-      "onUpdate:modelValue": _cache[7] || (_cache[7] = $event => ((editorOpen).value = $event)),
+      "onUpdate:modelValue": _cache[8] || (_cache[8] = $event => ((editorOpen).value = $event)),
       "max-width": "760",
       scrollable: ""
     }, {
@@ -336,7 +348,7 @@ return (_ctx, _cache) => {
                   }, null, 8, ["icon"])
                 ]),
                 _createElementVNode("div", null, [
-                  _cache[25] || (_cache[25] = _createElementVNode("div", { class: "dialog-kicker" }, "通知内容", -1)),
+                  _cache[26] || (_cache[26] = _createElementVNode("div", { class: "dialog-kicker" }, "通知内容", -1)),
                   _createElementVNode("div", null, _toDisplayString(activeMeta.value.label), 1)
                 ]),
                 _createVNode(_component_VBtn, {
@@ -355,10 +367,10 @@ return (_ctx, _cache) => {
                   (!['auth_success', 'auth_failed', 'test'].includes(activeAction.value))
                     ? (_openBlock(), _createElementBlock("div", _hoisted_14, "示例影片 (2026)"))
                     : _createCommentVNode("", true),
-                  _cache[26] || (_cache[26] = _createElementVNode("div", { class: "message-preview__note" }, "下方勾选的字段将按当前顺序继续展示", -1))
+                  _cache[27] || (_cache[27] = _createElementVNode("div", { class: "message-preview__note" }, "下方勾选的字段将按当前顺序继续展示", -1))
                 ]),
                 _createElementVNode("div", _hoisted_15, [
-                  _cache[28] || (_cache[28] = _createElementVNode("div", null, [
+                  _cache[29] || (_cache[29] = _createElementVNode("div", null, [
                     _createElementVNode("strong", null, "可通知内容"),
                     _createElementVNode("span", null, "拖动左侧手柄排序，只能修改展示名称")
                   ], -1)),
@@ -368,7 +380,7 @@ return (_ctx, _cache) => {
                     "prepend-icon": "mdi-restore",
                     onClick: resetFields
                   }, {
-                    default: _withCtx(() => [...(_cache[27] || (_cache[27] = [
+                    default: _withCtx(() => [...(_cache[28] || (_cache[28] = [
                       _createTextVNode("恢复默认", -1)
                     ]))]),
                     _: 1
@@ -379,7 +391,7 @@ return (_ctx, _cache) => {
                     return (_openBlock(), _createElementBlock("div", {
                       key: row.key,
                       class: _normalizeClass(["field-row", { 'field-row--disabled': !row.enabled }]),
-                      onDragover: _cache[5] || (_cache[5] = _withModifiers(() => {}, ["prevent"])),
+                      onDragover: _cache[6] || (_cache[6] = _withModifiers(() => {}, ["prevent"])),
                       onDrop: _withModifiers($event => (dropField(index)), ["prevent"])
                     }, [
                       _createElementVNode("button", {
@@ -394,15 +406,34 @@ return (_ctx, _cache) => {
                       ], 40, _hoisted_18),
                       _createElementVNode("div", _hoisted_19, [
                         _createElementVNode("div", _hoisted_20, _toDisplayString(fieldMeta(row.key).label), 1),
-                        _createVNode(_component_VTextField, {
-                          modelValue: row.label,
-                          "onUpdate:modelValue": $event => ((row.label) = $event),
-                          label: "展示名称",
-                          density: "compact",
-                          variant: "outlined",
-                          maxlength: "30",
-                          "hide-details": ""
-                        }, null, 8, ["modelValue", "onUpdate:modelValue"])
+                        (row.key === 'server')
+                          ? (_openBlock(), _createBlock(_component_VSelect, {
+                              key: 0,
+                              modelValue: draft.value.mediaservers,
+                              "onUpdate:modelValue": _cache[5] || (_cache[5] = $event => ((draft.value.mediaservers) = $event)),
+                              items: serverOptions.value,
+                              "item-title": "title",
+                              "item-value": "value",
+                              label: "选择媒体服务器",
+                              placeholder: "未选择时监听全部",
+                              density: "compact",
+                              variant: "outlined",
+                              multiple: "",
+                              chips: "",
+                              "closable-chips": "",
+                              clearable: "",
+                              "hide-details": ""
+                            }, null, 8, ["modelValue", "items"]))
+                          : (_openBlock(), _createBlock(_component_VTextField, {
+                              key: 1,
+                              modelValue: row.label,
+                              "onUpdate:modelValue": $event => ((row.label) = $event),
+                              label: "展示名称",
+                              density: "compact",
+                              variant: "outlined",
+                              maxlength: "30",
+                              "hide-details": ""
+                            }, null, 8, ["modelValue", "onUpdate:modelValue"]))
                       ]),
                       _createElementVNode("div", _hoisted_21, [
                         _createVNode(_component_VBtn, {
@@ -439,9 +470,9 @@ return (_ctx, _cache) => {
                 _createVNode(_component_VBtn, {
                   color: "primary",
                   variant: "flat",
-                  onClick: _cache[6] || (_cache[6] = $event => (editorOpen.value = false))
+                  onClick: _cache[7] || (_cache[7] = $event => (editorOpen.value = false))
                 }, {
-                  default: _withCtx(() => [...(_cache[29] || (_cache[29] = [
+                  default: _withCtx(() => [...(_cache[30] || (_cache[30] = [
                     _createTextVNode("完成", -1)
                   ]))]),
                   _: 1
@@ -457,7 +488,7 @@ return (_ctx, _cache) => {
     }, 8, ["modelValue"]),
     _createVNode(_component_VDialog, {
       modelValue: settingsOpen.value,
-      "onUpdate:modelValue": _cache[19] || (_cache[19] = $event => ((settingsOpen).value = $event)),
+      "onUpdate:modelValue": _cache[20] || (_cache[20] = $event => ((settingsOpen).value = $event)),
       "max-width": "720",
       scrollable: ""
     }, {
@@ -469,7 +500,7 @@ return (_ctx, _cache) => {
                 _createElementVNode("div", _hoisted_22, [
                   _createVNode(_component_VIcon, { icon: "mdi-tune-variant" })
                 ]),
-                _cache[30] || (_cache[30] = _createElementVNode("div", null, [
+                _cache[31] || (_cache[31] = _createElementVNode("div", null, [
                   _createElementVNode("div", { class: "dialog-kicker" }, "GLOBAL SETTINGS"),
                   _createElementVNode("div", null, "通知设置")
                 ], -1)),
@@ -477,7 +508,7 @@ return (_ctx, _cache) => {
                   class: "ml-auto",
                   icon: "mdi-close",
                   variant: "text",
-                  onClick: _cache[8] || (_cache[8] = $event => (settingsOpen.value = false))
+                  onClick: _cache[9] || (_cache[9] = $event => (settingsOpen.value = false))
                 })
               ]),
               _: 1
@@ -485,22 +516,22 @@ return (_ctx, _cache) => {
             _createVNode(_component_VCardText, { class: "dialog-body settings-stack" }, {
               default: _withCtx(() => [
                 _createElementVNode("div", _hoisted_23, [
-                  _cache[31] || (_cache[31] = _createElementVNode("div", null, [
+                  _cache[32] || (_cache[32] = _createElementVNode("div", null, [
                     _createElementVNode("strong", null, "启用插件"),
                     _createElementVNode("span", null, "接收媒体服务器事件并发送通知")
                   ], -1)),
                   _createVNode(_component_VSwitch, {
                     modelValue: draft.value.enabled,
-                    "onUpdate:modelValue": _cache[9] || (_cache[9] = $event => ((draft.value.enabled) = $event)),
+                    "onUpdate:modelValue": _cache[10] || (_cache[10] = $event => ((draft.value.enabled) = $event)),
                     color: "primary",
                     "hide-details": ""
                   }, null, 8, ["modelValue"])
                 ]),
                 _createElementVNode("div", _hoisted_24, [
-                  _cache[32] || (_cache[32] = _createElementVNode("label", null, "媒体服务器", -1)),
+                  _cache[33] || (_cache[33] = _createElementVNode("label", null, "媒体服务器", -1)),
                   _createVNode(_component_VSelect, {
                     modelValue: draft.value.mediaservers,
-                    "onUpdate:modelValue": _cache[10] || (_cache[10] = $event => ((draft.value.mediaservers) = $event)),
+                    "onUpdate:modelValue": _cache[11] || (_cache[11] = $event => ((draft.value.mediaservers) = $event)),
                     items: serverOptions.value,
                     "item-title": "title",
                     "item-value": "value",
@@ -512,38 +543,38 @@ return (_ctx, _cache) => {
                     variant: "outlined",
                     "hide-details": ""
                   }, null, 8, ["modelValue", "items"]),
-                  _cache[33] || (_cache[33] = _createElementVNode("small", null, "选择需要接收通知的 Emby、Jellyfin 或 Plex 实例。", -1))
+                  _cache[34] || (_cache[34] = _createElementVNode("small", null, "选择需要接收通知的 Emby、Jellyfin 或 Plex 实例。", -1))
                 ]),
-                _createVNode(_component_VAlert, {
-                  class: "webhook-guide",
-                  type: "info",
-                  variant: "tonal",
-                  icon: "mdi-webhook"
-                }, {
-                  default: _withCtx(() => [...(_cache[34] || (_cache[34] = [
-                    _createElementVNode("strong", null, "媒体服务器 Webhook 配置", -1),
-                    _createElementVNode("span", null, "回调地址为：", -1),
-                    _createElementVNode("code", null, "http://localhost:3000/api/v1/webhook?token=API_TOKEN&source=媒体服务器名", -1),
+                _createElementVNode("div", _hoisted_25, [
+                  _createElementVNode("div", _hoisted_26, [
+                    _createVNode(_component_VIcon, {
+                      icon: "mdi-webhook",
+                      size: "22"
+                    })
+                  ]),
+                  _cache[35] || (_cache[35] = _createElementVNode("div", { class: "info-card__content" }, [
+                    _createElementVNode("strong", null, "媒体服务器 Webhook 配置"),
+                    _createElementVNode("span", null, "回调地址为："),
+                    _createElementVNode("code", null, "http://localhost:3000/api/v1/webhook?token=API_TOKEN&source=媒体服务器名:3001"),
                     _createElementVNode("span", null, [
                       _createTextVNode("其中 "),
                       _createElementVNode("code", null, "API_TOKEN"),
                       _createTextVNode(" 替换为 MoviePilot 设置中的 API Token，"),
                       _createElementVNode("code", null, "source"),
-                      _createTextVNode(" 必须与上方媒体服务器名称一致。如果媒体服务器与 MoviePilot 不在同一台主机，请将 "),
+                      _createTextVNode(" 按“媒体服务器名:3001”填写。如果媒体服务器与 MoviePilot 不在同一台主机，请将 "),
                       _createElementVNode("code", null, "localhost"),
                       _createTextVNode(" 换成 MoviePilot 的实际 IP 或域名。")
-                    ], -1)
-                  ]))]),
-                  _: 1
-                }),
-                _createElementVNode("div", _hoisted_25, [
-                  _cache[35] || (_cache[35] = _createElementVNode("div", null, [
+                    ])
+                  ], -1))
+                ]),
+                _createElementVNode("div", _hoisted_27, [
+                  _cache[36] || (_cache[36] = _createElementVNode("div", null, [
                     _createElementVNode("strong", null, "聚合剧集入库"),
                     _createElementVNode("span", null, "同一剧集在窗口内只发送一条通知")
                   ], -1)),
                   _createVNode(_component_VSwitch, {
                     modelValue: draft.value.aggregate_enabled,
-                    "onUpdate:modelValue": _cache[11] || (_cache[11] = $event => ((draft.value.aggregate_enabled) = $event)),
+                    "onUpdate:modelValue": _cache[12] || (_cache[12] = $event => ((draft.value.aggregate_enabled) = $event)),
                     color: "primary",
                     "hide-details": ""
                   }, null, 8, ["modelValue"])
@@ -552,7 +583,7 @@ return (_ctx, _cache) => {
                   ? (_openBlock(), _createBlock(_component_VTextField, {
                       key: 0,
                       modelValue: draft.value.aggregate_time,
-                      "onUpdate:modelValue": _cache[12] || (_cache[12] = $event => ((draft.value.aggregate_time) = $event)),
+                      "onUpdate:modelValue": _cache[13] || (_cache[13] = $event => ((draft.value.aggregate_time) = $event)),
                       modelModifiers: { number: true },
                       label: "聚合窗口（秒）",
                       type: "number",
@@ -561,10 +592,10 @@ return (_ctx, _cache) => {
                       "hide-details": ""
                     }, null, 8, ["modelValue"]))
                   : _createCommentVNode("", true),
-                _createElementVNode("div", _hoisted_26, [
+                _createElementVNode("div", _hoisted_28, [
                   _createVNode(_component_VTextField, {
                     modelValue: draft.value.dedupe_library,
-                    "onUpdate:modelValue": _cache[13] || (_cache[13] = $event => ((draft.value.dedupe_library) = $event)),
+                    "onUpdate:modelValue": _cache[14] || (_cache[14] = $event => ((draft.value.dedupe_library) = $event)),
                     modelModifiers: { number: true },
                     label: "入库/删除去重（秒）",
                     type: "number",
@@ -574,7 +605,7 @@ return (_ctx, _cache) => {
                   }, null, 8, ["modelValue"]),
                   _createVNode(_component_VTextField, {
                     modelValue: draft.value.dedupe_playback,
-                    "onUpdate:modelValue": _cache[14] || (_cache[14] = $event => ((draft.value.dedupe_playback) = $event)),
+                    "onUpdate:modelValue": _cache[15] || (_cache[15] = $event => ((draft.value.dedupe_playback) = $event)),
                     modelModifiers: { number: true },
                     label: "播放事件去重（秒）",
                     type: "number",
@@ -583,24 +614,24 @@ return (_ctx, _cache) => {
                     "hide-details": ""
                   }, null, 8, ["modelValue"])
                 ]),
-                _createElementVNode("div", _hoisted_27, [
-                  _cache[36] || (_cache[36] = _createElementVNode("div", null, [
+                _createElementVNode("div", _hoisted_29, [
+                  _cache[37] || (_cache[37] = _createElementVNode("div", null, [
                     _createElementVNode("strong", null, "停止时发送待聚合消息"),
                     _createElementVNode("span", null, "插件重载或停止时不丢弃队列")
                   ], -1)),
                   _createVNode(_component_VSwitch, {
                     modelValue: draft.value.flush_on_stop,
-                    "onUpdate:modelValue": _cache[15] || (_cache[15] = $event => ((draft.value.flush_on_stop) = $event)),
+                    "onUpdate:modelValue": _cache[16] || (_cache[16] = $event => ((draft.value.flush_on_stop) = $event)),
                     color: "primary",
                     "hide-details": ""
                   }, null, 8, ["modelValue"])
                 ]),
-                _createElementVNode("div", _hoisted_28, [
-                  _cache[37] || (_cache[37] = _createElementVNode("label", null, "测试通知", -1)),
-                  _createElementVNode("div", _hoisted_29, [
+                _createElementVNode("div", _hoisted_30, [
+                  _cache[38] || (_cache[38] = _createElementVNode("label", null, "测试通知", -1)),
+                  _createElementVNode("div", _hoisted_31, [
                     _createVNode(_component_VSelect, {
                       modelValue: draft.value.preview_type,
-                      "onUpdate:modelValue": _cache[16] || (_cache[16] = $event => ((draft.value.preview_type) = $event)),
+                      "onUpdate:modelValue": _cache[17] || (_cache[17] = $event => ((draft.value.preview_type) = $event)),
                       items: _unref(actionOrder).map(value => ({ value, title: actionMeta(value).label })),
                       label: "通知类型",
                       variant: "outlined",
@@ -608,35 +639,34 @@ return (_ctx, _cache) => {
                     }, null, 8, ["modelValue", "items"]),
                     _createVNode(_component_VSwitch, {
                       modelValue: draft.value.send_test,
-                      "onUpdate:modelValue": _cache[17] || (_cache[17] = $event => ((draft.value.send_test) = $event)),
+                      "onUpdate:modelValue": _cache[18] || (_cache[18] = $event => ((draft.value.send_test) = $event)),
                       label: "保存时发送",
                       color: "primary",
                       "hide-details": ""
                     }, null, 8, ["modelValue"])
                   ])
                 ]),
-                _createVNode(_component_VAlert, {
-                  type: "info",
-                  variant: "tonal",
-                  icon: "mdi-message-badge-outline"
-                }, {
-                  default: _withCtx(() => [...(_cache[38] || (_cache[38] = [
-                    _createTextVNode(" 消息渠道遵循 MoviePilot 全局设置，通知类型固定为“媒体库”。 ", -1)
-                  ]))]),
-                  _: 1
-                })
+                _createElementVNode("div", _hoisted_32, [
+                  _createElementVNode("div", _hoisted_33, [
+                    _createVNode(_component_VIcon, {
+                      icon: "mdi-message-badge-outline",
+                      size: "22"
+                    })
+                  ]),
+                  _cache[39] || (_cache[39] = _createElementVNode("div", { class: "info-card__content" }, "消息渠道遵循 MoviePilot 全局设置，通知类型固定为“媒体服务器”。", -1))
+                ])
               ]),
               _: 1
             }),
             _createVNode(_component_VCardActions, { class: "dialog-actions" }, {
               default: _withCtx(() => [
-                _cache[40] || (_cache[40] = _createElementVNode("span", null, "设置随主页面一起保存", -1)),
+                _cache[41] || (_cache[41] = _createElementVNode("span", null, "设置随主页面一起保存", -1)),
                 _createVNode(_component_VBtn, {
                   color: "primary",
                   variant: "flat",
-                  onClick: _cache[18] || (_cache[18] = $event => (settingsOpen.value = false))
+                  onClick: _cache[19] || (_cache[19] = $event => (settingsOpen.value = false))
                 }, {
-                  default: _withCtx(() => [...(_cache[39] || (_cache[39] = [
+                  default: _withCtx(() => [...(_cache[40] || (_cache[40] = [
                     _createTextVNode("完成", -1)
                   ]))]),
                   _: 1
@@ -655,6 +685,6 @@ return (_ctx, _cache) => {
 }
 
 };
-const Config = /*#__PURE__*/_export_sfc(_sfc_main, [['__scopeId',"data-v-76b61aa8"]]);
+const Config = /*#__PURE__*/_export_sfc(_sfc_main, [['__scopeId',"data-v-c5860a46"]]);
 
 export { Config as default };

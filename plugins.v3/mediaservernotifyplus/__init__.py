@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any, Dict, List, Mapping, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 from app.schemas.types import EventType, MediaImageType, MediaSource, MediaType, MessageType
 from app.sdk.classification import classify_media
@@ -23,7 +23,7 @@ class MediaServerNotifyPlus(MediaServerNotifyCore, _PluginBase):
     plugin_name = "媒体库通知"
     plugin_desc = "极简配置可自定义的媒体库通知消息"
     plugin_icon = "mediaplay.png"
-    plugin_version = "3.0.6"
+    plugin_version = "3.0.7"
     plugin_author = "cz"
     author_url = "https://github.com/changzhanghs"
     plugin_config_prefix = "mediaservernotifyplus_"
@@ -200,13 +200,6 @@ class MediaServerNotifyPlus(MediaServerNotifyCore, _PluginBase):
                 season=getattr(info, "season_id", None),
                 episode=getattr(info, "episode_id", None),
             )
-
-    def _play_link(self, context: Mapping[str, Any]) -> Optional[str]:
-        service_info = self._service(str(context.get("server") or ""), str(context.get("channel") or ""))
-        item_id = context.get("_item_id")
-        if not service_info or not item_id:
-            return None
-        return service_info.instance.get_play_url(item_id)
 
     @staticmethod
     def _log_debug(message: str) -> None:

@@ -191,7 +191,24 @@ function enabledFieldCount(action) {
               ><VIcon icon="mdi-drag-vertical" /></button>
               <div class="field-identity">
                 <div class="field-key">{{ fieldMeta(row.key).label }}</div>
+                <VSelect
+                  v-if="row.key === 'server'"
+                  v-model="draft.mediaservers"
+                  :items="serverOptions"
+                  item-title="title"
+                  item-value="value"
+                  label="选择媒体服务器"
+                  placeholder="未选择时监听全部"
+                  density="compact"
+                  variant="outlined"
+                  multiple
+                  chips
+                  closable-chips
+                  clearable
+                  hide-details
+                />
                 <VTextField
+                  v-else
                   v-model="row.label"
                   label="展示名称"
                   density="compact"
@@ -246,12 +263,15 @@ function enabledFieldCount(action) {
             <small>选择需要接收通知的 Emby、Jellyfin 或 Plex 实例。</small>
           </div>
 
-          <VAlert class="webhook-guide" type="info" variant="tonal" icon="mdi-webhook">
-            <strong>媒体服务器 Webhook 配置</strong>
-            <span>回调地址为：</span>
-            <code>http://localhost:3000/api/v1/webhook?token=API_TOKEN&amp;source=媒体服务器名</code>
-            <span>其中 <code>API_TOKEN</code> 替换为 MoviePilot 设置中的 API Token，<code>source</code> 必须与上方媒体服务器名称一致。如果媒体服务器与 MoviePilot 不在同一台主机，请将 <code>localhost</code> 换成 MoviePilot 的实际 IP 或域名。</span>
-          </VAlert>
+          <div class="info-card webhook-guide" role="note">
+            <div class="info-card__icon"><VIcon icon="mdi-webhook" size="22" /></div>
+            <div class="info-card__content">
+              <strong>媒体服务器 Webhook 配置</strong>
+              <span>回调地址为：</span>
+              <code>http://localhost:3000/api/v1/webhook?token=API_TOKEN&amp;source=媒体服务器名:3001</code>
+              <span>其中 <code>API_TOKEN</code> 替换为 MoviePilot 设置中的 API Token，<code>source</code> 按“媒体服务器名:3001”填写。如果媒体服务器与 MoviePilot 不在同一台主机，请将 <code>localhost</code> 换成 MoviePilot 的实际 IP 或域名。</span>
+            </div>
+          </div>
 
           <div class="setting-row">
             <div><strong>聚合剧集入库</strong><span>同一剧集在窗口内只发送一条通知</span></div>
@@ -274,9 +294,10 @@ function enabledFieldCount(action) {
             </div>
           </div>
 
-          <VAlert type="info" variant="tonal" icon="mdi-message-badge-outline">
-            消息渠道遵循 MoviePilot 全局设置，通知类型固定为“媒体库”。
-          </VAlert>
+          <div class="info-card" role="note">
+            <div class="info-card__icon"><VIcon icon="mdi-message-badge-outline" size="22" /></div>
+            <div class="info-card__content">消息渠道遵循 MoviePilot 全局设置，通知类型固定为“媒体服务器”。</div>
+          </div>
         </VCardText>
         <VCardActions class="dialog-actions"><span>设置随主页面一起保存</span><VBtn color="primary" variant="flat" @click="settingsOpen = false">完成</VBtn></VCardActions>
       </VCard>
@@ -334,9 +355,12 @@ h1 { margin: 3px 0 4px; font-size: clamp(28px, 4vw, 38px); line-height: 1.15; le
 .setting-block { display: grid; gap: 8px; padding: 15px 16px; border: 1px solid var(--line); border-radius: 14px; }
 .setting-block label { font-size: 14px; font-weight: 650; }
 .setting-block small { color: rgba(var(--v-theme-on-surface), .5); }
+.info-card { display: grid; grid-template-columns: 38px minmax(0, 1fr); align-items: start; gap: 12px; min-height: 0; padding: 14px 16px; overflow: visible; border: 1px solid rgba(var(--v-theme-info), .3); border-radius: 12px; background: rgba(var(--v-theme-info), .1); color: rgb(var(--v-theme-info)); }
+.info-card__icon { display: grid; place-items: center; width: 34px; height: 34px; border-radius: 9px; background: rgba(var(--v-theme-info), .12); }
+.info-card__content { min-width: 0; overflow: visible; line-height: 1.55; }
 .webhook-guide strong, .webhook-guide span, .webhook-guide code { display: block; }
 .webhook-guide span { margin-top: 5px; line-height: 1.55; }
-.webhook-guide code { margin-top: 9px; padding: 9px 10px; overflow-wrap: anywhere; border-radius: 8px; background: rgba(var(--v-theme-on-surface), .07); font-size: 12px; }
+.webhook-guide code { margin-top: 9px; padding: 9px 10px; white-space: normal; overflow-wrap: anywhere; border-radius: 8px; background: rgba(var(--v-theme-on-surface), .07); color: rgb(var(--v-theme-info)); font-size: 12px; }
 .webhook-guide span code { display: inline; margin: 0; padding: 0; background: transparent; }
 .settings-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
 .settings-grid--test { align-items: center; }

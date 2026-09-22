@@ -16,7 +16,7 @@ export const actionMetaFallback = {
   test: { label: '测试', description: '用于检查当前通知样式', icon: 'mdi-flask-outline' },
 }
 
-const retiredFields = new Set(['client', 'year', 'channel', 'ip_location'])
+const retiredFields = new Set(['client', 'year', 'channel', 'ip_location', 'play_link'])
 const clone = value => JSON.parse(JSON.stringify(value || {}))
 
 export function normalizeNotificationModel(value) {
@@ -36,6 +36,8 @@ export function normalizeNotificationModel(value) {
       if (allowed.size && !allowed.has(source.key)) continue
       const row = clone(source)
       if (row.key === 'device' && ['设备 / 客户端', '设备/客户端'].includes(row.label)) row.label = '设备'
+      if (row.key === 'library' && ['媒体库', '媒体类别'].includes(row.label)) row.label = '媒体库分类'
+      if (row.key === 'category' && row.label === '分类') row.label = '媒体类别'
       rows.push(row)
       seen.add(row.key)
     }

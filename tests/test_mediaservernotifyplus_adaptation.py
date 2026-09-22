@@ -20,9 +20,9 @@ class AdaptationTests(unittest.TestCase):
     def test_versions_and_manifests_match(self):
         v2_package = json.loads((ROOT / "package.v2.json").read_text(encoding="utf-8"))
         v3_package = json.loads((ROOT / "package.v3.json").read_text(encoding="utf-8"))
-        self.assertEqual(v2_package["MediaServerNotifyPlus"]["version"], "2.0.6")
+        self.assertEqual(v2_package["MediaServerNotifyPlus"]["version"], "2.0.7")
         self.assertFalse(v2_package["MediaServerNotifyPlus"]["v3"])
-        self.assertEqual(v3_package["MediaServerNotifyPlus"]["version"], "3.0.6")
+        self.assertEqual(v3_package["MediaServerNotifyPlus"]["version"], "3.0.7")
         self.assertEqual(v3_package["MediaServerNotifyPlus"]["system_version"], ">=3.0.0")
         for package in (v2_package, v3_package):
             metadata = package["MediaServerNotifyPlus"]
@@ -69,8 +69,13 @@ class AdaptationTests(unittest.TestCase):
             self.assertNotIn("查询媒体元数据", source)
             self.assertNotIn("查询 IP 归属地", source)
             self.assertIn("消息渠道遵循 MoviePilot 全局设置", source)
-            self.assertIn("http://localhost:3000/api/v1/webhook", source)
+            self.assertIn("通知类型固定为“媒体服务器”", source)
+            self.assertIn("http://localhost:3000/api/v1/webhook?token=API_TOKEN&amp;source=媒体服务器名:3001", source)
             self.assertNotIn("localhost:3001", source)
+            self.assertGreaterEqual(source.count('class="info-card'), 2)
+            self.assertIn('v-if="row.key === \'server\'"', source)
+            self.assertIn('v-model="draft.mediaservers"', source)
+            self.assertIn('label="选择媒体服务器"', source)
             self.assertIn("<h1>媒体库通知</h1>", source)
             page = (plugin / "src/components/Page.vue").read_text(encoding="utf-8")
             self.assertIn("emit('switch')", page)
@@ -80,7 +85,7 @@ class AdaptationTests(unittest.TestCase):
             self.assertNotIn("@click=\"$emit('action')\"", page)
             shared = (plugin / "src/notificationModel.js").read_text(encoding="utf-8")
             self.assertIn("normalizeNotificationModel", source)
-            self.assertIn("['client', 'year', 'channel', 'ip_location']", shared)
+            self.assertIn("['client', 'year', 'channel', 'ip_location', 'play_link']", shared)
 
     def test_notification_type_is_fixed_to_media_server(self):
         v2 = (ROOT / "plugins.v2/mediaservernotifyplus/__init__.py").read_text(encoding="utf-8")

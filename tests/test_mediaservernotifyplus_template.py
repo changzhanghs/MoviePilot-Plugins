@@ -147,8 +147,11 @@ class TemplateTests(unittest.TestCase):
         configs = CORE.default_field_configs()
         playback_keys = [row["key"] for row in configs["playback_started"]]
         self.assertIn("overview", playback_keys)
+        self.assertIn("rating", playback_keys)
+        self.assertIn("actors", playback_keys)
         self.assertIn("device", playback_keys)
         self.assertNotIn("client", playback_keys)
+        self.assertNotIn("play_link", playback_keys)
         self.assertEqual(CORE.FIELD_CATALOG["device"]["label"], "设备")
 
         info = SimpleNamespace(
@@ -177,7 +180,7 @@ class TemplateTests(unittest.TestCase):
         configs = CORE.default_field_configs()
         for rows in configs.values():
             keys = {row["key"] for row in rows}
-            self.assertTrue(keys.isdisjoint({"client", "year", "channel", "ip_location"}))
+            self.assertTrue(keys.isdisjoint({"client", "year", "channel", "ip_location", "play_link"}))
         for action in (
             "library_added", "library_deleted", "playback_started", "playback_stopped",
             "playback_paused", "playback_resumed", "rated",
@@ -187,6 +190,9 @@ class TemplateTests(unittest.TestCase):
         self.assertNotIn("year", CORE.FIELD_CATALOG)
         self.assertNotIn("channel", CORE.FIELD_CATALOG)
         self.assertNotIn("ip_location", CORE.FIELD_CATALOG)
+        self.assertNotIn("play_link", CORE.FIELD_CATALOG)
+        self.assertEqual(CORE.FIELD_CATALOG["library"]["label"], "媒体库分类")
+        self.assertEqual(CORE.FIELD_CATALOG["category"]["label"], "媒体类别")
 
     def test_legacy_field_config_is_migrated_before_sending(self):
         normalized = CORE.normalize_field_configs({
@@ -196,12 +202,20 @@ class TemplateTests(unittest.TestCase):
                 {"key": "year", "label": "年份", "enabled": True},
                 {"key": "channel", "label": "媒体服务", "enabled": True},
                 {"key": "ip_location", "label": "IP 归属地", "enabled": True},
-            ]
+                {"key": "play_link", "label": "播放链接", "enabled": True},
+            ],
+            "library_added": [
+                {"key": "library", "label": "媒体类别", "enabled": True},
+                {"key": "category", "label": "分类", "enabled": True},
+            ],
         })
         rows = normalized["playback_started"]
         self.assertEqual(next(row for row in rows if row["key"] == "device")["label"], "设备")
-        self.assertTrue({row["key"] for row in rows}.isdisjoint({"client", "year", "channel", "ip_location"}))
+        self.assertTrue({row["key"] for row in rows}.isdisjoint({"client", "year", "channel", "ip_location", "play_link"}))
         self.assertIn("overview", {row["key"] for row in rows})
+        library_rows = {row["key"]: row for row in normalized["library_added"]}
+        self.assertEqual(library_rows["library"]["label"], "媒体库分类")
+        self.assertEqual(library_rows["category"]["label"], "媒体类别")
 
     def test_login_and_test_notifications_never_link_to_tmdb(self):
         plugin = FakePlugin()
