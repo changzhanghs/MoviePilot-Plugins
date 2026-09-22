@@ -21,6 +21,7 @@ const loading = ref(true)
 const loadError = ref('')
 const model = ref({ types: [] })
 const enabledTypes = computed(() => new Set(model.value.types || []))
+const targetStorageKey = computed(() => `mediaservernotifyplus:edit:${props.pluginId}`)
 
 function unwrap(value) {
   let current = value
@@ -50,6 +51,13 @@ async function load() {
   }
 }
 onMounted(load)
+
+function openConfig(action = '') {
+  if (action) {
+    try { window.sessionStorage.setItem(targetStorageKey.value, action) } catch (_) { /* ignore */ }
+  }
+  emit('switch')
+}
 </script>
 
 <template>
@@ -57,7 +65,7 @@ onMounted(load)
     <VCardTitle class="detail-header">
       <VAvatar color="primary" variant="tonal"><VIcon icon="mdi-bell-ring-outline" /></VAvatar>
       <div><div>媒体库通知</div><div class="text-caption text-medium-emphasis">点击通知类型可进入设置</div></div>
-      <VBtn class="ml-auto" prepend-icon="mdi-tune-variant" variant="tonal" @click="$emit('action')">设置</VBtn>
+      <VBtn class="ml-auto" prepend-icon="mdi-tune-variant" variant="tonal" @click="openConfig()">设置</VBtn>
       <VBtn icon="mdi-close" variant="text" @click="$emit('close')" />
     </VCardTitle>
     <VDivider />
@@ -65,7 +73,15 @@ onMounted(load)
       <div v-if="loading" class="detail-loading"><VProgressCircular indeterminate color="primary" /><span>正在读取通知设置</span></div>
       <VAlert v-else-if="loadError" type="error" variant="tonal">{{ loadError }}</VAlert>
       <div v-else class="detail-grid">
-        <VCard v-for="action in actionOrder" :key="action" class="detail-card" variant="outlined" @click="$emit('action')">
+        <VCard
+          v-for="action in actionOrder"
+          :key="action"
+          class="detail-card"
+          variant="outlined"
+          tabindex="0"
+          @click="openConfig(action)"
+          @keydown.enter="openConfig(action)"
+        >
           <VCardText>
             <div class="detail-card__top"><VIcon :icon="fallbacks[action][1]" color="primary" /><span class="detail-state" :class="{ 'detail-state--off': !enabledTypes.has(action) }" /></div>
             <strong>{{ actionLabel(action) }}</strong>

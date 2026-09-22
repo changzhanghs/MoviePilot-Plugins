@@ -23,7 +23,7 @@ class MediaServerNotifyPlus(MediaServerNotifyCore, _PluginBase):
     plugin_name = "媒体库通知"
     plugin_desc = "Emby/Jellyfin/Plex 媒体库通知；按事件选择、排序并命名通知字段。"
     plugin_icon = "mediaplay.png"
-    plugin_version = "3.0.2"
+    plugin_version = "3.0.3"
     plugin_author = "cz"
     author_url = "https://github.com/changzhanghs/MoviePilot-Plugins"
     plugin_config_prefix = "mediaservernotifyplus_"
@@ -166,11 +166,9 @@ class MediaServerNotifyPlus(MediaServerNotifyCore, _PluginBase):
         )):
             return
 
-        season = getattr(info, "season_id", None)
-        tmdb = self.chain.tmdb_info(tmdbid=media_id, mtype=kind, season=season) or {}
-        if kind == MediaType.TV and season is not None:
-            series = self.chain.tmdb_info(tmdbid=media_id, mtype=kind) or {}
-            tmdb = {**series, **tmdb}
+        # TMDB ID 指向剧集本身，通知标题也应始终使用剧名。
+        # 不再用季详情覆盖剧集标题，否则会显示成“第 1 季”。
+        tmdb = self.chain.tmdb_info(tmdbid=media_id, mtype=kind) or {}
         title = tmdb.get("title") or tmdb.get("name")
         year = str(tmdb.get("release_date") or tmdb.get("first_air_date") or "")[:4]
         context["title"] = title or context["title"]

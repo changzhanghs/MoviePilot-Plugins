@@ -20,9 +20,9 @@ class AdaptationTests(unittest.TestCase):
     def test_versions_and_manifests_match(self):
         v2_package = json.loads((ROOT / "package.v2.json").read_text(encoding="utf-8"))
         v3_package = json.loads((ROOT / "package.v3.json").read_text(encoding="utf-8"))
-        self.assertEqual(v2_package["MediaServerNotifyPlus"]["version"], "2.0.2")
+        self.assertEqual(v2_package["MediaServerNotifyPlus"]["version"], "2.0.3")
         self.assertFalse(v2_package["MediaServerNotifyPlus"]["v3"])
-        self.assertEqual(v3_package["MediaServerNotifyPlus"]["version"], "3.0.2")
+        self.assertEqual(v3_package["MediaServerNotifyPlus"]["version"], "3.0.3")
         self.assertEqual(v3_package["MediaServerNotifyPlus"]["system_version"], ">=3.0.0")
 
     def test_v2_uses_v2_host_contracts(self):
@@ -65,6 +65,10 @@ class AdaptationTests(unittest.TestCase):
             self.assertNotIn("查询媒体元数据", source)
             self.assertNotIn("查询 IP 归属地", source)
             self.assertIn("消息渠道遵循 MoviePilot 全局设置", source)
+            page = (plugin / "src/components/Page.vue").read_text(encoding="utf-8")
+            self.assertIn("emit('switch')", page)
+            self.assertIn("sessionStorage.setItem", page)
+            self.assertNotIn("@click=\"$emit('action')\"", page)
 
     def test_notification_type_is_fixed_to_media_server(self):
         v2 = (ROOT / "plugins.v2/mediaservernotifyplus/__init__.py").read_text(encoding="utf-8")

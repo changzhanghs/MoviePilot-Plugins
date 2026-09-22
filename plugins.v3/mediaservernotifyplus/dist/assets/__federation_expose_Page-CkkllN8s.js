@@ -1,7 +1,7 @@
 import { importShared } from './__federation_fn_import-JrT3xvdd.js';
 import { _ as _export_sfc } from './_plugin-vue_export-helper-pcqpp-6-.js';
 
-const {resolveComponent:_resolveComponent,createVNode:_createVNode,withCtx:_withCtx,createElementVNode:_createElementVNode,createTextVNode:_createTextVNode,openBlock:_openBlock,createElementBlock:_createElementBlock,createCommentVNode:_createCommentVNode,toDisplayString:_toDisplayString,createBlock:_createBlock,renderList:_renderList,Fragment:_Fragment,normalizeClass:_normalizeClass} = await importShared('vue');
+const {resolveComponent:_resolveComponent,createVNode:_createVNode,withCtx:_withCtx,createElementVNode:_createElementVNode,createTextVNode:_createTextVNode,openBlock:_openBlock,createElementBlock:_createElementBlock,createCommentVNode:_createCommentVNode,toDisplayString:_toDisplayString,createBlock:_createBlock,renderList:_renderList,Fragment:_Fragment,normalizeClass:_normalizeClass,withKeys:_withKeys} = await importShared('vue');
 
 
 const _hoisted_1 = {
@@ -28,6 +28,7 @@ const _sfc_main = {
   setup(__props, { emit: __emit }) {
 
 const props = __props;
+const emit = __emit;
 const actionOrder = [
   'library_added', 'library_deleted', 'playback_started', 'playback_stopped',
   'playback_paused', 'playback_resumed', 'auth_success', 'auth_failed', 'rated', 'test',
@@ -43,6 +44,7 @@ const loading = ref(true);
 const loadError = ref('');
 const model = ref({ types: [] });
 const enabledTypes = computed(() => new Set(model.value.types || []));
+const targetStorageKey = computed(() => `mediaservernotifyplus:edit:${props.pluginId}`);
 
 function unwrap(value) {
   let current = value;
@@ -73,6 +75,13 @@ async function load() {
 }
 onMounted(load);
 
+function openConfig(action = '') {
+  if (action) {
+    try { window.sessionStorage.setItem(targetStorageKey.value, action); } catch (_) { /* ignore */ }
+  }
+  emit('switch');
+}
+
 return (_ctx, _cache) => {
   const _component_VIcon = _resolveComponent("VIcon");
   const _component_VAvatar = _resolveComponent("VAvatar");
@@ -101,7 +110,7 @@ return (_ctx, _cache) => {
             ]),
             _: 1
           }),
-          _cache[4] || (_cache[4] = _createElementVNode("div", null, [
+          _cache[3] || (_cache[3] = _createElementVNode("div", null, [
             _createElementVNode("div", null, "媒体库通知"),
             _createElementVNode("div", { class: "text-caption text-medium-emphasis" }, "点击通知类型可进入设置")
           ], -1)),
@@ -109,9 +118,9 @@ return (_ctx, _cache) => {
             class: "ml-auto",
             "prepend-icon": "mdi-tune-variant",
             variant: "tonal",
-            onClick: _cache[0] || (_cache[0] = $event => (_ctx.$emit('action')))
+            onClick: _cache[0] || (_cache[0] = $event => (openConfig()))
           }, {
-            default: _withCtx(() => [...(_cache[3] || (_cache[3] = [
+            default: _withCtx(() => [...(_cache[2] || (_cache[2] = [
               _createTextVNode("设置", -1)
             ]))]),
             _: 1
@@ -133,7 +142,7 @@ return (_ctx, _cache) => {
                   indeterminate: "",
                   color: "primary"
                 }),
-                _cache[5] || (_cache[5] = _createElementVNode("span", null, "正在读取通知设置", -1))
+                _cache[4] || (_cache[4] = _createElementVNode("span", null, "正在读取通知设置", -1))
               ]))
             : (loadError.value)
               ? (_openBlock(), _createBlock(_component_VAlert, {
@@ -152,7 +161,9 @@ return (_ctx, _cache) => {
                       key: action,
                       class: "detail-card",
                       variant: "outlined",
-                      onClick: _cache[2] || (_cache[2] = $event => (_ctx.$emit('action')))
+                      tabindex: "0",
+                      onClick: $event => (openConfig(action)),
+                      onKeydown: _withKeys($event => (openConfig(action)), ["enter"])
                     }, {
                       default: _withCtx(() => [
                         _createVNode(_component_VCardText, null, {
@@ -173,7 +184,7 @@ return (_ctx, _cache) => {
                         }, 1024)
                       ]),
                       _: 2
-                    }, 1024)
+                    }, 1032, ["onClick", "onKeydown"])
                   }), 64))
                 ]))
         ]),
@@ -186,6 +197,6 @@ return (_ctx, _cache) => {
 }
 
 };
-const Page = /*#__PURE__*/_export_sfc(_sfc_main, [['__scopeId',"data-v-a9a209d5"]]);
+const Page = /*#__PURE__*/_export_sfc(_sfc_main, [['__scopeId',"data-v-9ba991cd"]]);
 
 export { Page as default };

@@ -92,7 +92,15 @@ const draggingIndex = ref(-1);
 const saved = ref(false);
 
 watch(() => props.initialConfig, value => { draft.value = clone(value); }, { deep: true });
-onMounted(() => emit('layout', { maxWidth: '76rem' }));
+onMounted(() => {
+  emit('layout', { maxWidth: '76rem' });
+  try {
+    const key = `mediaservernotifyplus:edit:${props.pluginId}`;
+    const requestedAction = window.sessionStorage.getItem(key);
+    window.sessionStorage.removeItem(key);
+    if (actionOrder.includes(requestedAction)) openEditor(requestedAction);
+  } catch (_) { /* sessionStorage 不可用时仍可正常打开配置页 */ }
+});
 
 const actionMeta = action => {
   const supplied = draft.value._action_meta?.[action];
@@ -597,6 +605,6 @@ return (_ctx, _cache) => {
 }
 
 };
-const Config = /*#__PURE__*/_export_sfc(_sfc_main, [['__scopeId',"data-v-1ed0edc4"]]);
+const Config = /*#__PURE__*/_export_sfc(_sfc_main, [['__scopeId',"data-v-14af9958"]]);
 
 export { Config as default };

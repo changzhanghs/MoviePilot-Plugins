@@ -2,6 +2,7 @@ import importlib.util
 import pathlib
 import sys
 import unittest
+from types import SimpleNamespace
 
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
@@ -140,6 +141,23 @@ class TemplateTests(unittest.TestCase):
         self.assertEqual(message["title"], "📂 已入库 1 个文件")
         self.assertTrue(message["text"].startswith("兰香如故 (2026)"))
         self.assertEqual(message["link"], "https://www.themoviedb.org/tv/1")
+
+    def test_playback_fields_merge_device_client_and_offer_overview(self):
+        configs = CORE.default_field_configs()
+        playback_keys = [row["key"] for row in configs["playback_started"]]
+        self.assertIn("overview", playback_keys)
+        self.assertIn("device", playback_keys)
+        self.assertNotIn("client", playback_keys)
+        self.assertEqual(CORE.FIELD_CATALOG["device"]["label"], "设备 / 客户端")
+
+        info = SimpleNamespace(
+            json_object={"Item": {"SeriesName": "兰香如故", "Name": "交个朋友吧?"}},
+            item_type="TV", season_id=1, episode_id=12, device_name="Apple TV", client="VidHub",
+        )
+        context = CORE.MediaServerNotifyCore._base_context(info, "playback_started")
+        self.assertEqual(context["display_name"], "兰香如故")
+        self.assertEqual(context["device"], "Apple TV · VidHub")
+        self.assertEqual(context["season_episode"], "S01E12 - 交个朋友吧?")
 
 
 if __name__ == "__main__":
