@@ -1,0 +1,192 @@
+"""MoviePilot V2 适配入口。"""
+
+from __future__ import annotations
+
+import re
+from typing import Any, Dict, List, Mapping, Optional, Tuple
+
+from app.core.event import Event, eventmanager
+from app.helper.mediaserver import MediaServerHelper
+from app.log import logger
+from app.modules.themoviedb import CategoryHelper
+from app.plugins import _PluginBase
+from app.schemas.types import EventType, MediaImageType, MediaType, NotificationType
+from app.utils.web import WebUtils
+
+from .core import MediaServerNotifyCore
+
+
+class MediaServerNotifyPlus(MediaServerNotifyCore, _PluginBase):
+    """支持按事件类型自定义模板的媒体服务器通知。"""
+
+    plugin_name = "媒体库通知"
+    plugin_desc = "Emby/Jellyfin/Plex 通知；每种事件可独立自定义标题和正文。"
+    plugin_icon = "mediaplay.png"
+    plugin_version = "2.0.0"
+    plugin_author = "cz"
+    author_url = "https://github.com/changzhanghs/MoviePilot-Plugins"
+    plugin_config_prefix = "mediaservernotifyplus_"
+    plugin_order = 14
+    auth_level = 1
+
+    _notification_type = NotificationType.MediaServer
+
+    def __init__(self) -> None:
+        _PluginBase.__init__(self)
+        self._initialize_core()
+
+    def _host_initialize(self) -> None:
+        self._category = CategoryHelper()
+
+    @eventmanager.register(EventType.WebhookMessage)
+    def send(self, event: Event) -> None:
+        self.handle_webhook(event)
+
+    def _server_options(self) -> List[Dict[str, str]]:
+        try:
+            return [
+                {"title": config.name, "value": config.name}
+                for config in MediaServerHelper().get_configs().values()
+            ]
+        except Exception as error:
+            logger.debug(f"读取媒体服务器配置失败：{error}")
+            return []
+
+    def _services(self, channel: Optional[str] = None) -> dict:
+        if not self._mediaservers:
+            return {}
+        try:
+            return MediaServerHelper().get_services(
+                type_filter=channel,
+                name_filters=self._mediaservers,
+            ) or {}
+        except Exception as error:
+            logger.debug(f"读取媒体服务器实例失败：{error}")
+            return {}
+
+    def _service_allowed(self, info: Any) -> bool:
+        services = self._services(getattr(info, "channel", None))
+        server_name = getattr(info, "server_name", None)
+        return bool(services and (not server_name or server_name in services))
+
+    def _service(self, server_name: Optional[str], channel: Optional[str] = None) -> Any:
+        services = self._services(channel)
+        if server_name and server_name in services:
+            return services[server_name]
+        return next(iter(services.values()), None)
+
+    @staticmethod
+    def _names(values: Any, limit: int = 5) -> str:
+        if not isinstance(values, list):
+            return str(values or "")
+        names = []
+        for value in values[:limit]:
+            name = value.get("name") if isinstance(value, dict) else value
+            if name:
+                names.append(str(name))
+        return "、".join(names)
+
+    def _resolve_tmdb_id(self, info: Any) -> Optional[str]:
+        tmdb_id = getattr(info, "tmdb_id", None)
+        if tmdb_id:
+            return str(tmdb_id)
+        item = self._raw_item(info)
+        provider_ids = item.get("ProviderIds") or {}
+        if isinstance(provider_ids, dict) and provider_ids.get("Tmdb"):
+            return str(provider_ids["Tmdb"])
+        item_path = str(getattr(info, "item_path", "") or "")
+        match = re.search(r"[\[{](?:tmdbid|tmdb)[=-](\d+)[\]}]", item_path, re.I)
+        if match:
+            return match.group(1)
+        service_info = self._service(
+            getattr(info, "server_name", None), getattr(info, "channel", None)
+        )
+        item_id = getattr(info, "item_id", None)
+        if service_info and item_id:
+            try:
+                media_item = service_info.instance.get_iteminfo(item_id)
+                value = getattr(media_item, "tmdbid", None)
+                return str(value) if value else None
+            except Exception as error:
+                logger.debug(f"从媒体服务器解析 TMDB ID 失败：{error}")
+        return None
+
+    def _enrich_context(self, info: Any, context: Dict[str, Any]) -> None:
+        if self._lookup_ip and context.get("ip"):
+            try:
+                location = WebUtils.get_location(str(context["ip"]))
+                if location:
+                    context["ip"] = f"{context['ip']} {location}"
+            except Exception as error:
+                logger.debug(f"查询 IP 归属地失败：{error}")
+
+        tmdb_id = self._resolve_tmdb_id(info)
+        if not tmdb_id:
+            return
+        context["tmdb_id"] = tmdb_id
+        context["media_source"] = "themoviedb"
+        context["media_id"] = tmdb_id
+        kind = MediaType.MOVIE if str(getattr(info, "item_type", "")) == "MOV" else MediaType.TV
+        context["tmdb_url"] = (
+            f"https://www.themoviedb.org/movie/{tmdb_id}"
+            if kind == MediaType.MOVIE else f"https://www.themoviedb.org/tv/{tmdb_id}"
+        )
+        if not self._fetch_metadata:
+            return
+
+        season = getattr(info, "season_id", None)
+        tmdb = self.chain.tmdb_info(tmdbid=tmdb_id, mtype=kind, season=season) or {}
+        if kind == MediaType.TV and season is not None:
+            series = self.chain.tmdb_info(tmdbid=tmdb_id, mtype=kind) or {}
+            tmdb = {**series, **tmdb}
+        title = tmdb.get("title") or tmdb.get("name")
+        year = str(tmdb.get("release_date") or tmdb.get("first_air_date") or "")[:4]
+        context["title"] = title or context["title"]
+        context["year"] = year or context["year"]
+        context["display_name"] = (
+            f"{context['title']} ({context['year']})" if context.get("year") else context["title"]
+        )
+        context["overview"] = context.get("overview") or tmdb.get("overview") or ""
+        vote = tmdb.get("vote_average")
+        if vote not in (None, "", 0):
+            context["rating"] = f"{float(vote):.1f}/10"
+        context["genres"] = self._names(tmdb.get("genres"), 4)
+        credits = tmdb.get("credits") or {}
+        context["actors"] = self._names(credits.get("cast") if isinstance(credits, dict) else [], 5)
+        context["status"] = tmdb.get("status") or ""
+        countries = tmdb.get("production_countries") or tmdb.get("origin_country") or []
+        context["region"] = self._names(countries, 3)
+        try:
+            context["category"] = (
+                self._category.get_movie_category(tmdb)
+                if kind == MediaType.MOVIE else self._category.get_tv_category(tmdb)
+            ) or ""
+        except Exception as error:
+            logger.debug(f"媒体分类失败：{error}")
+        if not context.get("_image"):
+            context["_image"] = self.chain.obtain_specific_image(
+                mediaid=tmdb_id,
+                mtype=kind,
+                image_type=MediaImageType.Poster if kind == MediaType.MOVIE else MediaImageType.Backdrop,
+                season=getattr(info, "season_id", None),
+                episode=getattr(info, "episode_id", None),
+            )
+
+    def _play_link(self, context: Mapping[str, Any]) -> Optional[str]:
+        service_info = self._service(str(context.get("server") or ""), str(context.get("channel") or ""))
+        item_id = context.get("_item_id")
+        if not service_info or not item_id:
+            return None
+        return service_info.instance.get_play_url(item_id)
+
+    @staticmethod
+    def _log_debug(message: str) -> None:
+        logger.debug(message)
+
+    @staticmethod
+    def _log_warning(message: str) -> None:
+        logger.warning(message)
+
+    @staticmethod
+    def _log_error(message: str) -> None:
+        logger.error(message, exc_info=True)

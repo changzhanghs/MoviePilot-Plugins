@@ -24,5 +24,20 @@
       "v2.0.1": "不值一提",
       "v2.0.0": "兼容v2及v3"
     }
+  },
+  "MediaServerNotifyPlus": {
+    "v3": false,
+    "name": "媒体库通知",
+    "description": "Emby/Jellyfin/Plex 通知，每种事件可独立自定义标题与正文模板。",
+    "labels": "消息通知,媒体库,自定义模板",
+    "version": "2.0.0",
+    "icon": "mediaplay.png",
+    "author": "cz",
+    "level": 1,
+    "release": true,
+    "system_version": ">=2.0.0,<3.0.0",
+    "history": {
+      "v2.0.0": "不值一提"
+    }
   }
 }
