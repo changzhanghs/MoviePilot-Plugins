@@ -62,7 +62,7 @@ class TemplateTests(unittest.TestCase):
         self.assertIn("library_added", defaults["field_configs"])
         self.assertIn("library_added", defaults["_action_meta"])
         self.assertIn("ip", defaults["_field_catalog"])
-        self.assertIn("ip_location", defaults["_field_catalog"])
+        self.assertNotIn("ip_location", defaults["_field_catalog"])
         self.assertIn("_server_options", defaults)
         self.assertTrue(plugin.get_page())
         self.assertNotIn("notification_type", defaults)
@@ -123,8 +123,8 @@ class TemplateTests(unittest.TestCase):
             "preview_type": "playback_started",
             "send_test": True,
         })
-        self.assertEqual(plugin.messages[-1]["title"], "▶️ 开始播放")
-        self.assertIn("示例影片 (2026)", plugin.messages[-1]["text"])
+        self.assertEqual(plugin.messages[-1]["title"], "▶️ 开始播放\n示例影片 (2026)")
+        self.assertNotIn("示例影片 (2026)", plugin.messages[-1]["text"])
         self.assertIn("36%", plugin.messages[-1]["text"])
         self.assertFalse(plugin.saved_config["send_test"])
 
@@ -138,8 +138,8 @@ class TemplateTests(unittest.TestCase):
             "tmdb_url": "https://www.themoviedb.org/tv/1",
         })
         message = plugin.messages[-1]
-        self.assertEqual(message["title"], "📂 已入库 1 个文件")
-        self.assertTrue(message["text"].startswith("兰香如故 (2026)"))
+        self.assertEqual(message["title"], "📂 已入库 1 个文件\n兰香如故 (2026)")
+        self.assertNotIn("兰香如故 (2026)", message["text"])
         self.assertEqual(message["link"], "https://www.themoviedb.org/tv/1")
 
     def test_playback_fields_merge_device_client_and_offer_overview(self):
@@ -159,11 +159,24 @@ class TemplateTests(unittest.TestCase):
         self.assertEqual(context["device"], "Apple TV · VidHub")
         self.assertEqual(context["season_episode"], "S01E12 - 交个朋友吧?")
 
+    def test_ip_field_also_contains_location_without_a_second_option(self):
+        configs = CORE.default_field_configs()
+        playback_keys = [row["key"] for row in configs["playback_started"]]
+        self.assertIn("ip", playback_keys)
+        self.assertNotIn("ip_location", playback_keys)
+        self.assertEqual(
+            CORE.merge_ip_location("192.0.2.1", "中国 上海"),
+            "192.0.2.1 中国 上海",
+        )
+        self.assertEqual(
+            CORE.merge_ip_location("192.0.2.1 中国 上海", "中国 上海"),
+            "192.0.2.1 中国 上海",
+        )
     def test_retired_fields_are_removed_and_media_events_offer_overview(self):
         configs = CORE.default_field_configs()
         for rows in configs.values():
             keys = {row["key"] for row in rows}
-            self.assertTrue(keys.isdisjoint({"client", "year", "channel"}))
+            self.assertTrue(keys.isdisjoint({"client", "year", "channel", "ip_location"}))
         for action in (
             "library_added", "library_deleted", "playback_started", "playback_stopped",
             "playback_paused", "playback_resumed", "rated",
@@ -172,6 +185,7 @@ class TemplateTests(unittest.TestCase):
         self.assertNotIn("client", CORE.FIELD_CATALOG)
         self.assertNotIn("year", CORE.FIELD_CATALOG)
         self.assertNotIn("channel", CORE.FIELD_CATALOG)
+        self.assertNotIn("ip_location", CORE.FIELD_CATALOG)
 
     def test_legacy_field_config_is_migrated_before_sending(self):
         normalized = CORE.normalize_field_configs({
@@ -180,11 +194,12 @@ class TemplateTests(unittest.TestCase):
                 {"key": "client", "label": "客户端", "enabled": True},
                 {"key": "year", "label": "年份", "enabled": True},
                 {"key": "channel", "label": "媒体服务", "enabled": True},
+                {"key": "ip_location", "label": "IP 归属地", "enabled": True},
             ]
         })
         rows = normalized["playback_started"]
         self.assertEqual(next(row for row in rows if row["key"] == "device")["label"], "设备")
-        self.assertTrue({row["key"] for row in rows}.isdisjoint({"client", "year", "channel"}))
+        self.assertTrue({row["key"] for row in rows}.isdisjoint({"client", "year", "channel", "ip_location"}))
         self.assertIn("overview", {row["key"] for row in rows})
 
     def test_login_and_test_notifications_never_link_to_tmdb(self):

@@ -16,7 +16,7 @@ export const actionMetaFallback = {
   test: { label: '测试', description: '用于检查当前通知样式', icon: 'mdi-flask-outline' },
 }
 
-const retiredFields = new Set(['client', 'year', 'channel'])
+const retiredFields = new Set(['client', 'year', 'channel', 'ip_location'])
 const clone = value => JSON.parse(JSON.stringify(value || {}))
 
 export function normalizeNotificationModel(value) {
