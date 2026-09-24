@@ -20,9 +20,9 @@ class AdaptationTests(unittest.TestCase):
     def test_versions_and_manifests_match(self):
         v2_package = json.loads((ROOT / "package.v2.json").read_text(encoding="utf-8"))
         v3_package = json.loads((ROOT / "package.v3.json").read_text(encoding="utf-8"))
-        self.assertEqual(v2_package["MediaServerNotifyPlus"]["version"], "2.0.10")
+        self.assertEqual(v2_package["MediaServerNotifyPlus"]["version"], "2.0.11")
         self.assertFalse(v2_package["MediaServerNotifyPlus"]["v3"])
-        self.assertEqual(v3_package["MediaServerNotifyPlus"]["version"], "3.0.10")
+        self.assertEqual(v3_package["MediaServerNotifyPlus"]["version"], "3.0.11")
         self.assertEqual(v3_package["MediaServerNotifyPlus"]["system_version"], ">=3.0.0")
         for package in (v2_package, v3_package):
             metadata = package["MediaServerNotifyPlus"]
@@ -56,18 +56,37 @@ class AdaptationTests(unittest.TestCase):
         v2 = (ROOT / "plugins.v2" / "mediaservernotifyplus" / "core.py").read_bytes()
         v3 = (ROOT / "plugins.v3" / "mediaservernotifyplus" / "core.py").read_bytes()
         self.assertEqual(v2, v3)
+        for relative in ("src/previewModel.js", "src/assets/preview-fantasy-banner.jpg"):
+            self.assertEqual(
+                (ROOT / "plugins.v2" / "mediaservernotifyplus" / relative).read_bytes(),
+                (ROOT / "plugins.v3" / "mediaservernotifyplus" / relative).read_bytes(),
+            )
 
     def test_both_versions_ship_vue_config_runtime(self):
         for generation in ("plugins.v2", "plugins.v3"):
             plugin = ROOT / generation / "mediaservernotifyplus"
             self.assertTrue((plugin / "src/components/Config.vue").is_file())
+            self.assertTrue((plugin / "src/previewModel.js").is_file())
+            self.assertTrue((plugin / "src/assets/preview-fantasy-banner.jpg").is_file())
             self.assertTrue((plugin / "dist/assets/remoteEntry.js").is_file())
+            config_bundles = list((plugin / "dist/assets").glob("__federation_expose_Config-*.js"))
+            self.assertEqual(len(config_bundles), 1)
+            self.assertIn("data:image/jpeg;base64", config_bundles[0].read_text(encoding="utf-8"))
             source = (plugin / "src/components/Config.vue").read_text(encoding="utf-8")
             self.assertIn("可通知内容", source)
             self.assertIn("媒体服务器", source)
-            self.assertIn("repeat(4", source)
+            self.assertIn('class="workspace"', source)
+            self.assertIn("{ label: '播放相关', actions: ['playback_started', 'playback_stopped', 'playback_paused', 'playback_resumed', 'rated'] }", source)
+            self.assertIn('class="content-editor"', source)
+            self.assertNotIn('v-model="editorOpen"', source)
+            self.assertIn('v-for="row in previewRows"', source)
+            self.assertNotIn('refreshPreview', source)
+            self.assertNotIn('换一组示例', source)
+            self.assertIn('const previewRows = computed(() => buildPreviewRows(', source)
+            self.assertNotIn('.slice(0, 4)', source)
             app_source = (plugin / "src/App.vue").read_text(encoding="utf-8")
-            self.assertEqual(app_source.count("[...mediaFields]"), 7)
+            self.assertEqual(app_source.count("[...mediaFields]"), 5)
+            self.assertEqual(app_source.count("[...libraryFields]"), 2)
             self.assertNotIn("查询媒体元数据", source)
             self.assertNotIn("查询 IP 归属地", source)
             self.assertIn("消息渠道遵循 MoviePilot 全局设置", source)
@@ -89,6 +108,7 @@ class AdaptationTests(unittest.TestCase):
             self.assertNotIn("detail-grid", page)
             self.assertNotIn("@click=\"$emit('action')\"", page)
             shared = (plugin / "src/notificationModel.js").read_text(encoding="utf-8")
+            self.assertIn("['user', 'device', 'progress', 'ip']", shared)
             self.assertIn("normalizeNotificationModel", source)
             self.assertIn("['client', 'year', 'channel', 'ip_location', 'play_link']", shared)
 

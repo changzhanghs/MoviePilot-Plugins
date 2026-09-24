@@ -7,7 +7,6 @@ from __future__ import annotations
 
 import threading
 import time
-from dataclasses import dataclass
 from typing import Any, Dict, List, Mapping, Optional, Tuple
 
 
@@ -69,10 +68,14 @@ COMMON_MEDIA_FIELDS: Tuple[str, ...] = (
     "season_episode", "user", "device", "progress", "server", "library",
     "rating", "actors", "region", "ip", "time", "overview",
 )
+LIBRARY_MEDIA_FIELDS: Tuple[str, ...] = tuple(
+    field for field in COMMON_MEDIA_FIELDS
+    if field not in {"user", "device", "progress", "ip"}
+)
 
 ACTION_FIELDS: Dict[str, Tuple[str, ...]] = {
-    "library_added": COMMON_MEDIA_FIELDS,
-    "library_deleted": COMMON_MEDIA_FIELDS,
+    "library_added": LIBRARY_MEDIA_FIELDS,
+    "library_deleted": LIBRARY_MEDIA_FIELDS,
     "playback_started": COMMON_MEDIA_FIELDS,
     "playback_stopped": COMMON_MEDIA_FIELDS,
     "playback_paused": COMMON_MEDIA_FIELDS,
@@ -268,8 +271,6 @@ class FieldTemplateRenderer:
             label = str(row.get("label") or meta["label"]).strip()
             if meta.get("style") == "block":
                 detail_lines.append(f"{meta['icon']} {label}\n{value}")
-            elif meta.get("style") == "link":
-                detail_lines.append(f"{meta['icon']} [{label}]({value})")
             else:
                 detail_lines.append(f"{meta['icon']} {label}：{value}")
         return title, "\n".join(detail_lines).strip()
@@ -287,14 +288,6 @@ class TemplateError(ValueError):
     """通知字段配置不合法。"""
 
 
-@dataclass
-class PendingMessage:
-    """待聚合的单条媒体通知。"""
-
-    event_info: Any
-    context: Dict[str, Any]
-
-
 class MediaServerNotifyCore:
     """V2/V3 共用的事件路由、去重、聚合和字段排版逻辑。"""
 
@@ -308,7 +301,7 @@ class MediaServerNotifyCore:
         self._active_operations = 0
         self._owned_timers: set[threading.Timer] = set()
         self._aggregate_timers: Dict[str, threading.Timer] = {}
-        self._pending_messages: Dict[str, List[PendingMessage]] = {}
+        self._pending_messages: Dict[str, List[Dict[str, Any]]] = {}
         self._dedupe_cache: Dict[str, float] = {}
         self._enabled = False
         self._types: List[str] = []
@@ -622,7 +615,7 @@ class MediaServerNotifyCore:
             if not self._accepting_events:
                 return
             self._owned_timers = {timer for timer in self._owned_timers if timer.is_alive()}
-            self._pending_messages.setdefault(key, []).append(PendingMessage(info, dict(context)))
+            self._pending_messages.setdefault(key, []).append(dict(context))
             previous = self._aggregate_timers.get(key)
             if previous:
                 previous.cancel()
@@ -650,10 +643,10 @@ class MediaServerNotifyCore:
             messages = self._pending_messages.pop(key, [])
         if not messages:
             return
-        context = dict(messages[0].context)
+        context = dict(messages[0])
         episodes = []
         for message in messages:
-            value = str(message.context.get("season_episode") or "").strip()
+            value = str(message.get("season_episode") or "").strip()
             if value and value not in episodes:
                 episodes.append(value)
         context["season_episode"] = "、".join(episodes)

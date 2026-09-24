@@ -44,6 +44,7 @@ export default defineConfig({
     target: 'esnext',
     minify: false,
     cssCodeSplit: true,
+    assetsInlineLimit: 300_000,
   },
   server: {
     host: '0.0.0.0',

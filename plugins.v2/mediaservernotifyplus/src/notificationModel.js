@@ -17,6 +17,9 @@ export const actionMetaFallback = {
 }
 
 const retiredFields = new Set(['client', 'year', 'channel', 'ip_location', 'play_link'])
+const libraryUnsupportedFields = new Set(['user', 'device', 'progress', 'ip'])
+const isAllowedField = (action, key) =>
+  !retiredFields.has(key) && (!['library_added', 'library_deleted'].includes(action) || !libraryUnsupportedFields.has(key))
 const clone = value => JSON.parse(JSON.stringify(value || {}))
 
 export function normalizeNotificationModel(value) {
@@ -25,14 +28,15 @@ export function normalizeNotificationModel(value) {
   const defaults = model._default_field_configs || {}
 
   for (const action of actionOrder) {
-    const defaultRows = (defaults[action] || []).filter(row => !retiredFields.has(row.key))
+    const defaultRows = (defaults[action] || []).filter(row => isAllowedField(action, row.key))
+    defaults[action] = defaultRows
     const allowed = new Set(defaultRows.map(row => row.key))
     const sourceRows = Array.isArray(model.field_configs[action]) ? model.field_configs[action] : []
     const rows = []
     const seen = new Set()
 
     for (const source of sourceRows) {
-      if (!source || retiredFields.has(source.key) || seen.has(source.key)) continue
+      if (!source || !isAllowedField(action, source.key) || seen.has(source.key)) continue
       if (allowed.size && !allowed.has(source.key)) continue
       const row = clone(source)
       if (row.key === 'device' && ['设备 / 客户端', '设备/客户端'].includes(row.label)) row.label = '设备'

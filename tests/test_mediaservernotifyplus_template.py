@@ -100,15 +100,31 @@ class TemplateTests(unittest.TestCase):
         self.assertNotIn("兰香如故 (2026)", message["text"])
         self.assertEqual(message["link"], "https://www.themoviedb.org/tv/1")
 
-    def test_media_notification_fields_match_playback_started(self):
+    def test_aggregate_keeps_only_contexts_and_combines_episodes(self):
+        plugin = FakePlugin()
+        plugin._pending_messages["series"] = [
+            {"display_name": "光阴之外 (2025)", "season_episode": "S01E21"},
+            {"display_name": "光阴之外 (2025)", "season_episode": "S01E22"},
+        ]
+        plugin._flush_aggregate("series")
+        message = plugin.messages[-1]
+        self.assertEqual(message["title"], "📂 已入库 2 个文件\n光阴之外 (2025)")
+        self.assertIn("S01E21、S01E22", message["text"])
+        self.assertNotIn("series", plugin._pending_messages)
+
+    def test_library_fields_exclude_playback_details(self):
         configs = CORE.default_field_configs()
         expected = [
             "season_episode", "user", "device", "progress", "server", "library",
             "rating", "actors", "region", "ip", "time", "overview",
         ]
+        for action in ("library_added", "library_deleted"):
+            self.assertEqual(
+                [row["key"] for row in configs[action]],
+                [key for key in expected if key not in {"user", "device", "progress", "ip"}],
+            )
         for action in (
-            "library_added", "library_deleted", "playback_started", "playback_stopped",
-            "playback_paused", "playback_resumed", "rated",
+            "playback_started", "playback_stopped", "playback_paused", "playback_resumed", "rated",
         ):
             self.assertEqual([row["key"] for row in configs[action]], expected)
         playback_keys = [row["key"] for row in configs["playback_started"]]
@@ -201,6 +217,16 @@ class TemplateTests(unittest.TestCase):
             "library_added": [
                 {"key": "library", "label": "媒体类别", "enabled": True},
                 {"key": "category", "label": "分类", "enabled": True},
+                {"key": "user", "label": "用户", "enabled": True},
+                {"key": "device", "label": "设备", "enabled": True},
+                {"key": "progress", "label": "播放进度", "enabled": True},
+                {"key": "ip", "label": "IP", "enabled": True},
+            ],
+            "library_deleted": [
+                {"key": "user", "label": "用户", "enabled": True},
+                {"key": "device", "label": "设备", "enabled": True},
+                {"key": "progress", "label": "播放进度", "enabled": True},
+                {"key": "ip", "label": "IP", "enabled": True},
             ],
         })
         rows = normalized["playback_started"]
@@ -210,6 +236,10 @@ class TemplateTests(unittest.TestCase):
         library_rows = {row["key"]: row for row in normalized["library_added"]}
         self.assertEqual(library_rows["library"]["label"], "媒体库分类")
         self.assertNotIn("category", library_rows)
+        for action in ("library_added", "library_deleted"):
+            self.assertTrue(
+                {row["key"] for row in normalized[action]}.isdisjoint({"user", "device", "progress", "ip"})
+            )
 
     def test_login_and_test_notifications_never_link_to_tmdb(self):
         plugin = FakePlugin()

@@ -1,6 +1,8 @@
 <script setup>
 import { computed, onMounted, ref, watch } from 'vue'
 import { actionMetaFallback, actionOrder, normalizeNotificationModel } from '../notificationModel.js'
+import { buildPreviewRows, createPreviewSample, previewActionIcons } from '../previewModel.js'
+import previewBanner from '../assets/preview-fantasy-banner.jpg'
 
 const props = defineProps({
   initialConfig: { type: Object, default: () => ({}) },
@@ -14,14 +16,18 @@ const emit = defineEmits(['layout', 'save', 'close', 'switch'])
 const clone = value => JSON.parse(JSON.stringify(value || {}))
 const draft = ref(normalizeNotificationModel(props.initialConfig))
 const settingsOpen = ref(false)
-const editorOpen = ref(false)
-const activeAction = ref('library_added')
+const activeAction = ref('playback_started')
 const draggingIndex = ref(-1)
 const saved = ref(false)
-
+const previewSample = createPreviewSample()
+const actionGroups = [
+  { label: '媒体库', actions: ['library_added', 'library_deleted'] },
+  { label: '播放相关', actions: ['playback_started', 'playback_stopped', 'playback_paused', 'playback_resumed', 'rated'] },
+  { label: '账号与调试', actions: ['auth_success', 'auth_failed', 'test'] },
+]
 watch(() => props.initialConfig, value => { draft.value = normalizeNotificationModel(value) }, { deep: true })
 onMounted(() => {
-  emit('layout', { maxWidth: '76rem' })
+  emit('layout', { maxWidth: '92rem' })
   try {
     const key = `mediaservernotifyplus:edit:${props.pluginId}`
     const requestedAction = window.sessionStorage.getItem(key)
@@ -39,6 +45,11 @@ const activeFields = computed(() => draft.value.field_configs?.[activeAction.val
 const activeMeta = computed(() => actionMeta(activeAction.value))
 const enabledTypes = computed(() => new Set(draft.value.types || []))
 const serverOptions = computed(() => draft.value._server_options || [])
+const previewRows = computed(() => buildPreviewRows(activeFields.value, previewSample, draft.value.mediaservers?.[0]))
+const showsMedia = computed(() => !['auth_success', 'auth_failed', 'test'].includes(activeAction.value))
+const previewHeading = computed(() => activeAction.value === 'library_added'
+  ? `已入库 ${previewSample.fileCount} 个文件`
+  : activeMeta.value.label)
 
 function isEnabled(action) {
   return enabledTypes.value.has(action)
@@ -50,7 +61,6 @@ function setEnabled(action, enabled) {
 }
 function openEditor(action) {
   activeAction.value = action
-  editorOpen.value = true
 }
 function moveField(from, to) {
   const rows = activeFields.value
@@ -95,7 +105,7 @@ function enabledFieldCount(action) {
       <div>
         <div class="eyebrow">MEDIA LIBRARY NOTIFICATIONS</div>
         <h1>媒体库通知</h1>
-            <p>选择通知类型，设置需要展示的字段和顺序。</p>
+        <p>选择通知类型并调整展示内容。</p>
       </div>
       <VBtn class="settings-button" variant="tonal" prepend-icon="mdi-tune-variant" @click="settingsOpen = true">
         设置
@@ -106,42 +116,105 @@ function enabledFieldCount(action) {
       插件当前未启用。你仍可编辑通知字段，启用后才会发送通知。
     </VAlert>
 
-    <section class="card-grid" aria-label="通知类型">
-      <VCard
-        v-for="action in actionOrder"
-        :key="action"
-        class="event-card"
-        :class="{ 'event-card--disabled': !isEnabled(action) }"
-        variant="outlined"
-        tabindex="0"
-        @click="openEditor(action)"
-        @keydown.enter="openEditor(action)"
-      >
-        <VCardText class="event-card__body">
-          <div class="event-card__top">
-            <div class="event-icon"><VIcon :icon="actionMetaFallback[action].icon" size="26" /></div>
+    <div class="workspace">
+      <nav class="event-sidebar" aria-label="通知类型">
+        <section v-for="group in actionGroups" :key="group.label" class="event-group">
+          <h2>{{ group.label }}</h2>
+          <div v-for="action in group.actions" :key="action" class="event-item" :class="{ 'event-item--active': activeAction === action }">
+            <button class="event-item__select" type="button" :aria-current="activeAction === action ? 'true' : undefined" @click="openEditor(action)">
+              <span class="event-icon"><VIcon :icon="actionMetaFallback[action].icon" size="22" /></span>
+              <span class="event-item__copy"><strong>{{ actionMeta(action).label }}</strong><small>{{ actionMeta(action).description }}</small></span>
+            </button>
             <VSwitch
               :model-value="isEnabled(action)"
               color="primary"
               hide-details
               density="compact"
               :aria-label="`启用${actionMeta(action).label}`"
-              @click.stop
               @update:model-value="setEnabled(action, $event)"
             />
           </div>
-          <div class="event-card__copy">
-            <h2>{{ actionMeta(action).label }}</h2>
-            <p>{{ actionMeta(action).description }}</p>
-          </div>
-        </VCardText>
-        <div class="event-card__status">
-          <span class="status-dot" :class="{ 'status-dot--off': !isEnabled(action) }" />
-          <span>{{ isEnabled(action) ? `已启用 · ${enabledFieldCount(action)} 个字段` : '已停用' }}</span>
-          <VIcon class="ml-auto" icon="mdi-chevron-right" size="20" />
+        </section>
+      </nav>
+
+      <section class="content-editor" aria-label="通知内容配置">
+        <div class="editor-heading">
+          <div><h2>通知内容配置</h2><p>自定义「{{ activeMeta.label }}」通知中显示的内容和顺序。</p></div>
+          <span class="field-count">{{ enabledFieldCount(activeAction) }} / {{ activeFields.length }} 个字段已启用</span>
         </div>
-      </VCard>
-    </section>
+
+        <div class="editor-workspace">
+          <div class="preview-pane" aria-label="通知预览">
+            <div class="preview-controls">
+              <strong>消息预览</strong>
+            </div>
+            <div class="notification-card">
+              <img v-if="showsMedia" class="notification-card__banner" :src="previewBanner" alt="示例媒体封面" />
+              <div class="notification-card__body">
+                <div class="notification-card__heading"><span aria-hidden="true">{{ previewActionIcons[activeAction] }}</span>{{ previewHeading }}</div>
+                <div v-if="showsMedia" class="notification-card__media">{{ previewSample.mediaName }}</div>
+                <div class="notification-card__rows">
+                  <div v-for="row in previewRows" :key="row.key" class="preview-row" :class="{ 'preview-row--block': row.block }">
+                    <span class="preview-row__icon" aria-hidden="true">{{ row.icon }}</span>
+                    <div class="preview-row__text">
+                      <template v-if="row.block"><span>{{ row.label }}</span><p>{{ row.value }}</p></template>
+                      <template v-else>{{ row.label }}：{{ row.value }}</template>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <p class="preview-note">仅用于展示排版，不会发送通知。</p>
+          </div>
+
+          <div class="fields-pane">
+            <div class="field-list-heading">
+              <div><strong>可通知内容</strong><span>拖动排序、勾选字段或修改展示名称，左侧预览实时更新。</span></div>
+              <VBtn size="small" variant="text" prepend-icon="mdi-restore" @click="resetFields">恢复默认</VBtn>
+            </div>
+
+            <div class="field-list" role="group" :aria-label="`${activeMeta.label}可通知内容`">
+          <div class="field-list__header"><span>排序</span><span>字段</span><span>展示名称（可自定义）</span><span>调整</span><span>显示</span></div>
+          <div
+            v-for="(row, index) in activeFields"
+            :key="row.key"
+            class="field-row"
+            :class="{ 'field-row--disabled': !row.enabled }"
+            @dragover.prevent
+            @drop.prevent="dropField(index)"
+          >
+            <button class="drag-handle" type="button" draggable="true" :aria-label="`拖动${row.label}排序`" @dragstart="startDrag(index, $event)" @dragend="draggingIndex = -1"><VIcon icon="mdi-drag-vertical" /></button>
+            <div class="field-key">{{ fieldMeta(row.key).label }}</div>
+            <div class="field-value">
+              <VSelect
+                v-if="row.key === 'server'"
+                v-model="draft.mediaservers"
+                :items="serverOptions"
+                item-title="title"
+                item-value="value"
+                label="选择媒体服务器"
+                placeholder="未选择时监听全部"
+                density="compact"
+                variant="outlined"
+                multiple
+                chips
+                closable-chips
+                clearable
+                hide-details
+              />
+              <VTextField v-else v-model="row.label" :aria-label="`${fieldMeta(row.key).label}展示名称`" density="compact" variant="outlined" maxlength="30" hide-details />
+            </div>
+            <div class="field-order-buttons">
+              <VBtn :disabled="index === 0" icon="mdi-chevron-up" size="x-small" variant="text" :aria-label="`上移${row.label}`" @click="moveField(index, index - 1)" />
+              <VBtn :disabled="index === activeFields.length - 1" icon="mdi-chevron-down" size="x-small" variant="text" :aria-label="`下移${row.label}`" @click="moveField(index, index + 1)" />
+            </div>
+            <VCheckbox v-model="row.enabled" color="primary" hide-details :aria-label="`展示${row.label}`" />
+          </div>
+            </div>
+          </div>
+        </div>
+      </section>
+    </div>
 
     <footer class="page-actions">
       <span class="save-hint"><VIcon icon="mdi-information-outline" size="18" /> 字段没有数据时会自动隐藏整行</span>
@@ -152,85 +225,6 @@ function enabledFieldCount(action) {
         </VBtn>
       </div>
     </footer>
-
-    <VDialog v-model="editorOpen" max-width="760" scrollable>
-      <VCard class="editor-dialog">
-        <VCardTitle class="dialog-header">
-          <div class="dialog-title-icon"><VIcon :icon="actionMetaFallback[activeAction].icon" /></div>
-          <div><div class="dialog-kicker">通知内容</div><div>{{ activeMeta.label }}</div></div>
-          <VBtn class="ml-auto" icon="mdi-close" variant="text" @click="editorOpen = false" />
-        </VCardTitle>
-        <VCardText class="dialog-body">
-          <div class="message-preview">
-            <div class="message-preview__title">{{ activeMeta.label }}</div>
-            <div v-if="!['auth_success', 'auth_failed', 'test'].includes(activeAction)" class="message-preview__media">示例影片 (2026)</div>
-            <div class="message-preview__note">下方勾选的字段将按当前顺序继续展示</div>
-          </div>
-
-          <div class="field-list-heading">
-            <div><strong>可通知内容</strong><span>拖动左侧手柄排序，只能修改展示名称</span></div>
-            <VBtn size="small" variant="text" prepend-icon="mdi-restore" @click="resetFields">恢复默认</VBtn>
-          </div>
-
-          <div class="field-list">
-            <div
-              v-for="(row, index) in activeFields"
-              :key="row.key"
-              class="field-row"
-              :class="{ 'field-row--disabled': !row.enabled }"
-              @dragover.prevent
-              @drop.prevent="dropField(index)"
-            >
-              <button
-                class="drag-handle"
-                type="button"
-                draggable="true"
-                :aria-label="`拖动${row.label}排序`"
-                @dragstart="startDrag(index, $event)"
-                @dragend="draggingIndex = -1"
-              ><VIcon icon="mdi-drag-vertical" /></button>
-              <div class="field-identity">
-                <div class="field-key">{{ fieldMeta(row.key).label }}</div>
-                <VSelect
-                  v-if="row.key === 'server'"
-                  v-model="draft.mediaservers"
-                  :items="serverOptions"
-                  item-title="title"
-                  item-value="value"
-                  label="选择媒体服务器"
-                  placeholder="未选择时监听全部"
-                  density="compact"
-                  variant="outlined"
-                  multiple
-                  chips
-                  closable-chips
-                  clearable
-                  hide-details
-                />
-                <VTextField
-                  v-else
-                  v-model="row.label"
-                  label="展示名称"
-                  density="compact"
-                  variant="outlined"
-                  maxlength="30"
-                  hide-details
-                />
-              </div>
-              <div class="field-order-buttons">
-                <VBtn :disabled="index === 0" icon="mdi-chevron-up" size="x-small" variant="text" @click="moveField(index, index - 1)" />
-                <VBtn :disabled="index === activeFields.length - 1" icon="mdi-chevron-down" size="x-small" variant="text" @click="moveField(index, index + 1)" />
-              </div>
-              <VCheckbox v-model="row.enabled" color="primary" hide-details :aria-label="`展示${row.label}`" />
-            </div>
-          </div>
-        </VCardText>
-        <VCardActions class="dialog-actions">
-          <span>{{ enabledFieldCount(activeAction) }} / {{ activeFields.length }} 个字段已启用</span>
-          <VBtn color="primary" variant="flat" @click="editorOpen = false">完成</VBtn>
-        </VCardActions>
-      </VCard>
-    </VDialog>
 
     <VDialog v-model="settingsOpen" max-width="720" scrollable>
       <VCard class="settings-dialog">
@@ -313,39 +307,69 @@ function enabledFieldCount(action) {
 h1 { margin: 3px 0 4px; font-size: clamp(28px, 4vw, 38px); line-height: 1.15; letter-spacing: -.035em; }
 .page-header p { margin: 0; color: rgba(var(--v-theme-on-surface), .62); }
 .settings-button { margin-top: 8px; }
-.card-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
-.event-card { cursor: pointer; border-color: var(--line); border-radius: 18px; overflow: hidden; transition: border-color .18s ease, transform .18s ease, background-color .18s ease; }
-.event-card:hover, .event-card:focus-visible { border-color: rgba(var(--v-theme-primary), .66); background: rgba(var(--v-theme-primary), .035); transform: translateY(-1px); outline: none; }
-.event-card--disabled { opacity: .68; }
-.event-card__body { min-height: 136px; padding: 14px 14px 10px; }
-.event-card__top { display: flex; align-items: center; justify-content: space-between; }
-.event-icon, .dialog-title-icon { display: grid; place-items: center; width: 40px; height: 40px; color: rgb(var(--v-theme-primary)); background: rgba(var(--v-theme-primary), .12); border-radius: 12px; }
-.event-card__copy { margin-top: 14px; }
-.event-card__copy h2 { margin: 0 0 4px; font-size: 16px; line-height: 1.3; }
-.event-card__copy p { margin: 0; min-height: 42px; color: rgba(var(--v-theme-on-surface), .58); font-size: 13px; line-height: 1.55; }
-.event-card__status { display: flex; align-items: center; gap: 7px; min-height: 38px; padding: 0 14px; border-top: 1px solid var(--line); background: var(--surface-soft); color: rgba(var(--v-theme-on-surface), .65); font-size: 11px; }
-.status-dot { width: 7px; height: 7px; border-radius: 50%; background: rgb(var(--v-theme-success)); box-shadow: 0 0 0 3px rgba(var(--v-theme-success), .12); }
-.status-dot--off { background: rgba(var(--v-theme-on-surface), .36); box-shadow: none; }
+.workspace { display: grid; grid-template-columns: minmax(230px, 250px) minmax(0, 1fr); gap: 16px; align-items: start; }
+.event-sidebar, .content-editor { min-width: 0; border: 1px solid var(--line); border-radius: 16px; background: rgb(var(--v-theme-surface)); }
+.event-sidebar { padding: 14px 10px; }
+.event-group + .event-group { margin-top: 18px; }
+.event-group h2 { margin: 0 12px 8px; color: rgba(var(--v-theme-on-surface), .56); font-size: 12px; font-weight: 650; }
+.event-item { display: flex; align-items: center; gap: 2px; min-height: 58px; border-radius: 10px; transition: background-color .15s ease; }
+.event-item:hover { background: var(--surface-soft); }
+.event-item--active { background: rgba(var(--v-theme-primary), .14); }
+.event-item--active:hover { background: rgba(var(--v-theme-primary), .18); }
+.event-item__select { display: flex; align-items: center; gap: 10px; flex: 1; min-width: 0; padding: 6px 4px 6px 10px; text-align: left; color: inherit; border: 0; border-radius: 9px; background: transparent; cursor: pointer; }
+.event-item__select:focus-visible { outline: 2px solid rgb(var(--v-theme-primary)); outline-offset: -2px; }
+.event-icon, .dialog-title-icon { display: grid; place-items: center; flex: none; width: 38px; height: 38px; color: rgb(var(--v-theme-primary)); background: rgba(var(--v-theme-primary), .12); border-radius: 10px; }
+.event-item__copy { min-width: 0; }
+.event-item__copy strong, .event-item__copy small { display: block; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.event-item__copy strong { font-size: 14px; font-weight: 650; }
+.event-item__copy small { margin-top: 2px; color: rgba(var(--v-theme-on-surface), .53); font-size: 11px; }
+.event-item :deep(.v-switch) { flex: none; margin-right: 4px; }
+.content-editor { padding: 20px 22px 22px; }
+.editor-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; }
+.editor-heading h2 { margin: 0; font-size: 19px; line-height: 1.3; }
+.editor-heading p { margin: 4px 0 0; color: rgba(var(--v-theme-on-surface), .58); font-size: 13px; }
+.field-count { flex: none; color: rgba(var(--v-theme-on-surface), .54); font-size: 12px; }
+.editor-workspace { display: grid; grid-template-columns: minmax(320px, .85fr) minmax(440px, 1.15fr); align-items: start; gap: 18px; margin-top: 18px; }
+.preview-pane, .fields-pane { min-width: 0; }
+.preview-pane { position: sticky; top: 12px; max-height: calc(100vh - 100px); overflow-y: auto; scrollbar-width: thin; }
+.preview-controls { margin-bottom: 10px; }
+.preview-controls strong { font-size: 14px; }
+.notification-card { overflow: hidden; border: 1px solid rgba(255, 255, 255, .06); border-radius: 11px; background: #202020; color: #f1f1f1; }
+.notification-card__banner { display: block; width: 100%; aspect-ratio: 2.35; object-fit: cover; }
+.notification-card__body { padding: 17px 18px 19px; }
+.notification-card__heading { display: flex; align-items: baseline; gap: 8px; font-size: 20px; line-height: 1.35; }
+.notification-card__heading span { flex: none; }
+.notification-card__media { margin-top: 4px; font-size: 23px; line-height: 1.35; }
+.notification-card__rows { margin-top: 14px; }
+.preview-row { display: grid; grid-template-columns: 23px minmax(0, 1fr); align-items: start; gap: 5px; color: #aaa8ac; font-size: 14px; line-height: 1.5; }
+.preview-row__icon { line-height: 1.5; }
+.preview-row__text { min-width: 0; overflow-wrap: anywhere; }
+.preview-row--block { margin-top: 3px; }
+.preview-row--block p { margin: 1px 0 0; line-height: 1.65; }
+.preview-note { margin: 9px 2px 0; color: rgba(var(--v-theme-on-surface), .5); font-size: 11px; }
 .page-actions { position: sticky; bottom: 0; z-index: 3; display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-top: 22px; padding: 14px 0 6px; background: rgb(var(--v-theme-surface)); }
 .save-hint { display: flex; align-items: center; gap: 7px; color: rgba(var(--v-theme-on-surface), .58); font-size: 12px; }
-.editor-dialog, .settings-dialog { border-radius: 20px !important; }
+.settings-dialog { border-radius: 20px !important; }
 .dialog-header { display: flex; align-items: center; gap: 13px; padding: 20px 22px 16px; border-bottom: 1px solid var(--line); }
 .dialog-title-icon { width: 42px; height: 42px; border-radius: 12px; }
 .dialog-body { padding: 20px 22px 22px !important; }
-.message-preview { padding: 18px; border: 1px solid var(--line); border-radius: 15px; background: var(--surface-soft); }
-.message-preview__title { font-size: 17px; font-weight: 700; }
-.message-preview__media { margin-top: 3px; font-size: 16px; }
-.message-preview__note { margin-top: 13px; color: rgba(var(--v-theme-on-surface), .5); font-size: 12px; }
-.field-list-heading { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin: 24px 2px 10px; }
+.field-list-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 32px; margin: 0 0 10px; }
 .field-list-heading strong, .field-list-heading span { display: block; }
 .field-list-heading span { margin-top: 2px; color: rgba(var(--v-theme-on-surface), .52); font-size: 12px; }
-.field-list { display: grid; gap: 8px; }
-.field-row { display: grid; grid-template-columns: 40px minmax(0, 1fr) auto 42px; align-items: center; gap: 10px; padding: 10px; border: 1px solid var(--line); border-radius: 13px; background: rgb(var(--v-theme-surface)); }
-.field-row--disabled { opacity: .6; }
-.drag-handle { width: 36px; height: 40px; color: rgba(var(--v-theme-on-surface), .46); cursor: grab; border: 0; background: transparent; border-radius: 8px; }
+.field-list { overflow: hidden; border: 1px solid var(--line); border-radius: 12px; }
+.field-list__header, .field-row { display: grid; grid-template-columns: 38px minmax(84px, .6fr) minmax(160px, 1.6fr) 60px 48px; align-items: center; gap: 8px; }
+.field-list__header { padding: 9px 12px; color: rgba(var(--v-theme-on-surface), .55); font-size: 11px; border-bottom: 1px solid var(--line); }
+.field-list__header span:last-child { text-align: center; }
+.field-row { min-height: 54px; padding: 5px 12px; border-bottom: 1px solid var(--line); }
+.field-row:last-child { border-bottom: 0; }
+.field-row:nth-child(even) { background: var(--surface-soft); }
+.field-row--disabled .field-key, .field-row--disabled .field-value { opacity: .58; }
+.drag-handle { width: 32px; height: 40px; color: rgba(var(--v-theme-on-surface), .46); cursor: grab; border: 0; background: transparent; border-radius: 8px; }
 .drag-handle:active { cursor: grabbing; }
-.field-identity { display: grid; grid-template-columns: minmax(84px, .55fr) minmax(150px, 1fr); align-items: center; gap: 12px; }
-.field-key { color: rgba(var(--v-theme-on-surface), .62); font-size: 13px; }
+.field-key { font-size: 13px; }
+.field-value { min-width: 0; }
+.field-value :deep(.v-field) { min-height: 36px; }
+.field-value :deep(.v-field__input) { min-height: 36px; padding-top: 5px; padding-bottom: 5px; }
 .field-order-buttons { display: flex; }
 .dialog-actions { display: flex; justify-content: space-between; min-height: 66px; padding: 12px 22px !important; border-top: 1px solid var(--line); color: rgba(var(--v-theme-on-surface), .56); font-size: 12px; }
 .settings-stack { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
@@ -366,18 +390,39 @@ h1 { margin: 3px 0 4px; font-size: clamp(28px, 4vw, 38px); line-height: 1.15; le
 .webhook-guide span code { display: inline; margin: 0; padding: 0; background: transparent; }
 .settings-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
 .settings-grid--test { align-items: center; }
-@media (max-width: 1040px) {
-  .card-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+@media (max-width: 1100px) {
+  .editor-workspace { grid-template-columns: minmax(0, 1fr); }
+  .preview-pane { position: static; max-height: none; }
+  .notification-card { max-width: 600px; }
+}
+@media (max-width: 900px) {
+  .workspace { grid-template-columns: minmax(210px, 240px) minmax(0, 1fr); }
+  .event-item__copy small { display: none; }
+  .field-list__header, .field-row { grid-template-columns: 30px minmax(70px, .55fr) minmax(120px, 1.5fr) 48px 40px; gap: 4px; }
+  .field-order-buttons :deep(.v-btn) { width: 24px; }
 }
 @media (max-width: 680px) {
   .notify-config { padding-top: 0; }
   .page-header { align-items: center; }
   .page-header p, .eyebrow { display: none; }
   h1 { font-size: 26px; }
-  .card-grid { grid-template-columns: 1fr; }
-  .event-card__body { min-height: 132px; }
-  .field-row { grid-template-columns: 34px minmax(0, 1fr) 42px; }
-  .field-identity { grid-template-columns: 1fr; gap: 5px; }
+  .workspace { grid-template-columns: minmax(0, 1fr); }
+  .event-sidebar { display: flex; gap: 20px; overflow-x: auto; padding: 10px; }
+  .event-group { min-width: max-content; }
+  .event-group + .event-group { margin-top: 0; }
+  .event-group h2 { margin-left: 5px; }
+  .event-item { min-width: 170px; }
+  .event-item__copy small { display: none; }
+  .content-editor { padding: 16px 12px; }
+  .editor-heading { display: block; }
+  .field-count { display: block; margin-top: 5px; }
+  .notification-card__media { font-size: 21px; }
+  .field-list__header { display: none; }
+  .field-row { grid-template-columns: 30px minmax(0, 1fr) 36px; grid-template-areas: 'drag key check' 'drag value check'; gap: 2px 6px; padding: 8px; }
+  .drag-handle { grid-area: drag; }
+  .field-key { grid-area: key; }
+  .field-value { grid-area: value; }
+  .field-row > :last-child { grid-area: check; }
   .field-order-buttons { display: none; }
   .page-actions { align-items: flex-end; }
   .save-hint { max-width: 150px; }
