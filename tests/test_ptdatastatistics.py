@@ -1175,8 +1175,9 @@ class PackagingTests(unittest.TestCase):
         manifest = json.loads((ROOT / "package.v2.json").read_text(encoding="utf-8"))
         meta = manifest["PTDataStatistics"]
         source = (PLUGIN / "__init__.py").read_text(encoding="utf-8")
-        self.assertEqual(meta["version"], "2.0.16")
+        self.assertEqual(meta["version"], "2.0.17")
         self.assertEqual(meta["history"], {
+            "v2.0.17": "不值一提",
             "v2.0.16": "不值一提",
             "v2.0.15": "不值一提",
             "v2.0.14": "不值一提",
@@ -1195,7 +1196,7 @@ class PackagingTests(unittest.TestCase):
             "v2.0.1": "不值一提",
             "v2.0.0": "兼容v2及v3",
         })
-        self.assertIn('plugin_version = "2.0.16"', source)
+        self.assertIn('plugin_version = "2.0.17"', source)
         frontend_meta = json.loads((PLUGIN / "package.json").read_text(encoding="utf-8"))
         self.assertEqual(frontend_meta["version"], meta["version"])
         icon_url = "https://raw.githubusercontent.com/changzhanghs/MoviePilot-Plugins/main/icons/ptdatastatistics.png"
@@ -1307,6 +1308,8 @@ class PackagingTests(unittest.TestCase):
         self.assertNotIn("魔力（预估时魔）", source)
         self.assertIn("const siteSortOptions", source)
         self.assertIn("const siteSortKey = ref('site_priority')", source)
+        self.assertEqual(source.count("{ title: '加入时间', value: 'join_at' }"), 2)
+        self.assertIn("if (key === 'join_at')", source)
         for key in ("site_priority", "upload", "download", "bonus", "seeding", "seeding_size"):
             self.assertIn(f"value: '{key}'", source)
         self.assertIn("title: '站点优先级'", source)
@@ -1412,8 +1415,8 @@ class PackagingTests(unittest.TestCase):
         self.assertLess(source.index('class="retirement-detail__metrics"'), source.index('class="retirement-route-rail"'))
         self.assertLess(source.index('class="retirement-route-rail"'), source.index('class="requirement-panel"'))
         self.assertIn('v-if="level.description"', source)
-        self.assertIn(".retirement-level-row__detail strong{max-width:100%;margin-left:auto", source)
-        self.assertIn("overflow-wrap:anywhere;text-align:right", source)
+        self.assertNotIn("<span>积分预计</span><span>状态</span>", source)
+        self.assertNotIn("routeMissingLabel(level)", source)
         self.assertIn(".pt-workbench--compact .retirement-explorer{grid-template-columns:1fr", source)
         self.assertIn(".pt-workbench--compact .requirement-table,.pt-workbench--compact .retirement-levels{max-width:100%;overflow-x:auto", source)
         self.assertIn("<h2>养老进度</h2>", source)
