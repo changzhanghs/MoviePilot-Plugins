@@ -15766,10 +15766,8 @@ function nextLevelRule(site) {
 }
 function retirementRoute(site) {
   const route = site.route || [];
-  const retirementIndex = route.findIndex(level => level.is_retirement);
-  const boundedRoute = retirementIndex >= 0 ? route.slice(0, retirementIndex + 1) : route;
-  const userIndex = boundedRoute.findIndex(level => String(level.name || '').replace(/[^a-z0-9]/gi, '').toLocaleLowerCase() === 'user');
-  return userIndex >= 0 ? boundedRoute.slice(userIndex) : boundedRoute
+  const userIndex = route.findIndex(level => String(level.name || '').replace(/[^a-z0-9]/gi, '').toLowerCase() === 'user');
+  return userIndex >= 0 ? route.slice(userIndex) : route
 }
 function nextLevelOverallProgress(site) {
   if (site?.status === 'wealthy_retired') return 100
@@ -15948,7 +15946,7 @@ function requirementRows(site, level, alternativeIndex = null) {
         current: available ? formatter(currentNumber) : '数据未提供',
         target: `${strict ? '>' : '≥'} ${formatter(target)}`,
         detail: complete ? '已达成' : difference === null ? '数据未提供' : strict && difference === 0 ? `需大于 ${formatter(target)}` : `剩余 ${formatter(difference)}`,
-        eta: '—',
+        eta: key === 'min_seeding_points' && !complete ? selectedAlternative.seeding_points_eta_date || '—' : '—',
         complete,
         unavailable: !available,
         progress,
@@ -17710,6 +17708,6 @@ return (_ctx, _cache) => {
 }
 
 };
-const PTStatsWorkbench = /*#__PURE__*/_export_sfc(_sfc_main, [['__scopeId',"data-v-25640544"]]);
+const PTStatsWorkbench = /*#__PURE__*/_export_sfc(_sfc_main, [['__scopeId',"data-v-18ae09f4"]]);
 
 export { PTStatsWorkbench as P };
