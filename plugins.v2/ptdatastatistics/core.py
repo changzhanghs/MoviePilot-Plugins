@@ -550,6 +550,34 @@ def _eligible_date(join_at: Any, minimum_days: Any, strict: bool = False) -> str
     return (joined + timedelta(days=days + (1 if strict and days else 0))).isoformat()
 
 
+def _seeding_points_eta(
+    requirement: Mapping[str, Any], site: Mapping[str, Any]
+) -> dict[str, Any]:
+    target = as_float(requirement.get("min_seeding_points"))
+    current = site.get("seeding_points")
+    rate = site.get("seeding_points_hourly")
+    hours = None
+    days = None
+    eta_date = ""
+    if target and current is not None and rate and rate > 0:
+        required = target + (1 if requirement.get("min_seeding_points_strict") else 0)
+        remaining = max(required - current, 0)
+        hours = int(math.floor(remaining / rate))
+        days = int(math.ceil(remaining / rate / 24))
+        try:
+            eta_date = (
+                date.fromisoformat(as_text(site.get("updated_day"))[:10])
+                + timedelta(days=days)
+            ).isoformat()
+        except (TypeError, ValueError):
+            pass
+    return {
+        "seeding_points_eta_hours": hours,
+        "seeding_points_eta_days": days,
+        "seeding_points_eta_date": eta_date,
+    }
+
+
 def build_retirement_progress(
     snapshots: Iterable[Mapping[str, Any]],
     rules_by_name: Mapping[str, Mapping[str, Any]] | None = None,
@@ -672,26 +700,11 @@ def build_retirement_progress(
         for index, raw_level in enumerate(raw_levels):
             level = _with_derived_upload(raw_level)
             level_name = as_text(level.get("name"))
-            points_target = as_float(level.get("min_seeding_points"))
-            points_current = base["seeding_points"]
-            points_rate = base["seeding_points_hourly"]
-            points_eta_hours = None
-            points_eta_days = None
-            points_eta_date = ""
-            if points_target and points_current is not None and points_rate and points_rate > 0:
-                required_points = points_target + (
-                    1 if bool(level.get("min_seeding_points_strict")) else 0
-                )
-                remaining_points = max(required_points - points_current, 0)
-                points_eta_hours = int(math.floor(remaining_points / points_rate))
-                points_eta_days = int(math.ceil(remaining_points / points_rate / 24))
-                try:
-                    points_eta_date = (
-                        date.fromisoformat(base["updated_day"][:10])
-                        + timedelta(days=points_eta_days)
-                    ).isoformat()
-                except (TypeError, ValueError):
-                    points_eta_date = ""
+            points_eta = _seeding_points_eta(level, base)
+            alternatives = [
+                {**option, **_seeding_points_eta(option, base)}
+                for option in level.get("alternatives") or []
+            ]
             route.append(
                 {
                     "name": level_name,
@@ -709,9 +722,7 @@ def build_retirement_progress(
                     "min_bonus_strict": bool(level.get("min_bonus_strict")),
                     "min_seeding_points": as_float(level.get("min_seeding_points")),
                     "min_seeding_points_strict": bool(level.get("min_seeding_points_strict")),
-                    "seeding_points_eta_hours": points_eta_hours,
-                    "seeding_points_eta_days": points_eta_days,
-                    "seeding_points_eta_date": points_eta_date,
+                    **points_eta,
                     "min_seeding": max(as_int(level.get("min_seeding")), 0),
                     "min_seeding_strict": bool(level.get("min_seeding_strict")),
                     "min_seeding_size": max(as_int(level.get("min_seeding_size")), 0),
@@ -720,7 +731,7 @@ def build_retirement_progress(
                     "min_torrent_uploads_strict": bool(level.get("min_torrent_uploads_strict")),
                     "min_average_seeding_time_days": as_float(level.get("min_average_seeding_time_days")),
                     "min_average_seeding_time_days_strict": bool(level.get("min_average_seeding_time_days_strict")),
-                    "alternatives": list(level.get("alternatives") or []),
+                    "alternatives": alternatives,
                     "unsupported_requirements": list(level.get("unsupported_requirements") or []),
                     "eligible_date": _eligible_date(
                         base["join_at"],

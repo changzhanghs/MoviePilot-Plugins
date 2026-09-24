@@ -747,6 +747,26 @@ class TwelveAndExportTests(unittest.TestCase):
         self.assertEqual(power["seeding_points_eta_days"], 29)
         self.assertEqual(power["seeding_points_eta_date"], "2026-10-10")
 
+    def test_cat_alternative_tasks_have_separate_points_eta(self):
+        progress = core.build_retirement_progress([{
+            "site_id": 1,
+            "site_name": "猫站",
+            "user_level": "加菲猫 POWER USER",
+            "join_at": "2026-01-01",
+            "updated_day": "2026-09-24",
+            "seeding_points": 200_000,
+            "seeding_points_hourly": 1_000,
+        }])
+        ultimate = next(
+            level for level in progress["sites"][0]["route"]
+            if level["name"] == "山东狮子猫 ULTIMATE USER"
+        )
+        first, second = ultimate["alternatives"]
+        self.assertEqual(first["seeding_points_eta_days"], 42)
+        self.assertEqual(first["seeding_points_eta_date"], "2026-11-05")
+        self.assertEqual(second["seeding_points_eta_days"], 142)
+        self.assertEqual(second["seeding_points_eta_date"], "2027-02-13")
+
     def test_audiences_seeding_points_gap_uses_readable_integer_format(self):
         missing = core._requirement_missing(
             {"min_seeding_points": 1_500_000},
@@ -1155,8 +1175,9 @@ class PackagingTests(unittest.TestCase):
         manifest = json.loads((ROOT / "package.v2.json").read_text(encoding="utf-8"))
         meta = manifest["PTDataStatistics"]
         source = (PLUGIN / "__init__.py").read_text(encoding="utf-8")
-        self.assertEqual(meta["version"], "2.0.15")
+        self.assertEqual(meta["version"], "2.0.16")
         self.assertEqual(meta["history"], {
+            "v2.0.16": "不值一提",
             "v2.0.15": "不值一提",
             "v2.0.14": "不值一提",
             "v2.0.13": "不值一提",
@@ -1174,7 +1195,7 @@ class PackagingTests(unittest.TestCase):
             "v2.0.1": "不值一提",
             "v2.0.0": "兼容v2及v3",
         })
-        self.assertIn('plugin_version = "2.0.15"', source)
+        self.assertIn('plugin_version = "2.0.16"', source)
         frontend_meta = json.loads((PLUGIN / "package.json").read_text(encoding="utf-8"))
         self.assertEqual(frontend_meta["version"], meta["version"])
         icon_url = "https://raw.githubusercontent.com/changzhanghs/MoviePilot-Plugins/main/icons/ptdatastatistics.png"
@@ -1343,7 +1364,8 @@ class PackagingTests(unittest.TestCase):
         self.assertIn("const route = retirementRoute(site)", source)
         self.assertIn("const levels = site.route || []", source)
         self.assertNotIn("route.slice(currentIndex)", source)
-        self.assertIn("boundedRoute.slice(userIndex)", source)
+        self.assertIn("route.slice(userIndex)", source)
+        self.assertNotIn("route.slice(0, retirementIndex + 1)", source)
         self.assertIn('class="rules-file-input"', source)
         self.assertIn("async function uploadRuleFile(event)", source)
         self.assertIn("settingsDraft.value.custom_retirement_rules = rules", source)

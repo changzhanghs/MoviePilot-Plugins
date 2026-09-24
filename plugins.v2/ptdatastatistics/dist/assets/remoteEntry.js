@@ -2,17 +2,17 @@ const currentImports = {};
       const exportSet = new Set(['Module', '__esModule', 'default', '_export_sfc']);
       let moduleMap = {
 "./Page":()=>{
-      dynamicLoadingCss(["PTStatsWorkbench-CRvd36ME.css"], false, './Page');
-      return __federation_import('./__federation_expose_Page-k7Iu0VYP.js').then(module =>Object.keys(module).every(item => exportSet.has(item)) ? () => module.default : () => module)},
+      dynamicLoadingCss(["PTStatsWorkbench-C7kdWkxF.css"], false, './Page');
+      return __federation_import('./__federation_expose_Page-DYxl22j7.js').then(module =>Object.keys(module).every(item => exportSet.has(item)) ? () => module.default : () => module)},
 "./Config":()=>{
-      dynamicLoadingCss(["PTStatsWorkbench-CRvd36ME.css"], false, './Config');
-      return __federation_import('./__federation_expose_Config-BnnVpuq-.js').then(module =>Object.keys(module).every(item => exportSet.has(item)) ? () => module.default : () => module)},
+      dynamicLoadingCss(["PTStatsWorkbench-C7kdWkxF.css"], false, './Config');
+      return __federation_import('./__federation_expose_Config-CrqMqBmL.js').then(module =>Object.keys(module).every(item => exportSet.has(item)) ? () => module.default : () => module)},
 "./Dashboard":()=>{
       dynamicLoadingCss(["__federation_expose_Dashboard-BfgsPRPe.css"], false, './Dashboard');
       return __federation_import('./__federation_expose_Dashboard-SmM4N3ED.js').then(module =>Object.keys(module).every(item => exportSet.has(item)) ? () => module.default : () => module)},
 "./AppPage":()=>{
-      dynamicLoadingCss(["PTStatsWorkbench-CRvd36ME.css"], false, './AppPage');
-      return __federation_import('./__federation_expose_AppPage-PVODkRX8.js').then(module =>Object.keys(module).every(item => exportSet.has(item)) ? () => module.default : () => module)},};
+      dynamicLoadingCss(["PTStatsWorkbench-C7kdWkxF.css"], false, './AppPage');
+      return __federation_import('./__federation_expose_AppPage-CYfjJhPm.js').then(module =>Object.keys(module).every(item => exportSet.has(item)) ? () => module.default : () => module)},};
       const seen = {};
       const dynamicLoadingCss = (cssFilePaths, dontAppendStylesToHead, exposeItemName) => {
         const metaUrl = import.meta.url;
