@@ -73,6 +73,7 @@ const hourlyLoading = ref(false)
 const historyChartCanvas = ref(null)
 let historyChart = null
 const selectedRetirementSiteKey = ref('')
+const selectedRouteLevelName = ref('')
 const springUpgradeTaskIndex = ref(0)
 
 const pluginBase = computed(() => `plugin/${props.pluginId || 'PTDataStatistics'}`)
@@ -947,9 +948,10 @@ const selectedRetirementView = computed(() => {
   const route = retirementRoute(site)
   const levels = site.route || []
   const nextLevel = nextLevelRule(site)
-  const upgradeTasks = springUpgradeTasks(site, nextLevel)
+  const displayedLevel = route.find(level => level.name === selectedRouteLevelName.value) || nextLevel
+  const upgradeTasks = springUpgradeTasks(site, displayedLevel)
   const selectedTaskIndex = upgradeTasks.length ? Math.min(springUpgradeTaskIndex.value, upgradeTasks.length - 1) : null
-  const requirements = requirementRows(site, nextLevel, selectedTaskIndex)
+  const requirements = requirementRows(site, displayedLevel, selectedTaskIndex)
   const overallProgress = averageRequirementProgress(requirements)
   const completedCount = requirements.filter(row => row.complete).length
   const routeCount = route.length
@@ -968,14 +970,16 @@ const selectedRetirementView = computed(() => {
     } : {},
     routeProgress: routeCount <= 1
       ? 100
-      : Math.min(100, (completedRouteSegments + overallProgress / 100) * 100 / (routeCount - 1)),
+      : Math.min(100, (completedRouteSegments + nextLevelOverallProgress(site) / 100) * 100 / (routeCount - 1)),
+    displayedLevel,
+    isDefaultLevel: displayedLevel?.name === nextLevel?.name,
     requirements,
     upgradeTasks,
     selectedTaskIndex,
     overallProgress,
     completedCount,
     pendingCount: requirements.length - completedCount,
-    eta: nextLevelEta(site, requirements),
+    eta: displayedLevel?.reached ? { label: '已达成', days: null } : nextLevelEta(site, requirements),
   }
 })
 watch(
@@ -989,6 +993,7 @@ watch(
   { immediate: true },
 )
 watch(selectedRetirementSiteKey, () => {
+  selectedRouteLevelName.value = ''
   springUpgradeTaskIndex.value = 0
 })
 watch(
@@ -1252,12 +1257,21 @@ onBeforeUnmount(() => historyChart?.destroy())
                     <VProgressLinear :model-value="selectedRetirementView.routeProgress" color="primary" bg-color="secondary" :bg-opacity="0.3" height="5" rounded />
                   </div>
                   <div class="retirement-route-rail__nodes">
-                    <div v-for="(level, index) in selectedRetirementView.route" :key="level.name" :class="{ 'is-reached': level.reached, 'is-current': level.is_current, 'is-next': level.name === selectedRetirementSite.next_level, 'is-retirement': level.is_retirement }">
+                    <button
+                      v-for="(level, index) in selectedRetirementView.route"
+                      :key="level.name"
+                      type="button"
+                      class="retirement-route-node"
+                      :class="{ 'is-reached': level.reached, 'is-current': level.is_current, 'is-next': level.name === selectedRetirementSite.next_level, 'is-retirement': level.is_retirement, 'is-selected': level.name === selectedRetirementView.displayedLevel?.name }"
+                      :aria-pressed="level.name === selectedRetirementView.displayedLevel?.name"
+                      :aria-label="`查看 ${level.name} 等级进度`"
+                      @click="selectedRouteLevelName = level.name; springUpgradeTaskIndex = 0"
+                    >
                       <i class="retirement-route-node__marker" aria-hidden="true">{{ index + 1 }}</i>
                       <strong class="retirement-route-node__name"><span>{{ splitLevelName(level).local }}</span><span v-if="splitLevelName(level).english">{{ splitLevelName(level).english }}</span></strong>
                       <em class="retirement-route-node__badge">{{ routeNodeStatus(selectedRetirementSite, level) }}</em>
                       <small>{{ routeNodeMeta(level) }}</small>
-                    </div>
+                    </button>
                   </div>
                 </div>
               </div>
@@ -1265,7 +1279,7 @@ onBeforeUnmount(() => historyChart?.destroy())
               <div v-if="selectedRetirementSite.status !== 'wealthy_retired' && selectedRetirementView.route.length" class="retirement-target-grid">
                 <section class="requirement-panel">
                   <div class="requirement-panel__heading">
-                    <div><VIcon icon="mdi-target" color="primary" size="34" /><span>下一等级</span><strong>{{ selectedRetirementSite.next_level || '已是最高等级' }}</strong></div>
+                    <div><VIcon icon="mdi-target" color="primary" size="34" /><span>{{ selectedRetirementView.isDefaultLevel ? '下一等级' : '所选等级' }}</span><strong>{{ selectedRetirementView.displayedLevel?.name || '已是最高等级' }}</strong></div>
                     <div v-if="selectedRetirementView.upgradeTasks.length" class="spring-upgrade-tasks" role="tablist" aria-label="春天神王晋级任务">
                       <button
                         v-for="(task, index) in selectedRetirementView.upgradeTasks"
@@ -1282,7 +1296,7 @@ onBeforeUnmount(() => historyChart?.destroy())
                       </button>
                     </div>
                     <div v-else class="requirement-panel__spacer" aria-hidden="true" />
-                    <VChip color="warning" size="small" variant="tonal" prepend-icon="mdi-clock-outline">{{ selectedRetirementView.eta.label }}<template v-if="selectedRetirementView.eta.days !== null"> · 约 {{ selectedRetirementView.eta.days }} 天</template></VChip>
+                    <VChip :color="selectedRetirementView.displayedLevel?.reached ? 'success' : 'warning'" size="small" variant="tonal" :prepend-icon="selectedRetirementView.displayedLevel?.reached ? 'mdi-check-circle-outline' : 'mdi-clock-outline'">{{ selectedRetirementView.eta.label }}<template v-if="selectedRetirementView.eta.days !== null"> · 约 {{ selectedRetirementView.eta.days }} 天</template></VChip>
                   </div>
                   <div v-if="selectedRetirementView.requirements.length" class="requirement-overview">
                     <div class="requirement-overview__score">
@@ -1302,7 +1316,7 @@ onBeforeUnmount(() => historyChart?.destroy())
                       </div>
                     </div>
                   </div>
-                  <div v-else class="compact-empty-state">没有后续等级要求</div>
+                  <div v-else class="compact-empty-state">{{ selectedRetirementView.displayedLevel ? '该等级没有要求数据' : '没有后续等级要求' }}</div>
                 </section>
 
               </div>
@@ -1466,12 +1480,15 @@ onBeforeUnmount(() => historyChart?.destroy())
 .retirement-route-rail__track{position:relative;min-width:860px}
 .retirement-route-rail__line{position:absolute;z-index:0;top:19px;left:var(--route-inset);width:var(--route-span)}
 .retirement-route-rail__nodes{position:relative;z-index:1;display:grid;grid-template-columns:repeat(var(--route-count),minmax(80px,1fr));align-items:start}
-.retirement-route-rail__nodes>div{display:grid;min-width:0;grid-template-rows:40px auto 22px auto;place-items:center;gap:3px;padding:0 5px;text-align:center}
+.retirement-route-node{appearance:none;display:grid;min-width:0;grid-template-rows:40px auto 22px auto;place-items:center;gap:3px;padding:0 5px;border:0;border-radius:12px;background:transparent;color:inherit;font:inherit;text-align:center;cursor:pointer}
+.retirement-route-node:hover,.retirement-route-node:focus-visible{background:rgba(var(--v-theme-primary),.08);outline:none}
+.retirement-route-node:focus-visible{box-shadow:inset 0 0 0 2px rgb(var(--v-theme-primary))}
 .retirement-route-node__marker{position:relative;z-index:1;display:grid;width:38px;height:38px;place-items:center;border:4px solid rgba(var(--v-theme-on-surface),.32);border-radius:50%;background:rgb(var(--v-theme-surface));box-shadow:0 0 0 4px rgb(var(--v-theme-surface));color:rgba(var(--v-theme-on-surface),.82);font-size:.9rem;font-style:normal;font-weight:900}
 .retirement-route-rail__nodes .is-reached .retirement-route-node__marker{border-color:rgb(var(--v-theme-primary));background:rgb(var(--v-theme-primary))}
 .retirement-route-rail__nodes .is-next .retirement-route-node__marker{border-color:rgb(var(--v-theme-primary));background:rgba(var(--v-theme-primary),.34)}
 .retirement-route-rail__nodes .is-current .retirement-route-node__marker,.retirement-route-rail__nodes .is-next .retirement-route-node__marker{box-shadow:0 0 0 4px rgb(var(--v-theme-surface)),0 0 0 7px rgba(var(--v-theme-primary),.18)}
 .retirement-route-rail__nodes .is-retirement .retirement-route-node__marker{border-color:rgb(var(--v-theme-success));background:rgb(var(--v-theme-success))}
+.retirement-route-rail__nodes .is-selected .retirement-route-node__marker{box-shadow:0 0 0 4px rgb(var(--v-theme-surface)),0 0 0 8px rgb(var(--v-theme-primary))}
 .retirement-route-rail__nodes strong{max-width:100%;color:rgba(var(--v-theme-on-surface),.78);font-size:.7rem;line-height:1.2}
 .retirement-route-node__name{display:grid;min-height:34px;align-content:start;place-items:center;gap:1px}.retirement-route-node__name>span{display:block;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.retirement-route-node__name>span+span{font-size:.66rem;text-transform:uppercase}
 .retirement-route-node__badge{padding:2px 9px;border-radius:999px;background:rgba(var(--v-theme-on-surface),.1);color:rgba(var(--v-theme-on-surface),.68);font-size:.6rem;font-style:normal;font-weight:800;line-height:16px;white-space:nowrap}

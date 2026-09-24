@@ -1155,8 +1155,9 @@ class PackagingTests(unittest.TestCase):
         manifest = json.loads((ROOT / "package.v2.json").read_text(encoding="utf-8"))
         meta = manifest["PTDataStatistics"]
         source = (PLUGIN / "__init__.py").read_text(encoding="utf-8")
-        self.assertEqual(meta["version"], "2.0.13")
+        self.assertEqual(meta["version"], "2.0.14")
         self.assertEqual(meta["history"], {
+            "v2.0.14": "不值一提",
             "v2.0.13": "不值一提",
             "v2.0.12": "不值一提",
             "v2.0.11": "不值一提",
@@ -1172,7 +1173,7 @@ class PackagingTests(unittest.TestCase):
             "v2.0.1": "不值一提",
             "v2.0.0": "兼容v2及v3",
         })
-        self.assertIn('plugin_version = "2.0.13"', source)
+        self.assertIn('plugin_version = "2.0.14"', source)
         icon_url = "https://raw.githubusercontent.com/changzhanghs/MoviePilot-Plugins/main/icons/ptdatastatistics.png"
         self.assertEqual(meta["icon"], icon_url)
         self.assertIn(f'plugin_icon = "{icon_url}"', source)
@@ -1322,7 +1323,6 @@ class PackagingTests(unittest.TestCase):
         self.assertIn('class="spring-upgrade-tasks"', source)
         self.assertIn('@click="springUpgradeTaskIndex = index"', source)
         self.assertIn("const springUpgradeTaskIndex = ref(0)", source)
-        self.assertIn("requirementRows(site, nextLevel, selectedTaskIndex)", source)
         self.assertIn('class="retirement-levels"', source)
         self.assertIn("selectedRetirementSite", source)
         self.assertIn("const selectedRetirementView = computed", source)
@@ -1334,7 +1334,6 @@ class PackagingTests(unittest.TestCase):
         self.assertIn("eta: complete ? '—' : level.eligible_date || '—'", source)
         self.assertIn("function nextLevelEta(site, requirements)", source)
         self.assertIn(".map(row => row.eta)", source)
-        self.assertIn("eta: nextLevelEta(site, requirements)", source)
         self.assertIn("row.detail.replace(/^剩余\\s*/, '')", source)
         self.assertIn('class="retirement-levels__columns"', source)
         self.assertIn('<details v-for="level in selectedRetirementView.levels"', source)
@@ -1342,7 +1341,6 @@ class PackagingTests(unittest.TestCase):
         self.assertIn("const levels = site.route || []", source)
         self.assertNotIn("route.slice(currentIndex)", source)
         self.assertIn("boundedRoute.slice(userIndex)", source)
-        self.assertIn("completedRouteSegments + overallProgress / 100", source)
         self.assertIn('class="rules-file-input"', source)
         self.assertIn("async function uploadRuleFile(event)", source)
         self.assertIn("settingsDraft.value.custom_retirement_rules = rules", source)
