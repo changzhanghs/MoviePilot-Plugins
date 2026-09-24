@@ -15011,7 +15011,7 @@ const _hoisted_106 = {
   key: 0,
   class: "spring-upgrade-tasks",
   role: "tablist",
-  "aria-label": "春天神王晋级任务"
+  "aria-label": "任选任务"
 };
 const _hoisted_107 = ["aria-selected", "onClick"];
 const _hoisted_108 = {
@@ -15842,6 +15842,25 @@ function springUpgradeTasks(site, level) {
     { title: '任务二', subtitle: '发种升级', icon: 'mdi-cloud-upload-outline' },
   ]
 }
+function alternativeTaskOptions(site, level) {
+  const alternatives = level?.alternatives || [];
+  if (alternatives.length < 2) return []
+  const springTasks = springUpgradeTasks(site, level);
+  if (springTasks.length) return springTasks
+  const numerals = ['一', '二', '三', '四', '五', '六'];
+  return alternatives.map((option, index) => {
+    const targets = [];
+    if (option.min_seeding_points) targets.push(`积分 ${formatNumber$1(option.min_seeding_points, 0)}`);
+    if (option.min_torrent_uploads) targets.push(`发布 ${formatNumber$1(option.min_torrent_uploads, 0)}`);
+    if (option.min_download) targets.push(`下载 ${formatBytes(option.min_download)}`);
+    if (option.min_upload) targets.push(`上传 ${formatBytes(option.min_upload)}`);
+    return {
+      title: `任务${numerals[index] || index + 1}`,
+      subtitle: targets.slice(0, 2).join(' · ') || '任选条件',
+      icon: `mdi-numeric-${index + 1}-circle-outline`,
+    }
+  })
+}
 function requirementRows(site, level, alternativeIndex = null) {
   if (!site || !level) return []
   const rows = [];
@@ -16048,7 +16067,7 @@ const selectedRetirementView = computed(() => {
   const levels = site.route || [];
   const nextLevel = nextLevelRule(site);
   const displayedLevel = route.find(level => level.name === selectedRouteLevelName.value) || nextLevel;
-  const upgradeTasks = springUpgradeTasks(site, displayedLevel);
+  const upgradeTasks = alternativeTaskOptions(site, displayedLevel);
   const selectedTaskIndex = upgradeTasks.length ? Math.min(springUpgradeTaskIndex.value, upgradeTasks.length - 1) : null;
   const requirements = requirementRows(site, displayedLevel, selectedTaskIndex);
   const overallProgress = averageRequirementProgress(requirements);
@@ -17691,6 +17710,6 @@ return (_ctx, _cache) => {
 }
 
 };
-const PTStatsWorkbench = /*#__PURE__*/_export_sfc(_sfc_main, [['__scopeId',"data-v-52a76609"]]);
+const PTStatsWorkbench = /*#__PURE__*/_export_sfc(_sfc_main, [['__scopeId',"data-v-25640544"]]);
 
 export { PTStatsWorkbench as P };
