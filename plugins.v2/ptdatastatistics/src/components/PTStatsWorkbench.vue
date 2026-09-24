@@ -743,6 +743,25 @@ function springUpgradeTasks(site, level) {
     { title: '任务二', subtitle: '发种升级', icon: 'mdi-cloud-upload-outline' },
   ]
 }
+function alternativeTaskOptions(site, level) {
+  const alternatives = level?.alternatives || []
+  if (alternatives.length < 2) return []
+  const springTasks = springUpgradeTasks(site, level)
+  if (springTasks.length) return springTasks
+  const numerals = ['一', '二', '三', '四', '五', '六']
+  return alternatives.map((option, index) => {
+    const targets = []
+    if (option.min_seeding_points) targets.push(`积分 ${formatNumber(option.min_seeding_points, 0)}`)
+    if (option.min_torrent_uploads) targets.push(`发布 ${formatNumber(option.min_torrent_uploads, 0)}`)
+    if (option.min_download) targets.push(`下载 ${formatBytes(option.min_download)}`)
+    if (option.min_upload) targets.push(`上传 ${formatBytes(option.min_upload)}`)
+    return {
+      title: `任务${numerals[index] || index + 1}`,
+      subtitle: targets.slice(0, 2).join(' · ') || '任选条件',
+      icon: `mdi-numeric-${index + 1}-circle-outline`,
+    }
+  })
+}
 function requirementRows(site, level, alternativeIndex = null) {
   if (!site || !level) return []
   const rows = []
@@ -949,7 +968,7 @@ const selectedRetirementView = computed(() => {
   const levels = site.route || []
   const nextLevel = nextLevelRule(site)
   const displayedLevel = route.find(level => level.name === selectedRouteLevelName.value) || nextLevel
-  const upgradeTasks = springUpgradeTasks(site, displayedLevel)
+  const upgradeTasks = alternativeTaskOptions(site, displayedLevel)
   const selectedTaskIndex = upgradeTasks.length ? Math.min(springUpgradeTaskIndex.value, upgradeTasks.length - 1) : null
   const requirements = requirementRows(site, displayedLevel, selectedTaskIndex)
   const overallProgress = averageRequirementProgress(requirements)
@@ -1280,7 +1299,7 @@ onBeforeUnmount(() => historyChart?.destroy())
                 <section class="requirement-panel">
                   <div class="requirement-panel__heading">
                     <div><VIcon icon="mdi-target" color="primary" size="34" /><span>{{ selectedRetirementView.isDefaultLevel ? '下一等级' : '所选等级' }}</span><strong>{{ selectedRetirementView.displayedLevel?.name || '已是最高等级' }}</strong></div>
-                    <div v-if="selectedRetirementView.upgradeTasks.length" class="spring-upgrade-tasks" role="tablist" aria-label="春天神王晋级任务">
+                    <div v-if="selectedRetirementView.upgradeTasks.length" class="spring-upgrade-tasks" role="tablist" aria-label="任选任务">
                       <button
                         v-for="(task, index) in selectedRetirementView.upgradeTasks"
                         :key="task.title"
@@ -1476,11 +1495,11 @@ onBeforeUnmount(() => historyChart?.destroy())
 .retirement-detail__metrics{display:flex;flex:0 0 auto;align-items:center;gap:22px}
 .retirement-detail__metrics span{display:flex;flex-direction:column;gap:3px;color:rgba(var(--v-theme-on-surface),.52);font-size:.68rem}
 .retirement-detail__metrics strong{color:rgba(var(--v-theme-on-surface),.9);font-size:.86rem}
-.retirement-route-rail{overflow-x:auto;padding:22px 12px 8px}
+.retirement-route-rail{overflow-x:auto;padding:22px 12px 14px}
 .retirement-route-rail__track{position:relative;min-width:860px}
-.retirement-route-rail__line{position:absolute;z-index:0;top:19px;left:var(--route-inset);width:var(--route-span)}
+.retirement-route-rail__line{position:absolute;z-index:0;top:23px;left:var(--route-inset);width:var(--route-span)}
 .retirement-route-rail__nodes{position:relative;z-index:1;display:grid;grid-template-columns:repeat(var(--route-count),minmax(80px,1fr));align-items:start}
-.retirement-route-node{appearance:none;display:grid;min-width:0;grid-template-rows:40px auto 22px auto;place-items:center;gap:3px;padding:0 5px;border:0;border-radius:12px;background:transparent;color:inherit;font:inherit;text-align:center;cursor:pointer}
+.retirement-route-node{appearance:none;display:grid;min-width:0;grid-template-rows:48px auto 24px auto;place-items:center;gap:5px;padding:0 5px;border:0;border-radius:12px;background:transparent;color:inherit;font:inherit;text-align:center;cursor:pointer}
 .retirement-route-node:hover,.retirement-route-node:focus-visible{background:rgba(var(--v-theme-primary),.08);outline:none}
 .retirement-route-node:focus-visible{box-shadow:inset 0 0 0 2px rgb(var(--v-theme-primary))}
 .retirement-route-node__marker{position:relative;z-index:1;display:grid;width:38px;height:38px;place-items:center;border:4px solid rgba(var(--v-theme-on-surface),.32);border-radius:50%;background:rgb(var(--v-theme-surface));box-shadow:0 0 0 4px rgb(var(--v-theme-surface));color:rgba(var(--v-theme-on-surface),.82);font-size:.9rem;font-style:normal;font-weight:900}
@@ -1506,7 +1525,9 @@ onBeforeUnmount(() => historyChart?.destroy())
 .requirement-panel__heading span{color:rgba(var(--v-theme-on-surface),.56);font-size:.72rem}
 .requirement-panel__heading strong{margin-left:3px;font-size:1.22rem}
 .requirement-panel__spacer{min-width:0}
-.spring-upgrade-tasks{display:grid;grid-template-columns:repeat(2,minmax(112px,1fr));justify-self:center;gap:8px}.spring-upgrade-task{appearance:none;display:flex;align-items:center;justify-content:center;gap:8px;min-width:112px;padding:8px 12px;border:1px solid var(--pt-border);border-radius:12px;background:rgba(var(--v-theme-surface-variant),.12);color:rgba(var(--v-theme-on-surface),.62);font:inherit;text-align:left;cursor:pointer;transition:border-color .16s ease,background-color .16s ease,color .16s ease,box-shadow .16s ease}.spring-upgrade-task:hover,.spring-upgrade-task:focus-visible{border-color:rgba(var(--v-theme-primary),.48);outline:none}.spring-upgrade-task.is-selected{border-color:rgb(var(--v-theme-primary));background:rgba(var(--v-theme-primary),.14);color:rgb(var(--v-theme-primary));box-shadow:0 5px 16px rgba(var(--v-theme-primary),.12)}.spring-upgrade-task>span{display:grid;gap:1px;color:inherit}.requirement-panel__heading .spring-upgrade-task strong{margin:0;color:inherit;font-size:.72rem;line-height:1.1}.spring-upgrade-task small{color:rgba(var(--v-theme-on-surface),.58);font-size:.61rem;white-space:nowrap}.spring-upgrade-task.is-selected small{color:rgba(var(--v-theme-primary),.82)}
+.spring-upgrade-tasks{display:grid;grid-template-columns:repeat(2,minmax(140px,1fr));justify-self:center;gap:8px}.spring-upgrade-task{appearance:none;display:flex;align-items:center;justify-content:center;gap:8px;min-width:140px;padding:8px 12px;border:1px solid var(--pt-border);border-radius:12px;background:rgba(var(--v-theme-surface-variant),.12);color:rgba(var(--v-theme-on-surface),.62);font:inherit;text-align:left;cursor:pointer;transition:border-color .16s ease,background-color .16s ease,color .16s ease,box-shadow .16s ease}.spring-upgrade-task:hover,.spring-upgrade-task:focus-visible{border-color:rgba(var(--v-theme-primary),.48);outline:none}.spring-upgrade-task.is-selected{border-color:rgb(var(--v-theme-primary));background:rgba(var(--v-theme-primary),.14);color:rgb(var(--v-theme-primary));box-shadow:0 5px 16px rgba(var(--v-theme-primary),.12)}.spring-upgrade-task>span{display:grid;gap:1px;color:inherit}.requirement-panel__heading .spring-upgrade-task strong{margin:0;color:inherit;font-size:.72rem;line-height:1.1}.spring-upgrade-task small{color:rgba(var(--v-theme-on-surface),.58);font-size:.61rem;line-height:1.25;overflow-wrap:anywhere}.spring-upgrade-task.is-selected small{color:rgba(var(--v-theme-primary),.82)}
+@media(max-width:1100px){.requirement-panel__heading{grid-template-columns:minmax(0,1fr) auto}.spring-upgrade-tasks{grid-column:1/-1;grid-row:2}.requirement-panel__spacer{display:none}}
+@media(max-width:420px){.spring-upgrade-tasks{grid-template-columns:1fr}}
 .requirement-overview{display:grid;grid-template-columns:190px minmax(0,1fr);gap:20px;padding-top:14px}
 .requirement-overview__score{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:5px;border-right:1px solid var(--pt-border)}
 .requirement-overview__score :deep(.v-progress-circular__content)>strong{font-size:1.35rem}
