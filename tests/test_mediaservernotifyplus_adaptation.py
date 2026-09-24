@@ -20,9 +20,9 @@ class AdaptationTests(unittest.TestCase):
     def test_versions_and_manifests_match(self):
         v2_package = json.loads((ROOT / "package.v2.json").read_text(encoding="utf-8"))
         v3_package = json.loads((ROOT / "package.v3.json").read_text(encoding="utf-8"))
-        self.assertEqual(v2_package["MediaServerNotifyPlus"]["version"], "2.0.9")
+        self.assertEqual(v2_package["MediaServerNotifyPlus"]["version"], "2.0.10")
         self.assertFalse(v2_package["MediaServerNotifyPlus"]["v3"])
-        self.assertEqual(v3_package["MediaServerNotifyPlus"]["version"], "3.0.9")
+        self.assertEqual(v3_package["MediaServerNotifyPlus"]["version"], "3.0.10")
         self.assertEqual(v3_package["MediaServerNotifyPlus"]["system_version"], ">=3.0.0")
         for package in (v2_package, v3_package):
             metadata = package["MediaServerNotifyPlus"]
@@ -74,7 +74,9 @@ class AdaptationTests(unittest.TestCase):
             self.assertIn("通知类型固定为“媒体服务器”", source)
             self.assertIn("http://localhost:3000/api/v1/webhook?token=API_TOKEN&amp;source=媒体服务器名:3001", source)
             self.assertNotIn("localhost:3001", source)
-            self.assertGreaterEqual(source.count('<VAlert'), 3)
+            self.assertIn('<div class="info-panel" role="note">', source)
+            self.assertIn('class="info-panel webhook-guide"', source)
+            self.assertIn('需在所选媒体服务器中设置 Webhooks，并勾选对应的通知项。', source)
             self.assertNotIn('msnp-note-card', source)
             self.assertIn('v-if="row.key === \'server\'"', source)
             self.assertIn('v-model="draft.mediaservers"', source)

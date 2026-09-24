@@ -88,11 +88,19 @@ const _hoisted_21 = { class: "field-order-buttons" };
 const _hoisted_22 = { class: "dialog-title-icon" };
 const _hoisted_23 = { class: "setting-row setting-row--featured" };
 const _hoisted_24 = { class: "setting-block" };
-const _hoisted_25 = { class: "setting-row" };
-const _hoisted_26 = { class: "settings-grid" };
-const _hoisted_27 = { class: "setting-row" };
-const _hoisted_28 = { class: "setting-block test-block" };
-const _hoisted_29 = { class: "settings-grid settings-grid--test" };
+const _hoisted_25 = {
+  class: "info-panel webhook-guide",
+  role: "note"
+};
+const _hoisted_26 = { class: "setting-row" };
+const _hoisted_27 = { class: "settings-grid" };
+const _hoisted_28 = { class: "setting-row" };
+const _hoisted_29 = { class: "setting-block test-block" };
+const _hoisted_30 = { class: "settings-grid settings-grid--test" };
+const _hoisted_31 = {
+  class: "info-panel",
+  role: "note"
+};
 
 const {computed,onMounted,ref,watch} = await importShared('vue');
 
@@ -532,33 +540,32 @@ return (_ctx, _cache) => {
                     variant: "outlined",
                     "hide-details": ""
                   }, null, 8, ["modelValue", "items"]),
-                  _cache[34] || (_cache[34] = _createElementVNode("small", null, "选择需要接收通知的 Emby、Jellyfin 或 Plex 实例。", -1))
+                  _cache[34] || (_cache[34] = _createElementVNode("small", null, "选择需要接收通知的 Emby、Jellyfin 或 Plex 实例。", -1)),
+                  _cache[35] || (_cache[35] = _createElementVNode("small", null, "需在所选媒体服务器中设置 Webhooks，并勾选对应的通知项。", -1))
                 ]),
-                _createVNode(_component_VAlert, {
-                  class: "webhook-guide",
-                  type: "info",
-                  variant: "tonal"
-                }, {
-                  default: _withCtx(() => [...(_cache[35] || (_cache[35] = [
-                    _createElementVNode("div", null, [
-                      _createElementVNode("strong", null, "媒体服务器 Webhook 配置"),
-                      _createElementVNode("span", null, "回调地址为："),
-                      _createElementVNode("code", null, "http://localhost:3000/api/v1/webhook?token=API_TOKEN&source=媒体服务器名:3001"),
-                      _createElementVNode("span", null, [
-                        _createTextVNode("其中 "),
-                        _createElementVNode("code", null, "API_TOKEN"),
-                        _createTextVNode(" 替换为 MoviePilot 设置中的 API Token，"),
-                        _createElementVNode("code", null, "source"),
-                        _createTextVNode(" 按“媒体服务器名:3001”填写。如果媒体服务器与 MoviePilot 不在同一台主机，请将 "),
-                        _createElementVNode("code", null, "localhost"),
-                        _createTextVNode(" 换成 MoviePilot 的实际 IP 或域名。")
-                      ])
-                    ], -1)
-                  ]))]),
-                  _: 1
-                }),
                 _createElementVNode("div", _hoisted_25, [
-                  _cache[36] || (_cache[36] = _createElementVNode("div", null, [
+                  _createVNode(_component_VIcon, {
+                    class: "info-panel__icon",
+                    icon: "mdi-information-outline",
+                    size: "20"
+                  }),
+                  _cache[36] || (_cache[36] = _createElementVNode("div", { class: "info-panel__content" }, [
+                    _createElementVNode("strong", null, "媒体服务器 Webhook 配置"),
+                    _createElementVNode("span", null, "回调地址为："),
+                    _createElementVNode("code", null, "http://localhost:3000/api/v1/webhook?token=API_TOKEN&source=媒体服务器名:3001"),
+                    _createElementVNode("span", null, [
+                      _createTextVNode("其中 "),
+                      _createElementVNode("code", null, "API_TOKEN"),
+                      _createTextVNode(" 替换为 MoviePilot 设置中的 API Token，"),
+                      _createElementVNode("code", null, "source"),
+                      _createTextVNode(" 按“媒体服务器名:3001”填写。如果媒体服务器与 MoviePilot 不在同一台主机，请将 "),
+                      _createElementVNode("code", null, "localhost"),
+                      _createTextVNode(" 换成 MoviePilot 的实际 IP 或域名。")
+                    ])
+                  ], -1))
+                ]),
+                _createElementVNode("div", _hoisted_26, [
+                  _cache[37] || (_cache[37] = _createElementVNode("div", null, [
                     _createElementVNode("strong", null, "聚合剧集入库"),
                     _createElementVNode("span", null, "同一剧集在窗口内只发送一条通知")
                   ], -1)),
@@ -582,7 +589,7 @@ return (_ctx, _cache) => {
                       "hide-details": ""
                     }, null, 8, ["modelValue"]))
                   : _createCommentVNode("", true),
-                _createElementVNode("div", _hoisted_26, [
+                _createElementVNode("div", _hoisted_27, [
                   _createVNode(_component_VTextField, {
                     modelValue: draft.value.dedupe_library,
                     "onUpdate:modelValue": _cache[14] || (_cache[14] = $event => ((draft.value.dedupe_library) = $event)),
@@ -604,8 +611,8 @@ return (_ctx, _cache) => {
                     "hide-details": ""
                   }, null, 8, ["modelValue"])
                 ]),
-                _createElementVNode("div", _hoisted_27, [
-                  _cache[37] || (_cache[37] = _createElementVNode("div", null, [
+                _createElementVNode("div", _hoisted_28, [
+                  _cache[38] || (_cache[38] = _createElementVNode("div", null, [
                     _createElementVNode("strong", null, "停止时发送待聚合消息"),
                     _createElementVNode("span", null, "插件重载或停止时不丢弃队列")
                   ], -1)),
@@ -616,9 +623,9 @@ return (_ctx, _cache) => {
                     "hide-details": ""
                   }, null, 8, ["modelValue"])
                 ]),
-                _createElementVNode("div", _hoisted_28, [
-                  _cache[38] || (_cache[38] = _createElementVNode("label", null, "测试通知", -1)),
-                  _createElementVNode("div", _hoisted_29, [
+                _createElementVNode("div", _hoisted_29, [
+                  _cache[39] || (_cache[39] = _createElementVNode("label", null, "测试通知", -1)),
+                  _createElementVNode("div", _hoisted_30, [
                     _createVNode(_component_VSelect, {
                       modelValue: draft.value.preview_type,
                       "onUpdate:modelValue": _cache[17] || (_cache[17] = $event => ((draft.value.preview_type) = $event)),
@@ -636,27 +643,26 @@ return (_ctx, _cache) => {
                     }, null, 8, ["modelValue"])
                   ])
                 ]),
-                _createVNode(_component_VAlert, {
-                  type: "info",
-                  variant: "tonal"
-                }, {
-                  default: _withCtx(() => [...(_cache[39] || (_cache[39] = [
-                    _createTextVNode(" 消息渠道遵循 MoviePilot 全局设置，通知类型固定为“媒体服务器”。 ", -1)
-                  ]))]),
-                  _: 1
-                })
+                _createElementVNode("div", _hoisted_31, [
+                  _createVNode(_component_VIcon, {
+                    class: "info-panel__icon",
+                    icon: "mdi-information-outline",
+                    size: "20"
+                  }),
+                  _cache[40] || (_cache[40] = _createElementVNode("div", { class: "info-panel__content" }, "消息渠道遵循 MoviePilot 全局设置，通知类型固定为“媒体服务器”。", -1))
+                ])
               ]),
               _: 1
             }),
             _createVNode(_component_VCardActions, { class: "dialog-actions" }, {
               default: _withCtx(() => [
-                _cache[41] || (_cache[41] = _createElementVNode("span", null, "设置随主页面一起保存", -1)),
+                _cache[42] || (_cache[42] = _createElementVNode("span", null, "设置随主页面一起保存", -1)),
                 _createVNode(_component_VBtn, {
                   color: "primary",
                   variant: "flat",
                   onClick: _cache[19] || (_cache[19] = $event => (settingsOpen.value = false))
                 }, {
-                  default: _withCtx(() => [...(_cache[40] || (_cache[40] = [
+                  default: _withCtx(() => [...(_cache[41] || (_cache[41] = [
                     _createTextVNode("完成", -1)
                   ]))]),
                   _: 1
@@ -675,6 +681,6 @@ return (_ctx, _cache) => {
 }
 
 };
-const Config = /*#__PURE__*/_export_sfc(_sfc_main, [['__scopeId',"data-v-9d4614be"]]);
+const Config = /*#__PURE__*/_export_sfc(_sfc_main, [['__scopeId',"data-v-7e2ecbee"]]);
 
 export { Config as default };
