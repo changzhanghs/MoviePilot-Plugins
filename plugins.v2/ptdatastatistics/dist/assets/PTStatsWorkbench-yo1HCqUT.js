@@ -16289,7 +16289,8 @@ return (_ctx, _cache) => {
     ]),
     _createVNode(_component_VWindow, {
       modelValue: activeTab.value,
-      "onUpdate:modelValue": _cache[27] || (_cache[27] = $event => ((activeTab).value = $event))
+      "onUpdate:modelValue": _cache[27] || (_cache[27] = $event => ((activeTab).value = $event)),
+      touch: false
     }, {
       default: _withCtx(() => [
         _createVNode(_component_VWindowItem, { value: "overview" }, {
@@ -17781,6 +17782,6 @@ return (_ctx, _cache) => {
 }
 
 };
-const PTStatsWorkbench = /*#__PURE__*/_export_sfc(_sfc_main, [['__scopeId',"data-v-47d36e5f"]]);
+const PTStatsWorkbench = /*#__PURE__*/_export_sfc(_sfc_main, [['__scopeId',"data-v-2fc1ca35"]]);
 
 export { PTStatsWorkbench as P };

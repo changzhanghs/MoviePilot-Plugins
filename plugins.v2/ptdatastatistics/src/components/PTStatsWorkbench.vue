@@ -1077,7 +1077,7 @@ onBeforeUnmount(() => historyChart?.destroy())
       </div>
     </div>
 
-    <VWindow v-model="activeTab">
+    <VWindow v-model="activeTab" :touch="false">
       <VWindowItem value="overview">
         <section class="section-block"><div class="metric-grid">
           <MetricCard label="总上传" :value="formatBytes(summary.total_upload)" icon="mdi-arrow-up-bold" color="success" />
