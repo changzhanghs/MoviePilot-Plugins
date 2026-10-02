@@ -444,7 +444,7 @@ return (_ctx, _cache) => {
             _createElementVNode("div", _hoisted_23, [
               _cache[24] || (_cache[24] = _createElementVNode("div", null, [
                 _createElementVNode("strong", null, "可通知内容"),
-                _createElementVNode("span", null, "拖动排序、勾选字段或修改展示名称，左侧预览实时更新。")
+                _createElementVNode("span", null, "点击上下箭头调整顺序，也可拖动排序；勾选字段或修改展示名称，预览实时更新。")
               ], -1)),
               _createVNode(_component_VBtn, {
                 size: "small",
@@ -779,6 +779,6 @@ return (_ctx, _cache) => {
 }
 
 };
-const Config = /*#__PURE__*/_export_sfc(_sfc_main, [['__scopeId',"data-v-c77bd77c"]]);
+const Config = /*#__PURE__*/_export_sfc(_sfc_main, [['__scopeId',"data-v-ac93b1df"]]);
 
 export { Config as default };

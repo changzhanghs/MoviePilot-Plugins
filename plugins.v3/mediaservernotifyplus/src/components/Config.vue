@@ -169,7 +169,7 @@ function enabledFieldCount(action) {
 
           <div class="fields-pane">
             <div class="field-list-heading">
-              <div><strong>可通知内容</strong><span>拖动排序、勾选字段或修改展示名称，左侧预览实时更新。</span></div>
+              <div><strong>可通知内容</strong><span>点击上下箭头调整顺序，也可拖动排序；勾选字段或修改展示名称，预览实时更新。</span></div>
               <VBtn size="small" variant="text" prepend-icon="mdi-restore" @click="resetFields">恢复默认</VBtn>
             </div>
 
@@ -418,12 +418,13 @@ h1 { margin: 3px 0 4px; font-size: clamp(28px, 4vw, 38px); line-height: 1.15; le
   .field-count { display: block; margin-top: 5px; }
   .notification-card__media { font-size: 21px; }
   .field-list__header { display: none; }
-  .field-row { grid-template-columns: 30px minmax(0, 1fr) 36px; grid-template-areas: 'drag key check' 'drag value check'; gap: 2px 6px; padding: 8px; }
-  .drag-handle { grid-area: drag; }
+  .field-row { grid-template-columns: 44px minmax(0, 1fr) 36px; grid-template-areas: 'order key check' 'order value check'; gap: 2px 6px; padding: 8px; }
+  .drag-handle { display: none; }
   .field-key { grid-area: key; }
   .field-value { grid-area: value; }
   .field-row > :last-child { grid-area: check; }
-  .field-order-buttons { display: none; }
+  .field-order-buttons { grid-area: order; display: flex; flex-direction: column; align-items: center; }
+  .field-order-buttons :deep(.v-btn) { width: 44px; height: 44px; }
   .page-actions { align-items: flex-end; }
   .save-hint { max-width: 150px; }
   .settings-grid { grid-template-columns: 1fr; }
