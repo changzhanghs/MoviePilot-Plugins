@@ -56,8 +56,10 @@ const retirementSortOptions = [
   { title: '站点名称', value: 'site_name' },
 ]
 let distributionRequestSequence = 0
+const ptdUuidVisible = ref(false)
+const ptdPasswordVisible = ref(false)
 const settingsDraft = ref({
-  enabled: false, show_sidebar: true, retention_days: 365,
+  enabled: false, retention_days: 365,
   notification_enabled: false, notification_cron: '0 9 * * *', notification_modes: ['today'],
   ptd_cookiecloud_enabled: false, ptd_cookiecloud_uuid: '',
   ptd_cookiecloud_password: '', ptd_cookiecloud_headers: '',
@@ -483,6 +485,8 @@ async function loadAll() {
       ...(parsed.settings || {}),
       ...hostSettings,
     }))
+    settingsDraft.value.ptd_cookiecloud_password = ''
+    ptdPasswordVisible.value = false
     ruleAnchorSites.value = parsed.rule_sites || []
     setDefaultRanges()
     await loadDistribution()
@@ -509,6 +513,10 @@ async function loadHistory() {
   }
 }
 async function saveSettings() {
+  if (settingsDraft.value.ptd_cookiecloud_enabled && !settingsDraft.value.ptd_cookiecloud_password) {
+    notify('请点击随机按钮生成 CookieCloud 密码后再保存', 'warning')
+    return
+  }
   saving.value = true
   try {
     const payload = JSON.parse(JSON.stringify(settingsDraft.value))
@@ -540,9 +548,11 @@ function randomPtdValue(length) {
 }
 function randomizePtdUuid() {
   settingsDraft.value.ptd_cookiecloud_uuid = randomPtdValue(20)
+  ptdUuidVisible.value = true
 }
 function randomizePtdPassword() {
   settingsDraft.value.ptd_cookiecloud_password = randomPtdValue(24)
+  ptdPasswordVisible.value = true
 }
 function uploadedRuleList(payload) {
   if (Array.isArray(payload)) return payload
@@ -1397,9 +1407,9 @@ onBeforeUnmount(() => historyChart?.destroy())
 
       <VWindowItem value="config">
         <section class="section-block settings-layout">
-          <div class="settings-card"><div class="section-heading"><div><span class="section-kicker">GENERAL</span><h2>基础设置</h2></div></div><VSwitch v-model="settingsDraft.enabled" color="primary" label="启用插件" hint="启用后读取 MP 已保存的站点数据，并在刷新时记录小时快照" persistent-hint /><VSwitch v-model="settingsDraft.show_sidebar" color="primary" label="在发现栏显示入口" /><VTextField v-model.number="settingsDraft.retention_days" type="number" min="0" max="36500" label="小时快照保留天数" hint="0 表示永久保留；日级历史由 MP 管理，不受此设置影响" persistent-hint variant="outlined" class="mt-3" /></div>
+          <div class="settings-card"><div class="section-heading"><div><span class="section-kicker">GENERAL</span><h2>基础设置</h2></div></div><VSwitch v-model="settingsDraft.enabled" color="primary" label="启用插件" hint="启用后读取 MP 已保存的站点数据，并在刷新时记录小时快照" persistent-hint /><VTextField v-model.number="settingsDraft.retention_days" type="number" min="0" max="36500" label="小时快照保留天数" hint="0 表示永久保留；日级历史由 MP 管理，不受此设置影响" persistent-hint variant="outlined" class="mt-3" /></div>
           <div class="settings-card"><div class="section-heading"><div><span class="section-kicker">NOTIFICATION</span><h2>每日通知</h2></div></div><VSwitch v-model="settingsDraft.notification_enabled" color="primary" label="启用汇总通知" /><VTextField v-model="settingsDraft.notification_cron" label="通知 Cron（五段式）" placeholder="0 9 * * *" hint="分 时 日 月 星期；按服务器时区执行，每个自然日最多通知一次" persistent-hint variant="outlined" /><VCheckbox v-model="settingsDraft.notification_modes" value="today" label="今日数据：仅上传和下载增量" hide-details /><VCheckbox v-model="settingsDraft.notification_modes" value="all" label="所有数据：仅累计上传和累计下载" hide-details /><div class="setting-hint mt-2">Cron 错过后不补发；无数据站点不会通知。</div></div>
-          <div class="settings-card settings-card--wide"><div class="section-heading"><div><span class="section-kicker">PTD RECEIVER</span><h2>PTD 数据补充</h2></div><span class="section-note">仅导入时魔和做种积分</span></div><VSwitch v-model="settingsDraft.ptd_cookiecloud_enabled" color="primary" label="启用 PTD 兼容接收端" hint="PTD 直接把最新备份发送给本插件；不需要启用 MoviePilot 内置 CookieCloud" persistent-hint /><div v-if="settingsDraft.ptd_cookiecloud_enabled" class="ptd-settings-grid"><VTextField :model-value="ptdReceiverUrl" class="ptd-receiver-url" label="PTD CookieCloud 地址" hint="同机使用 localhost；其它局域网设备请替换为 MoviePilot 主机 IP" persistent-hint readonly variant="outlined" /><VTextField v-model="settingsDraft.ptd_cookiecloud_uuid" label="PTD 专用 UUID" hint="插件与 PTD 必须填写完全相同的 UUID" persistent-hint variant="outlined"><template #append-inner><VBtn icon="mdi-shuffle-variant" size="small" variant="text" title="随机生成 UUID" @click="randomizePtdUuid" /></template></VTextField><VTextField v-model="settingsDraft.ptd_cookiecloud_password" label="CookieCloud 密码" hint="插件与 PTD 必须填写完全相同的密码" persistent-hint type="text" autocomplete="off" variant="outlined"><template #append-inner><VBtn icon="mdi-shuffle-variant" size="small" variant="text" title="随机生成密码" @click="randomizePtdPassword" /></template></VTextField><VTextarea v-model="settingsDraft.ptd_cookiecloud_headers" label="接收鉴权 Headers（可选）" placeholder="X-PTD-Token: 自定义密钥" hint="如填写，PTD 的 Headers 也要逐行填写相同内容；日志不会记录值" persistent-hint variant="outlined" rows="3" /><VTextarea v-model="settingsDraft.ptd_site_mappings" class="ptd-site-mappings" label="站点映射（可选）" placeholder="audiences=audiences.me\nmteam=kp.m-team.cc" hint="自动匹配失败时，每行填写 PTD站点ID=MP域名或站点名" persistent-hint variant="outlined" rows="3" /></div><div class="setting-hint mt-3">先保存本页，再在 PTD 中新增 CookieCloud 备份服务器：PTD 与 MoviePilot 同机时使用上方 localhost 地址；其它局域网设备将 localhost 替换为 MoviePilot 主机 IP。UUID、密码和可选 Headers 与这里保持一致；备份项目勾选“用户信息”。收到新备份后会立即解析并覆盖上一份数据，过程可在 MoviePilot 插件日志中查看。</div></div>
+          <div class="settings-card settings-card--wide"><div class="section-heading"><div><span class="section-kicker">PTD RECEIVER</span><h2>PTD 数据补充</h2></div><span class="section-note">仅导入时魔和做种积分</span></div><VSwitch v-model="settingsDraft.ptd_cookiecloud_enabled" color="primary" label="启用 PTD 兼容接收端" hint="PTD 直接把最新备份发送给本插件；不需要启用 MoviePilot 内置 CookieCloud" persistent-hint /><div v-if="settingsDraft.ptd_cookiecloud_enabled" class="ptd-settings-grid"><VTextField :model-value="ptdReceiverUrl" class="ptd-receiver-url" label="PTD CookieCloud 地址" hint="同机使用 localhost；其它局域网设备请替换为 MoviePilot 主机 IP" persistent-hint readonly variant="outlined" /><VTextField :model-value="ptdUuidVisible ? settingsDraft.ptd_cookiecloud_uuid : ''" :readonly="!ptdUuidVisible" placeholder="点击右侧随机按钮生成并显示" autocomplete="off" @update:model-value="settingsDraft.ptd_cookiecloud_uuid = $event" label="PTD 专用 UUID" hint="插件与 PTD 必须填写完全相同的 UUID" persistent-hint variant="outlined"><template #append-inner><VBtn icon="mdi-shuffle-variant" size="small" variant="text" title="随机生成 UUID" @click="randomizePtdUuid" /></template></VTextField><VTextField :model-value="ptdPasswordVisible ? settingsDraft.ptd_cookiecloud_password : ''" :readonly="!ptdPasswordVisible" placeholder="点击右侧随机按钮生成并显示" @update:model-value="settingsDraft.ptd_cookiecloud_password = $event" label="CookieCloud 密码" hint="插件与 PTD 必须填写完全相同的密码" persistent-hint type="text" autocomplete="off" variant="outlined"><template #append-inner><VBtn icon="mdi-shuffle-variant" size="small" variant="text" title="随机生成密码" @click="randomizePtdPassword" /></template></VTextField><VTextarea v-model="settingsDraft.ptd_cookiecloud_headers" label="接收鉴权 Headers（可选）" placeholder="X-PTD-Token: 自定义密钥" hint="如填写，PTD 的 Headers 也要逐行填写相同内容；日志不会记录值" persistent-hint variant="outlined" rows="3" /></div><div class="setting-hint mt-3">先保存本页，再在 PTD 中新增 CookieCloud 备份服务器：PTD 与 MoviePilot 同机时使用上方 localhost 地址；其它局域网设备将 localhost 替换为 MoviePilot 主机 IP。UUID、密码和可选 Headers 与这里保持一致；备份项目勾选“用户信息”。收到新备份后会立即解析并覆盖上一份数据，过程可在 MoviePilot 插件日志中查看。</div></div>
           <div class="settings-card settings-card--wide wealthy-site-settings">
             <div class="section-heading"><div><span class="section-kicker">WEALTHY RETIREMENT</span><h2>富贵养老</h2></div><VChip class="wealthy-summary-chip" prepend-icon="mdi-crown" variant="flat">已选择 {{ settingsDraft.wealthy_retirement_sites?.length || 0 }}</VChip></div>
             <div class="setting-hint">选择当前拥有 VIP、捐赠者或其它特殊会员身份的站点；保存后该站养老进度显示为“富贵养老”。选择结果按 MoviePilot 站点 ID 保存。</div>
@@ -1438,7 +1448,7 @@ onBeforeUnmount(() => historyChart?.destroy())
               </VCard>
             </VDialog>
           </div>
-          <div class="settings-card settings-card--wide"><div class="section-heading"><div><span class="section-kicker">LEVEL RULES</span><h2>等级规则</h2></div><div class="rules-upload__actions"><VBtn variant="tonal" color="primary" prepend-icon="mdi-upload-outline" @click="rulesFileInput?.click()">上传规则文件</VBtn><VBtn variant="text" prepend-icon="mdi-file-download-outline" @click="downloadRuleTemplate">下载模板</VBtn><VBtn v-if="customRuleSites.length" variant="text" color="error" prepend-icon="mdi-delete-outline" @click="clearUploadedRules">清空</VBtn></div></div><input ref="rulesFileInput" class="rules-file-input" type="file" accept="application/json,.json" @change="uploadRuleFile"><div v-if="customRuleSites.length" class="rules-upload"><div><strong>已载入 {{ customRuleSites.length }} 个站点</strong><p>{{ customRuleSites.join('、') }}</p><small v-if="rulesUploadName">文件：{{ rulesUploadName }}</small></div></div><div class="setting-hint mt-3">支持 site、aliases、domains、VIP 等级、任选条件、做种体积、发布数和平均做种时间；流量门槛使用字节，等级按 levels 中的顺序展示。模板中的 _comment 仅用于说明，导入时忽略；文件只写入插件设置，不会上传到外部服务。</div></div>
+          <div class="settings-card settings-card--wide"><div class="section-heading"><div><span class="section-kicker">LEVEL RULES</span><h2>等级规则</h2></div><div class="rules-upload__actions"><VBtn variant="tonal" color="primary" prepend-icon="mdi-upload-outline" @click="rulesFileInput?.click()">上传规则文件</VBtn><VBtn variant="text" prepend-icon="mdi-file-download-outline" @click="downloadRuleTemplate">下载模板</VBtn><VBtn v-if="customRuleSites.length" variant="text" color="error" prepend-icon="mdi-delete-outline" @click="clearUploadedRules">清空</VBtn></div></div><input ref="rulesFileInput" class="rules-file-input" type="file" accept="application/json,.json" @change="uploadRuleFile"><div v-if="customRuleSites.length" class="rules-upload"><div><strong>已载入 {{ customRuleSites.length }} 个站点</strong><p>{{ customRuleSites.join('、') }}</p><small v-if="rulesUploadName">文件：{{ rulesUploadName }}</small></div></div><div class="setting-hint mt-3">自定义规则优先级最高，上传并保存后，匹配站点以自定义规则为主；未匹配的站点继续使用内置规则。</div></div>
           <div class="settings-card settings-card--wide settings-actions"><div><strong>数据来源</strong><p>上传、下载、分享率等仍仅来自 MoviePilot；PTD 只补充最新时魔和做种积分。</p></div><VBtn color="primary" size="large" variant="flat" prepend-icon="mdi-content-save-outline" :loading="saving" @click="saveSettings">保存设置</VBtn></div>
         </section>
       </VWindowItem>
@@ -1495,11 +1505,11 @@ onBeforeUnmount(() => historyChart?.destroy())
 .site-stat-grid span{color:rgba(var(--v-theme-on-surface),.52);font-size:.68rem}
 .site-stat-grid strong{overflow-wrap:anywhere;font-size:.82rem}
 .retirement-explorer{display:grid;grid-template-columns:minmax(240px,300px) minmax(0,1fr);align-items:start;min-height:0;overflow:visible;border:1px solid var(--pt-border);border-radius:18px;background:rgba(var(--v-theme-surface),.44)}
-.retirement-site-list{position:sticky;top:16px;display:flex;min-width:0;min-height:0;max-height:calc(100vh - 32px);flex-direction:column;overflow:hidden;padding:14px;border-right:1px solid var(--pt-border);background:rgba(var(--v-theme-surface-variant),.1)}
+.retirement-site-list{display:flex;min-width:0;height:auto;min-height:0;flex-direction:column;padding:14px;border-right:1px solid var(--pt-border);background:rgba(var(--v-theme-surface-variant),.1)}
 .retirement-site-list__heading{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:2px 4px 12px}
 .retirement-site-list__heading span{color:rgba(var(--v-theme-on-surface),.52);font-size:.7rem}
 .retirement-site-sort{width:100%;flex:0 0 auto;margin-bottom:10px}
-.retirement-site-list__items{display:grid;min-height:0;flex:1 1 auto;align-content:start;gap:5px;overflow-y:auto;overscroll-behavior:contain;scrollbar-gutter:stable}
+.retirement-site-list__items{display:grid;align-content:start;gap:5px}
 .retirement-site-option{appearance:none;display:grid;grid-template-columns:auto minmax(0,1fr) auto;align-items:center;gap:10px;width:100%;padding:11px 10px;border:1px solid transparent;border-radius:12px;background:transparent;color:inherit;font:inherit;text-align:left;cursor:pointer;transition:background-color .16s ease,border-color .16s ease}
 .retirement-site-option:hover,.retirement-site-option:focus-visible{border-color:rgba(var(--v-theme-primary),.34);background:rgba(var(--v-theme-primary),.08);outline:none}
 .retirement-site-option--selected{border-color:rgba(var(--v-theme-primary),.46);background:rgba(var(--v-theme-primary),.12)}
@@ -1631,8 +1641,8 @@ onBeforeUnmount(() => historyChart?.destroy())
 .pt-workbench--compact .requirement-table__head,.pt-workbench--compact .requirement-row{min-width:840px}
 @media(max-width:1280px){.metric-grid{grid-template-columns:repeat(3,minmax(0,1fr))}.site-stat-grid{grid-template-columns:repeat(5,minmax(0,1fr))}.retirement-target-grid{grid-template-columns:1fr}}
 @media(max-width:960px){.workbench-nav{align-items:stretch;flex-direction:column;gap:5px}.workbench-nav__actions{align-self:flex-end;padding-bottom:10px}.history-workspace{grid-template-columns:1fr;height:auto;overflow:visible}.history-site-sidebar{overflow:visible;border-right:0;border-bottom:1px solid var(--pt-border)}.history-site-sidebar__items{display:flex;max-height:none;overflow-x:auto;overflow-y:hidden;scrollbar-gutter:auto}.history-site-option{width:210px;flex:0 0 210px}.history-workspace__main{overflow:visible;scrollbar-gutter:auto}.history-record-shell{overflow-x:auto}.history-record-table{min-width:900px;table-layout:auto}.distribution-grid{grid-template-columns:1fr}.retirement-explorer{grid-template-columns:1fr;height:auto;min-height:0;overflow:visible}.retirement-site-list{overflow:visible;border-right:0;border-bottom:1px solid var(--pt-border)}.retirement-site-list__items{display:flex;max-height:none;overflow-x:auto;overflow-y:hidden;scrollbar-gutter:auto}.retirement-site-option{width:245px;flex:0 0 245px}.retirement-detail{overflow:visible;scrollbar-gutter:auto}.requirement-overview{grid-template-columns:1fr}.requirement-overview__score{border-right:0;border-bottom:1px solid var(--pt-border);padding-bottom:14px}.requirement-table,.retirement-levels{overflow-x:auto}}
-.ptd-settings-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin-top:14px}.ptd-receiver-url,.ptd-site-mappings{grid-column:1/-1}
-@media(max-width:720px){.workbench-nav__actions{align-self:stretch}.section-block{padding:14px}.metric-grid,.settings-layout,.ptd-settings-grid{grid-template-columns:1fr}.ptd-receiver-url,.ptd-site-mappings{grid-column:auto}.settings-card--wide{grid-column:auto}.settings-actions{align-items:stretch;flex-direction:column}.section-heading,.distribution-heading{align-items:flex-start;flex-direction:column}.pie-layout{grid-template-columns:1fr}.pie{width:180px}.history-detail-summary{align-items:flex-start;flex-direction:column}.history-detail-metrics{width:100%;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}.history-period-card{min-width:142px}.history-line-chart{height:220px}.history-site-panel .history-detail-shell{overflow-x:auto}.history-site-panel .history-detail-table{min-width:720px}}
+.ptd-settings-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin-top:14px}.ptd-receiver-url{grid-column:1/-1}
+@media(max-width:720px){.workbench-nav__actions{align-self:stretch}.section-block{padding:14px}.metric-grid,.settings-layout,.ptd-settings-grid{grid-template-columns:1fr}.ptd-receiver-url{grid-column:auto}.settings-card--wide{grid-column:auto}.settings-actions{align-items:stretch;flex-direction:column}.section-heading,.distribution-heading{align-items:flex-start;flex-direction:column}.pie-layout{grid-template-columns:1fr}.pie{width:180px}.history-detail-summary{align-items:flex-start;flex-direction:column}.history-detail-metrics{width:100%;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}.history-period-card{min-width:142px}.history-line-chart{height:220px}.history-site-panel .history-detail-shell{overflow-x:auto}.history-site-panel .history-detail-table{min-width:720px}}
 @media(max-width:720px){.site-sort-select{width:100%;flex:0 0 auto}.site-data-card{padding:12px}.site-data-card__header,.site-account-meta{align-items:flex-start;flex-direction:column}.site-stat-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.retirement-detail{padding:14px}.retirement-detail__header{align-items:flex-start;flex-direction:column}.retirement-detail__metrics{width:100%;justify-content:space-between;gap:10px}.retirement-route-rail{margin-right:-14px;margin-left:-14px;padding-right:14px;padding-left:14px}.requirement-panel__heading{grid-template-columns:1fr;align-items:flex-start}.requirement-panel__heading>div:first-child{flex-wrap:wrap}.spring-upgrade-tasks{width:100%;justify-self:stretch}.spring-upgrade-task{min-width:0}.requirement-table__head,.requirement-row{min-width:840px}.retirement-levels__heading{align-items:flex-start;flex-direction:column}}
 @media(max-width:720px){.retirement-detail__right{width:100%;align-items:flex-start}}
 @media(max-width:720px){.wealthy-selection-summary{align-items:stretch;flex-direction:column}.wealthy-selection-summary>.v-btn{width:100%}.wealthy-selection-summary__copy strong{max-width:calc(100vw - 150px)}.wealthy-picker-dialog-card{max-height:88dvh;border-radius:20px 20px 0 0!important}.wealthy-picker-toolbar{grid-template-columns:1fr}.wealthy-picker-toolbar>.v-btn{justify-self:end}.wealthy-site-picker{grid-template-columns:1fr}.wealthy-picker-dialog__header,.wealthy-picker-dialog__body{padding-right:14px!important;padding-left:14px!important}.wealthy-picker-dialog__actions{align-items:stretch;flex-direction:column;padding-right:14px!important;padding-left:14px!important}.wealthy-picker-dialog__actions>.v-btn{width:100%}}
