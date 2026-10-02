@@ -314,7 +314,6 @@ class SettingsData(BaseModel):
     """插件可编辑设置。"""
 
     enabled: bool = False
-    show_sidebar: bool = True
     retention_days: int = 365
     notification_enabled: bool = False
     notification_cron: str = "0 9 * * *"

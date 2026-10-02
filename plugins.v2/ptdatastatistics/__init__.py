@@ -64,7 +64,7 @@ class PTDataStatistics(_PluginBase):
     plugin_name = "PT数据统计"
     plugin_desc = "统计 PT 站点累计与每日上传下载，提供历史、养老进度和通知。"
     plugin_icon = "https://raw.githubusercontent.com/changzhanghs/MoviePilot-Plugins/main/icons/ptdatastatistics.png"
-    plugin_version = "2.1.0"
+    plugin_version = "2.1.1"
     plugin_author = "cz"
     author_url = "https://github.com/changzhanghs"
     plugin_config_prefix = "ptdatastatistics_"
@@ -72,7 +72,6 @@ class PTDataStatistics(_PluginBase):
     auth_level = 1
 
     _enabled = False
-    _show_sidebar = True
     _retention_days = 365
     _notification_enabled = False
     _notification_cron = "0 9 * * *"
@@ -120,7 +119,6 @@ class PTDataStatistics(_PluginBase):
         """把已校验设置投影为插件运行属性。"""
 
         self._enabled = value.enabled
-        self._show_sidebar = value.show_sidebar
         self._retention_days = value.retention_days
         self._notification_enabled = value.notification_enabled
         self._notification_cron = value.notification_cron
@@ -147,7 +145,6 @@ class PTDataStatistics(_PluginBase):
 
         return SettingsData(
             enabled=self._enabled,
-            show_sidebar=self._show_sidebar,
             retention_days=self._retention_days,
             notification_enabled=self._notification_enabled,
             notification_cron=self._notification_cron,
@@ -186,7 +183,7 @@ class PTDataStatistics(_PluginBase):
     def get_sidebar_nav(self) -> list[dict[str, Any]]:
         """在 MoviePilot 侧栏发现分组注册 PT 数据统计入口。"""
 
-        if not self.get_state() or not self._show_sidebar:
+        if not self.get_state():
             return []
         return [
             {
