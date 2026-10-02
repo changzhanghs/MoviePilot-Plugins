@@ -1175,8 +1175,9 @@ class PackagingTests(unittest.TestCase):
         manifest = json.loads((ROOT / "package.v2.json").read_text(encoding="utf-8"))
         meta = manifest["PTDataStatistics"]
         source = (PLUGIN / "__init__.py").read_text(encoding="utf-8")
-        self.assertEqual(meta["version"], "2.1.1")
+        self.assertEqual(meta["version"], "2.1.2")
         self.assertEqual(meta["history"], {
+            "v2.1.2": "不值一提",
             "v2.1.1": "不值一提",
             "v2.1.0": "不值一提",
             "v2.0.17": "不值一提",
@@ -1198,7 +1199,7 @@ class PackagingTests(unittest.TestCase):
             "v2.0.1": "不值一提",
             "v2.0.0": "兼容v2及v3",
         })
-        self.assertIn('plugin_version = "2.1.1"', source)
+        self.assertIn('plugin_version = "2.1.2"', source)
         frontend_meta = json.loads((PLUGIN / "package.json").read_text(encoding="utf-8"))
         self.assertEqual(frontend_meta["version"], meta["version"])
         icon_url = "https://raw.githubusercontent.com/changzhanghs/MoviePilot-Plugins/main/icons/ptdatastatistics.png"
