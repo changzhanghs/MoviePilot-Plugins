@@ -15600,6 +15600,7 @@ async function loadAll() {
       ...(parsed.settings || {}),
       ...hostSettings,
     }));
+    ptdUuidVisible.value = Boolean(settingsDraft.value.ptd_cookiecloud_uuid);
     ptdPasswordVisible.value = Boolean(settingsDraft.value.ptd_cookiecloud_password);
     ruleAnchorSites.value = parsed.rule_sites || [];
     setDefaultRanges();
@@ -17779,6 +17780,6 @@ return (_ctx, _cache) => {
 }
 
 };
-const PTStatsWorkbench = /*#__PURE__*/_export_sfc(_sfc_main, [['__scopeId',"data-v-b6074845"]]);
+const PTStatsWorkbench = /*#__PURE__*/_export_sfc(_sfc_main, [['__scopeId',"data-v-07cd7e31"]]);
 
 export { PTStatsWorkbench as P };

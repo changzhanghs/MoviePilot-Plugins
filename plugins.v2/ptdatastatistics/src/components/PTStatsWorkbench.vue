@@ -485,6 +485,7 @@ async function loadAll() {
       ...(parsed.settings || {}),
       ...hostSettings,
     }))
+    ptdUuidVisible.value = Boolean(settingsDraft.value.ptd_cookiecloud_uuid)
     ptdPasswordVisible.value = Boolean(settingsDraft.value.ptd_cookiecloud_password)
     ruleAnchorSites.value = parsed.rule_sites || []
     setDefaultRanges()
