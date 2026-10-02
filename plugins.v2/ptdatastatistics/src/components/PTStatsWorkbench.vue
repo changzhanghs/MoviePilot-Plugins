@@ -485,8 +485,7 @@ async function loadAll() {
       ...(parsed.settings || {}),
       ...hostSettings,
     }))
-    settingsDraft.value.ptd_cookiecloud_password = ''
-    ptdPasswordVisible.value = false
+    ptdPasswordVisible.value = Boolean(settingsDraft.value.ptd_cookiecloud_password)
     ruleAnchorSites.value = parsed.rule_sites || []
     setDefaultRanges()
     await loadDistribution()
