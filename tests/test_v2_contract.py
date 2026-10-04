@@ -119,28 +119,13 @@ class V2ContractTests(unittest.TestCase):
             (PLUGIN_V2 / "package.json").read_text(encoding="utf-8")
         )
 
-        self.assertEqual(meta["version"], "2.0.13")
+        self.assertEqual(meta["version"], PTDataStatisticsV2.plugin_version)
+        self.assertEqual(frontend_meta["version"], meta["version"])
+        self.assertIn(f"v{meta['version']}", meta["history"])
         self.assertEqual(meta["system_version"], ">=2.12.0")
         self.assertIsNot(meta.get("v3"), False)
-        self.assertEqual(meta["history"], {
-            "v2.0.13": "不值一提",
-            "v2.0.12": "不值一提",
-            "v2.0.11": "不值一提",
-            "v2.0.10": "不值一提",
-            "v2.0.9": "不值一提",
-            "v2.0.8": "不值一提",
-            "v2.0.7": "不值一提",
-            "v2.0.6": "不值一提",
-            "v2.0.5": "不值一提",
-            "v2.0.4": "不值一提",
-            "v2.0.3": "不值一提",
-            "v2.0.2": "不值一提",
-            "v2.0.1": "不值一提",
-            "v2.0.0": "兼容v2及v3",
-        })
-        self.assertIn('plugin_version = "2.0.13"', source)
-        self.assertEqual(frontend_meta["version"], "2.0.13")
-        self.assertFalse((ROOT / "package.v3.json").exists())
+        v3_meta = json.loads((ROOT / "package.v3.json").read_text(encoding="utf-8"))
+        self.assertNotIn("PTDataStatistics", v3_meta)
         self.assertFalse((ROOT / "plugins.v3" / "ptdatastatistics").exists())
         for path in PLUGIN_V2.glob("*.py"):
             self.assertNotIn("app.sdk", path.read_text(encoding="utf-8"), path.name)

@@ -325,7 +325,9 @@ def _match_named_rule(
     return max(candidates, key=lambda item: item[0])[1] if candidates else None
 
 
-def _match_level_index(current_level: Any, levels: Iterable[Mapping[str, Any]]) -> int:
+def _match_level_index(
+    current_level: Any, levels: Iterable[Mapping[str, Any]], *, exact_only: bool = False
+) -> int:
     """匹配 MP 等级文本，优先最长等级名以避免 User 误配 Power User。"""
 
     identity = normalize_identity(current_level)
@@ -341,7 +343,7 @@ def _match_level_index(current_level: Any, levels: Iterable[Mapping[str, Any]]) 
         for level_identity in level_identities:
             if level_identity == identity:
                 return index
-            if level_identity in identity or identity in level_identity:
+            if not exact_only and (level_identity in identity or identity in level_identity):
                 candidates.append((len(level_identity), index))
     return max(candidates, default=(0, -1))[1]
 
@@ -681,20 +683,13 @@ def build_retirement_progress(
             continue
 
         current_index = _match_level_index(base["current_level"], raw_levels)
-        retirement_identity = normalize_identity(retirement_name)
-        retirement_index = next(
-            (
-                index
-                for index, level in enumerate(raw_levels)
-                if retirement_identity
-                and normalize_identity(level.get("name")) == retirement_identity
-            ),
-            -1,
-        )
+        retirement_index = _match_level_index(retirement_name, raw_levels, exact_only=True)
         if retirement_name and retirement_index < 0:
             sites.append({**base, "retirement_level": retirement_name})
             counts["rule_missing"] += 1
             continue
+        if retirement_index >= 0:
+            retirement_name = as_text(raw_levels[retirement_index].get("name"))
 
         route: list[dict[str, Any]] = []
         for index, raw_level in enumerate(raw_levels):

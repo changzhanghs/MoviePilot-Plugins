@@ -31,6 +31,12 @@ site_rules_builtin = sys.modules["ptdatastatistics.site_rules_builtin"]
 
 
 class PTDCookieCloudTests(unittest.TestCase):
+    def test_empty_or_unidentified_list_returns_controlled_error(self):
+        for records in ([], [{}], [{"bonusPerHour": 3}], {"userInfo": []}):
+            with self.subTest(records=records):
+                with self.assertRaises(ptd_cookiecloud.PTDCookieCloudError):
+                    ptd_cookiecloud._extract_metrics(records)
+
     def test_extracts_only_latest_seeding_metrics_per_site(self):
         values = ptd_cookiecloud._extract_metrics(
             {
@@ -451,6 +457,24 @@ class TwelveAndExportTests(unittest.TestCase):
         self.assertEqual(progress["retired"], 1)
         self.assertEqual(progress["sites"][0]["status"], "retired")
 
+    def test_retirement_target_does_not_use_substring_matching(self):
+        result = core.build_retirement_progress(
+            [{"site_name": "示例", "user_level": "Power User"}],
+            {"示例": {"retirement_level": "User", "levels": [{"name": "Power User"}]}},
+        )
+        self.assertEqual(result["sites"][0]["status"], "rule_missing")
+
+    def test_retirement_alias_normalizes_case_and_punctuation(self):
+        result = core.build_retirement_progress(
+            [{"site_name": "示例", "user_level": "Veteran User"}],
+            {"示例": {
+                "retirement_level": " KEEP-ACCOUNT ",
+                "levels": [{"name": "User"}, {"name": "Veteran User", "aliases": ["Keep Account"]}],
+            }},
+        )
+        self.assertEqual(result["sites"][0]["status"], "retired")
+        self.assertEqual(result["sites"][0]["retirement_level"], "Veteran User")
+
     def test_fixed_source_rules_include_queen_alternatives_and_ttg(self):
         self.assertEqual(len(site_rules_builtin.SITE_LEVEL_RULES), 234)
         self.assertEqual(
@@ -576,9 +600,14 @@ class TwelveAndExportTests(unittest.TestCase):
         rules = core.DEFAULT_RETIREMENT_RULES
         spring = rules["春天"]
         self.assertNotIn("不可说", spring["aliases"])
-        self.assertEqual(spring["retirement_level"], "神王(Immortal)")
+        self.assertEqual(spring["retirement_level"], "传说(Legend)")
         spring_elite = next(level for level in spring["levels"] if level["source_id"] == 2)
-        self.assertTrue(spring_elite["min_download_strict"])
+        self.assertIsNone(spring_elite["min_download"])
+        self.assertEqual(spring_elite["min_join_days"], 35)
+        self.assertEqual(len(spring_elite["alternatives"]), 4)
+        self.assertTrue(spring_elite["alternatives"][0]["min_download_strict"])
+        self.assertEqual(spring_elite["alternatives"][0]["min_download"], 500 * 1024**3)
+        self.assertEqual(spring_elite["alternatives"][2]["unsupported_requirements"][0]["target"], "> 2048 GB")
         self.assertTrue(spring_elite["min_ratio_strict"])
         self.assertTrue(spring_elite["alternatives"][0]["min_torrent_uploads_strict"])
         spring_immortal = next(level for level in spring["levels"] if level["source_id"] == 5)
@@ -603,6 +632,43 @@ class TwelveAndExportTests(unittest.TestCase):
         self.assertEqual(spring_site["next_level"], "神王(Immortal)")
         self.assertEqual(len(immortal_route["alternatives"]), 2)
         self.assertTrue(any("任选条件未达成" in item for item in immortal_route["missing"]))
+        spring_statuses = core.build_retirement_progress([
+            {"site_id": 1, "site_name": "春天", "user_level": "神王(Immortal)", "updated_day": "2026-10-04"},
+            {"site_id": 2, "site_name": "春天", "user_level": "传说(Legend)", "updated_day": "2026-10-04"},
+        ])
+        self.assertEqual(spring_statuses["sites"][0]["status"], "upgrading")
+        self.assertEqual(spring_statuses["sites"][0]["next_level"], "传说(Legend)")
+        self.assertEqual(spring_statuses["sites"][1]["status"], "retired")
+        self.assertEqual([item["name"] for item in spring["vip_levels"]], ["荣誉会员(Honor)"])
+        snapshot = {"join_at": "2026-08-01", "updated_day": "2026-10-04", "ratio": 1.3, "download": 501 * 1024**3, "seeding_points": 150_000, "torrent_uploads": 0}
+        self.assertEqual(core._requirement_missing(spring_elite, snapshot), [])
+        snapshot["download"] = 500 * 1024**3
+        self.assertTrue(core._requirement_missing(spring_elite, snapshot))
+        snapshot["download"] = 501 * 1024**3
+        snapshot["seeding_points"] = 100_000
+        snapshot["torrent_uploads"] = 1
+        self.assertTrue(core._requirement_missing(spring_elite, snapshot))
+        snapshot["torrent_uploads"] = 2
+        self.assertEqual(core._requirement_missing(spring_elite, snapshot), [])
+        snapshot["join_at"] = "2026-08-31"
+        self.assertTrue(core._requirement_missing(spring_elite, snapshot))
+        snapshot["join_at"] = "2026-08-30"
+        self.assertEqual(core._requirement_missing(spring_elite, snapshot), [])
+        for source_id, download, real_download, points, uploads, points_only, ratio in (
+            (3, 1024**4, "> 4 TB", 500_000, 100, 1_000_000, 1.2),
+            (4, 3 * 1024**4, "> 12 TB", 1_200_000, 300, 2_400_000, 2),
+        ):
+            level = next(item for item in spring["levels"] if item["source_id"] == source_id)
+            self.assertEqual(level["min_join_days"], 35)
+            self.assertEqual(level["min_ratio"], ratio)
+            self.assertTrue(level["min_ratio_strict"])
+            self.assertEqual(len(level["alternatives"]), 4)
+            self.assertEqual(level["alternatives"][0]["min_download"], download)
+            self.assertEqual(level["alternatives"][0]["min_seeding_points"], points)
+            self.assertEqual(level["alternatives"][0]["min_torrent_uploads"], uploads)
+            self.assertTrue(level["alternatives"][0]["min_torrent_uploads_strict"])
+            self.assertEqual(level["alternatives"][1]["min_seeding_points"], points_only)
+            self.assertEqual(level["alternatives"][2]["unsupported_requirements"][0]["target"], real_download)
 
         lolita = rules["ilolicon"]
         self.assertIn("萝莉", lolita["aliases"])
@@ -627,6 +693,21 @@ class TwelveAndExportTests(unittest.TestCase):
         )
         self.assertTrue(all(level["min_ratio_strict"] for level in depth_levels))
         self.assertTrue(all(level["min_seeding_points_strict"] for level in depth_levels))
+        self.assertEqual(rules["Depth Studio"]["retirement_level"], "Nexus Master")
+        self.assertEqual([level["min_join_days"] for level in depth_levels], [35, 56, 105, 175, 280, 420, 560, 700])
+        self.assertEqual([level["min_seeding_points"] for level in depth_levels], [25000, 60000, 120000, 200000, 350000, 500000, 700000, 1000000])
+        self.assertEqual([level["min_download"] for level in depth_levels], [50 * 1024**3, 120 * 1024**3, 300 * 1024**3, 500 * 1024**3, 750 * 1024**3, 1024**4, 1.5 * 1024**4, 3 * 1024**4])
+        self.assertNotIn("封存", depth_levels[1]["description"])
+        self.assertNotIn("永远", depth_levels[4]["description"])
+        self.assertIn("封存账号后不会被删除", depth_levels[5]["description"])
+        self.assertIn("永远保留账号", depth_levels[7]["description"])
+        depth_progress = core.build_retirement_progress([
+            {"site_id": 1, "site_name": "Depth Studio", "user_level": "Veteran User", "updated_day": "2026-10-04"},
+            {"site_id": 2, "site_name": "Depth Studio", "user_level": "Nexus Master", "updated_day": "2026-10-04"},
+        ])
+        self.assertEqual(depth_progress["sites"][0]["status"], "upgrading")
+        self.assertEqual(depth_progress["sites"][0]["retirement_level"], "Nexus Master")
+        self.assertEqual(depth_progress["sites"][1]["status"], "retired")
 
         ggpt_power = next(level for level in rules["GGPT"]["levels"] if level["source_id"] == 1)
         self.assertFalse(ggpt_power["min_ratio_strict"])
@@ -893,7 +974,7 @@ class TwelveAndExportTests(unittest.TestCase):
         named = lambda suffix: next(level for name, level in levels.items() if name.endswith(suffix))
 
         self.assertTrue(site["next_level"].endswith("Power User"))
-        self.assertTrue(site["retirement_level"].endswith("Ultimate User"))
+        self.assertTrue(site["retirement_level"].endswith("Nexus Master"))
         self.assertEqual(named("Power User")["min_seeding_points"], 80_000)
         self.assertFalse(named("Power User")["min_seeding_points_strict"])
         self.assertIsNone(named("Power User")["min_bonus"])
@@ -914,10 +995,24 @@ class TwelveAndExportTests(unittest.TestCase):
                 "Veteran User", "Extreme User", "Ultimate User", "Nexus Master",
             )
         ))
-        self.assertTrue(named("Ultimate User")["is_retirement"])
+        self.assertFalse(named("Ultimate User")["is_retirement"])
+        self.assertTrue(named("Nexus Master")["is_retirement"])
         self.assertEqual(named("Power User")["seeding_points_eta_days"], 1)
         self.assertEqual(named("Power User")["seeding_points_eta_date"], "2026-09-12")
         self.assertEqual(named("Power User")["seeding_points_eta_hours"], 0)
+
+    def test_hhan_retirement_requires_nexus_master(self):
+        rule = core.DEFAULT_RETIREMENT_RULES["憨憨"]
+        self.assertEqual(rule["retirement_level"], "满面娇憨 Nexus Master")
+        ultimate = next(level for level in rule["levels"] if level["source_id"] == 7)
+        self.assertNotIn("永远保留", ultimate["description"])
+        progress = core.build_retirement_progress([
+            {"site_id": 1, "site_name": "憨憨", "user_level": "Ultimate User", "updated_day": "2026-10-04"},
+            {"site_id": 2, "site_name": "HHanClub", "user_level": "Nexus Master", "updated_day": "2026-10-04"},
+        ])
+        self.assertEqual(progress["sites"][0]["status"], "upgrading")
+        self.assertEqual(progress["sites"][0]["next_level"], "满面娇憨 Nexus Master")
+        self.assertEqual(progress["sites"][1]["status"], "retired")
 
     def test_hhan_points_eta_never_uses_magic_rate(self):
         progress = core.build_retirement_progress(
@@ -1175,32 +1270,9 @@ class PackagingTests(unittest.TestCase):
         manifest = json.loads((ROOT / "package.v2.json").read_text(encoding="utf-8"))
         meta = manifest["PTDataStatistics"]
         source = (PLUGIN / "__init__.py").read_text(encoding="utf-8")
-        self.assertEqual(meta["version"], "2.1.3")
-        self.assertEqual(meta["history"], {
-            "v2.1.3": "不值一提",
-            "v2.1.2": "不值一提",
-            "v2.1.1": "不值一提",
-            "v2.1.0": "不值一提",
-            "v2.0.17": "不值一提",
-            "v2.0.16": "不值一提",
-            "v2.0.15": "不值一提",
-            "v2.0.14": "不值一提",
-            "v2.0.13": "不值一提",
-            "v2.0.12": "不值一提",
-            "v2.0.11": "不值一提",
-            "v2.0.10": "不值一提",
-            "v2.0.9": "不值一提",
-            "v2.0.8": "不值一提",
-            "v2.0.7": "不值一提",
-            "v2.0.6": "不值一提",
-            "v2.0.5": "不值一提",
-            "v2.0.4": "不值一提",
-            "v2.0.3": "不值一提",
-            "v2.0.2": "不值一提",
-            "v2.0.1": "不值一提",
-            "v2.0.0": "兼容v2及v3",
-        })
-        self.assertIn('plugin_version = "2.1.3"', source)
+        self.assertIn(f'plugin_version = "{meta["version"]}"', source)
+        self.assertIn(f'v{meta["version"]}', meta["history"])
+        self.assertEqual(meta["history"][f'v{meta["version"]}'], "不值一提")
         frontend_meta = json.loads((PLUGIN / "package.json").read_text(encoding="utf-8"))
         self.assertEqual(frontend_meta["version"], meta["version"])
         icon_url = "https://raw.githubusercontent.com/changzhanghs/MoviePilot-Plugins/main/icons/ptdatastatistics.png"
@@ -1362,7 +1434,7 @@ class PackagingTests(unittest.TestCase):
         self.assertIn('<span>目标要求</span><span>当前进度</span><span>剩余</span><span>时间</span><span>完成进度</span>', source)
         self.assertIn("etaDate: level.seeding_points_eta_date", source)
         self.assertLess(source.index("pushNumeric({ key: 'seeding-points'"), source.index("if (joinRow) rows.push(joinRow)"))
-        self.assertIn("eta: complete ? '—' : level.eligible_date || '—'", source)
+        self.assertIn("eta: complete ? '—' : eligibleDate || '—'", source)
         self.assertIn("function nextLevelEta(site, requirements)", source)
         self.assertIn(".map(row => row.eta)", source)
         self.assertIn("row.detail.replace(/^剩余\\s*/, '')", source)

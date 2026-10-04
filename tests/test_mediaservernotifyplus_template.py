@@ -1,6 +1,7 @@
 import importlib.util
 import pathlib
 import sys
+import threading
 import unittest
 from types import SimpleNamespace
 
@@ -45,6 +46,122 @@ class FakePlugin(CORE.MediaServerNotifyCore):
 
 
 class TemplateTests(unittest.TestCase):
+    def test_login_deduplication_distinguishes_users_and_sources(self):
+        for event_name in ("user.authenticated", "user.authenticationfailed"):
+            with self.subTest(event=event_name):
+                plugin = FakePlugin()
+                plugin.init_plugin({"enabled": True})
+                baseline = {
+                    "event": event_name, "server_name": "emby", "channel": "emby",
+                    "user_name": "alice", "ip": "192.0.2.1",
+                    "device_name": "Phone", "client": "Emby", "session_id": "session-1",
+                }
+                try:
+                    variants = [{}, {"user_name": "bob"}, {"ip": "192.0.2.2"},
+                                {"device_name": "TV"}, {"client": "Browser"},
+                                {"session_id": "session-2"}]
+                    for index, changes in enumerate(variants, start=1):
+                        event = SimpleNamespace(event_data=SimpleNamespace(**{**baseline, **changes}))
+                        plugin.handle_webhook(event)
+                        self.assertEqual(len(plugin.messages), index, changes)
+                        plugin.handle_webhook(event)
+                        self.assertEqual(len(plugin.messages), index, "identical webhook must still deduplicate")
+                finally:
+                    plugin.close()
+
+    def test_login_deduplication_uses_raw_webhook_identity_fallbacks(self):
+        plugin = FakePlugin()
+        plugin.init_plugin({"enabled": True})
+        try:
+            for user, address in (("alice", "192.0.2.1"), ("bob", "192.0.2.1"), ("bob", "192.0.2.2")):
+                plugin.handle_webhook(SimpleNamespace(event_data=SimpleNamespace(
+                    event="user.authenticationfailed", channel="emby",
+                    json_object={"ServerName": "emby", "NotificationUsername": user,
+                                 "RemoteEndPoint": address, "DeviceName": "Phone", "ClientName": "Emby"},
+                )))
+            self.assertEqual(len(plugin.messages), 3)
+        finally:
+            plugin.close()
+
+    def test_explicit_zero_disables_deduplication(self):
+        plugin = FakePlugin()
+        plugin.init_plugin({"enabled": True, "dedupe_library": 0, "dedupe_playback": 0})
+        try:
+            info = SimpleNamespace(item_id="1")
+            for action in ("library_added", "playback_started"):
+                for _ in range(2):
+                    self.assertFalse(plugin._is_duplicate(info, action, {"server": "test"}))
+        finally:
+            plugin.close()
+
+    def test_inflight_event_cannot_send_or_queue_after_reload_timeout(self):
+        for action, item_type in (("playback.start", "MOV"), ("library.new", "TV")):
+            for enabled in (False, True):
+                with self.subTest(action=action, enabled=enabled):
+                    entered, release = threading.Event(), threading.Event()
+                    plugin = FakePlugin()
+                    plugin.SHUTDOWN_TIMEOUT = 0.01
+                    plugin.init_plugin({"enabled": True})
+
+                    def slow_enrich(_info, _context):
+                        entered.set()
+                        release.wait(2)
+
+                    plugin._enrich_context = slow_enrich
+                    event = SimpleNamespace(event_data=SimpleNamespace(
+                        event=action, item_id="1", item_type=item_type,
+                    ))
+                    worker = threading.Thread(target=plugin.handle_webhook, args=(event,))
+                    worker.start()
+                    try:
+                        self.assertTrue(entered.wait(1))
+                        plugin.init_plugin({"enabled": enabled})
+                        release.set()
+                        worker.join(1)
+                        self.assertFalse(worker.is_alive())
+                        self.assertEqual(plugin.messages, [])
+                        self.assertEqual(plugin._pending_messages, {})
+                        if enabled:
+                            plugin.handle_webhook(event)
+                            if item_type == "TV":
+                                self.assertEqual(len(plugin._pending_messages), 1)
+                            else:
+                                self.assertEqual(len(plugin.messages), 1)
+                    finally:
+                        release.set()
+                        worker.join(2)
+                        plugin.close()
+
+    def test_stop_can_explicitly_flush_tagged_pending_messages(self):
+        plugin = FakePlugin()
+        plugin.init_plugin({"enabled": True, "flush_on_stop": True})
+        event = SimpleNamespace(event_data=SimpleNamespace(
+            event="library.new", item_id="1", item_type="TV",
+        ))
+        plugin.handle_webhook(event)
+        self.assertEqual(len(plugin._pending_messages), 1)
+        self.assertTrue(plugin.stop_service())
+        self.assertEqual(len(plugin.messages), 1)
+
+    def test_old_timer_cannot_drain_reloaded_aggregate_queue(self):
+        plugin = FakePlugin()
+        plugin.init_plugin({"enabled": True})
+        old_generation = plugin._generation
+        plugin.init_plugin({"enabled": True})
+        event = SimpleNamespace(event_data=SimpleNamespace(
+            event="library.new", item_id="1", item_type="TV",
+        ))
+        try:
+            plugin.handle_webhook(event)
+            key = next(iter(plugin._pending_messages))
+            plugin._flush_aggregate(key, expected_generation=old_generation)
+            self.assertIn(key, plugin._pending_messages)
+            self.assertEqual(plugin.messages, [])
+            plugin._flush_aggregate(key, expected_generation=plugin._generation)
+            self.assertEqual(len(plugin.messages), 1)
+        finally:
+            plugin.close()
+
     def test_vue_config_exposes_card_editor_metadata(self):
         plugin = FakePlugin()
         form, defaults = plugin.get_form()
