@@ -326,12 +326,14 @@ def _match_named_rule(
 
 
 def _match_level_index(current_level: Any, levels: Iterable[Mapping[str, Any]]) -> int:
-    """匹配 MP 等级文本，优先最长等级名以避免 User 误配 Power User。"""
+    """匹配 MP 等级文本，区分完整等级名和省略展示后缀的短文本。"""
 
     identity = normalize_identity(current_level)
     if not identity:
         return -1
-    candidates: list[tuple[int, int]] = []
+    contained: list[tuple[int, int]] = []
+    prefixes: list[tuple[int, int]] = []
+    partial: list[tuple[int, int]] = []
     for index, level in enumerate(levels):
         level_identities = [
             normalize_identity(value)
@@ -341,9 +343,19 @@ def _match_level_index(current_level: Any, levels: Iterable[Mapping[str, Any]]) 
         for level_identity in level_identities:
             if level_identity == identity:
                 return index
-            if level_identity in identity or identity in level_identity:
-                candidates.append((len(level_identity), index))
-    return max(candidates, default=(0, -1))[1]
+            if level_identity in identity:
+                # MP 文本包含完整等级名时，选最具体的名称，避免 Power User 命中 User。
+                contained.append((len(level_identity), index))
+            elif level_identity.startswith(identity):
+                # MP 仅返回英文部分时，优先对应前缀，避免 User 命中 Ultimate User。
+                prefixes.append((len(level_identity), index))
+            elif identity in level_identity:
+                partial.append((len(level_identity), index))
+    if contained:
+        return max(contained, key=lambda item: (item[0], -item[1]))[1]
+    if prefixes:
+        return min(prefixes)[1]
+    return min(partial, default=(0, -1))[1]
 
 
 def match_twelve_site(

@@ -451,6 +451,45 @@ class TwelveAndExportTests(unittest.TestCase):
         self.assertEqual(progress["retired"], 1)
         self.assertEqual(progress["sites"][0]["status"], "retired")
 
+    def test_cafe_short_english_levels_match_correct_route(self):
+        levels = core.DEFAULT_RETIREMENT_RULES["咖啡"]["levels"]
+        for index, level in enumerate(levels):
+            english_name = level["name"].rsplit(" ", 1)[0]
+            for text in (english_name, level["name"], f"等级：{level['name']}（当前）"):
+                with self.subTest(text=text):
+                    self.assertEqual(core._match_level_index(text, levels), index)
+
+    def test_cafe_new_user_is_upgrading_with_five_levels_remaining(self):
+        progress = core.build_retirement_progress([{
+            "site_id": 1,
+            "site_name": "咖啡",
+            "user_level": "User",
+            "join_at": "2026-09-24",
+            "updated_day": "2026-10-04",
+            "download": int(7.57 * 1024**3),
+            "ratio": 5.36,
+            "seeding_points": 19093,
+        }])
+        site = progress["sites"][0]
+        self.assertEqual(progress["retired"], 0)
+        self.assertEqual(site["status"], "upgrading")
+        self.assertEqual(site["levels_remaining"], 5)
+        self.assertEqual(site["next_level"], "Power User 速溶小白")
+        self.assertEqual([item["name"] for item in site["route"] if item["is_current"]],
+                         ["User 咖啡新人"])
+
+    def test_level_matching_preserves_exact_alias_and_specific_contained_name(self):
+        levels = [
+            {"name": "User"},
+            {"name": "Power User", "aliases": ["资深用户"]},
+            {"name": "Ultimate User 咖啡巨星"},
+        ]
+        for text, expected in (("User", 0), ("资深用户", 1), ("等级：Power User（当前）", 1),
+                               ("", -1), ("未知等级", -1)):
+            with self.subTest(text=text):
+                self.assertEqual(core._match_level_index(text, iter(levels)), expected)
+        self.assertEqual(core._match_level_index("User", levels[1:]), 0)
+
     def test_fixed_source_rules_include_queen_alternatives_and_ttg(self):
         self.assertEqual(len(site_rules_builtin.SITE_LEVEL_RULES), 234)
         self.assertEqual(
