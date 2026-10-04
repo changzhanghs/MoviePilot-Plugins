@@ -247,6 +247,46 @@ class HostContractTests(unittest.TestCase):
                 "levels": [{"name": "User"}],
             }])
 
+    def test_uploaded_retirement_aliases_use_each_sites_actual_target(self):
+        build_progress = importlib.import_module("ptdatastatistics.core").build_retirement_progress
+        for site_name, level_name, alias in (
+            ("示例甲", "Keeper", "保号"),
+            ("示例乙", "Veteran User", "老兵"),
+            ("示例丙", "Nexus Master", "最高保号"),
+        ):
+            with self.subTest(site=site_name):
+                value = SettingsData(custom_retirement_rules=[{
+                    "site": site_name, "retirement_level": alias,
+                    "levels": [{"name": "User"}, {"name": level_name, "aliases": [alias]}],
+                }])
+                rule = value.custom_retirement_rules[0].model_dump()
+                for current, status, remaining in (("User", "upgrading", 1), (alias, "retired", 0)):
+                    result = build_progress(
+                        [{"site_name": site_name, "user_level": current}], {site_name: rule},
+                    )["sites"][0]
+                    self.assertEqual(result["retirement_level"], level_name)
+                    self.assertEqual(result["status"], status)
+                    self.assertEqual(result["levels_remaining"], remaining)
+                    self.assertTrue(result["route"][1]["is_retirement"])
+
+    def test_downloaded_template_roundtrips_localized_retirement_target(self):
+        template = PTDataStatistics.api_rule_template()
+        comments = "\n".join(template["_comment"])
+        self.assertIn("该站实际保号等级", comments)
+        self.assertIn("不要照搬", comments)
+        rule = template["rules"][0]
+        target = next(level for level in rule["levels"] if level["name"] == rule["retirement_level"])
+        self.assertTrue(target["aliases"])
+        rule["retirement_level"] = target["aliases"][0]
+        value = SettingsData(custom_retirement_rules=[rule])
+        result = importlib.import_module("ptdatastatistics.core").build_retirement_progress(
+            [{"site_name": rule["site"], "user_level": target["aliases"][0]}],
+            {rule["site"]: value.custom_retirement_rules[0].model_dump()},
+        )["sites"][0]
+        self.assertEqual(result["retirement_level"], target["name"])
+        self.assertEqual(result["status"], "retired")
+
+
     @staticmethod
     def _request(headers: list[tuple[bytes, bytes]] | None = None) -> Request:
         return Request({"type": "http", "method": "GET", "path": "/", "headers": headers or []})

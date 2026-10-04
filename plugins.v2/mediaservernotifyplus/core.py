@@ -298,6 +298,7 @@ class MediaServerNotifyCore:
     def _initialize_core(self) -> None:
         self._condition = threading.Condition(threading.RLock())
         self._accepting_events = False
+        self._generation = 0
         self._active_operations = 0
         self._owned_timers: set[threading.Timer] = set()
         self._aggregate_timers: Dict[str, threading.Timer] = {}
@@ -312,7 +313,8 @@ class MediaServerNotifyCore:
 
     def init_plugin(self, config: Optional[dict] = None) -> None:
         """可重复调用地读取配置并重建运行状态。"""
-        self._quiesce(flush=False)
+        if not self._quiesce(flush=False):
+            self._log_debug("旧通知任务停止超时，已隔离旧任务并重建配置")
         config = config or {}
         field_configs = normalize_field_configs(config.get("field_configs"))
         with self._condition:
@@ -327,8 +329,12 @@ class MediaServerNotifyCore:
             self._mediaservers = list(config.get("mediaservers") or [])
             self._aggregate_enabled = bool(config.get("aggregate_enabled", True))
             self._aggregate_time = max(1, int(config.get("aggregate_time") or self.DEFAULT_AGGREGATE_TIME))
-            self._dedupe_library = max(0, int(config.get("dedupe_library") or self.DEFAULT_DEDUPE_TIME))
-            self._dedupe_playback = max(0, int(config.get("dedupe_playback") or self.DEFAULT_DEDUPE_TIME))
+            self._dedupe_library = max(0, int(
+                self.DEFAULT_DEDUPE_TIME if config.get("dedupe_library") in (None, "") else config["dedupe_library"]
+            ))
+            self._dedupe_playback = max(0, int(
+                self.DEFAULT_DEDUPE_TIME if config.get("dedupe_playback") in (None, "") else config["dedupe_playback"]
+            ))
             self._flush_on_stop = bool(config.get("flush_on_stop", False))
             self._field_configs = field_configs
             self._renderer = FieldTemplateRenderer(field_configs)
@@ -451,7 +457,8 @@ class MediaServerNotifyCore:
 
     def handle_webhook(self, event: Any) -> None:
         """标准化并处理 MoviePilot WebhookMessage 事件。"""
-        if not self._begin_operation():
+        generation = self._begin_operation()
+        if generation is None:
             return
         try:
             if not self._enabled:
@@ -464,6 +471,7 @@ class MediaServerNotifyCore:
             if not self._service_allowed(info):
                 return
             context = self._base_context(info, action)
+            context["_generation"] = generation
             if action not in {"auth_success", "auth_failed", "test"}:
                 self._match_library(info, context)
             if self._is_duplicate(info, action, context):
@@ -481,12 +489,19 @@ class MediaServerNotifyCore:
         finally:
             self._finish_operation()
 
-    def _begin_operation(self) -> bool:
+    def _begin_operation(self) -> Optional[int]:
         with self._condition:
             if not self._accepting_events:
-                return False
+                return None
             self._active_operations += 1
-            return True
+            return self._generation
+
+    def _context_is_current(self, context: Mapping[str, Any]) -> bool:
+        """拒绝停止或重载前创建的事件；显式测试消息不携带运行代际。"""
+        generation = context.get("_generation")
+        return generation is None or (
+            self._enabled and self._accepting_events and generation == self._generation
+        )
 
     def _finish_operation(self) -> None:
         with self._condition:
@@ -577,6 +592,11 @@ class MediaServerNotifyCore:
         ]
         if action.startswith("playback_"):
             parts.extend([session, context.get("user"), context.get("client"), context.get("device")])
+        elif action in {"auth_success", "auth_failed"}:
+            parts.extend([
+                context.get("user"), context.get("ip"),
+                context.get("client"), context.get("device"), session,
+            ])
         return "|".join(str(part or "") for part in parts)
 
     def _is_duplicate(self, info: Any, action: str, context: Mapping[str, Any]) -> bool:
@@ -586,6 +606,8 @@ class MediaServerNotifyCore:
         key = self._dedupe_key(info, action, context)
         now = time.monotonic()
         with self._condition:
+            if not self._context_is_current(context):
+                return True
             expired = [item for item, expiry in self._dedupe_cache.items() if expiry <= now]
             for item in expired:
                 self._dedupe_cache.pop(item, None)
@@ -612,34 +634,38 @@ class MediaServerNotifyCore:
     def _queue_aggregate(self, info: Any, context: Dict[str, Any]) -> None:
         key = self._aggregate_key(info, context)
         with self._condition:
-            if not self._accepting_events:
+            if not self._accepting_events or not self._context_is_current(context):
                 return
             self._owned_timers = {timer for timer in self._owned_timers if timer.is_alive()}
             self._pending_messages.setdefault(key, []).append(dict(context))
             previous = self._aggregate_timers.get(key)
             if previous:
                 previous.cancel()
-            timer = threading.Timer(self._aggregate_time, self._aggregate_timer_callback, [key])
+            timer = threading.Timer(self._aggregate_time, self._aggregate_timer_callback, [key, self._generation])
             timer.daemon = True
             self._aggregate_timers[key] = timer
             self._owned_timers.add(timer)
             timer.start()
 
-    def _aggregate_timer_callback(self, key: str) -> None:
+    def _aggregate_timer_callback(self, key: str, generation: int) -> None:
         timer = threading.current_thread()
         try:
             with self._condition:
                 if not self._accepting_events or self._aggregate_timers.get(key) is not timer:
                     return
-            self._flush_aggregate(key)
+            self._flush_aggregate(key, expected_generation=generation)
         finally:
             with self._condition:
                 if self._aggregate_timers.get(key) is timer:
                     self._aggregate_timers.pop(key, None)
                 self._condition.notify_all()
 
-    def _flush_aggregate(self, key: str) -> None:
+    def _flush_aggregate(
+        self, key: str, *, expected_generation: Optional[int] = None, allow_stopped: bool = False
+    ) -> None:
         with self._condition:
+            if expected_generation is not None and expected_generation != self._generation:
+                return
             messages = self._pending_messages.pop(key, [])
         if not messages:
             return
@@ -651,16 +677,23 @@ class MediaServerNotifyCore:
                 episodes.append(value)
         context["season_episode"] = "、".join(episodes)
         context["file_count"] = str(len(messages))
-        self._send_context("library_added", context)
+        self._send_context("library_added", context, allow_stopped=allow_stopped)
 
-    def _send_context(self, action: str, context: Dict[str, Any]) -> None:
-        title, body = self._renderer.render(action, context)
+    def _send_context(self, action: str, context: Dict[str, Any], *, allow_stopped: bool = False) -> None:
+        with self._condition:
+            if not allow_stopped and not self._context_is_current(context):
+                return
+            renderer = self._renderer
+        title, body = renderer.render(action, context)
         # 登录和测试通知不属于媒体卡片，不附带 TMDB 跳转。
         if action in {"auth_success", "auth_failed", "test"}:
             context["_link"] = None
         else:
             # MoviePilot 的 link 会让整张消息卡片可点击；优先跳转 TMDB。
             context["_link"] = context.get("tmdb_url") or context.get("_link")
+        with self._condition:
+            if not allow_stopped and not self._context_is_current(context):
+                return
         self.post_message(
             mtype=self._notification_type,
             title=title,
@@ -697,6 +730,7 @@ class MediaServerNotifyCore:
         deadline = time.monotonic() + self.SHUTDOWN_TIMEOUT
         with self._condition:
             self._accepting_events = False
+            self._generation += 1
             timers = set(self._owned_timers) | set(self._aggregate_timers.values())
             pending_keys = list(self._pending_messages)
             for timer in timers:
@@ -710,7 +744,7 @@ class MediaServerNotifyCore:
                 pass
         if should_flush:
             for key in pending_keys:
-                self._flush_aggregate(key)
+                self._flush_aggregate(key, allow_stopped=True)
         with self._condition:
             while self._active_operations:
                 remaining = deadline - time.monotonic()
@@ -718,13 +752,13 @@ class MediaServerNotifyCore:
                     break
                 self._condition.wait(remaining)
             alive = {timer for timer in timers if timer.is_alive()}
+            self._aggregate_timers.clear()
+            self._pending_messages.clear()
+            self._dedupe_cache.clear()
             if alive or self._active_operations:
                 self._owned_timers = alive
                 return False
             self._owned_timers.clear()
-            self._aggregate_timers.clear()
-            self._pending_messages.clear()
-            self._dedupe_cache.clear()
         return True
 
     def close(self) -> bool:
