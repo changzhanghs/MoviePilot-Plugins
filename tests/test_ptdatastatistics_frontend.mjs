@@ -126,9 +126,10 @@ function retirementFixture() {
     overview: { value: { server_date: '2026-10-04' } },
     formatBytes: value => `${value} B`,
     formatNumber: value => String(value),
+    normalizedSiteName: value => String(value || '').toLowerCase().replace(/[^\p{L}\p{N}]/gu, ''),
   }
   vm.createContext(state)
-  vm.runInContext(`${sourceFunction('function durationLabel(', 'function springUpgradeTasks(')}\n${sourceFunction('function requirementRows(', 'function levelTrafficRequirements(')}`, state)
+  vm.runInContext(sourceFunction('function durationLabel(', 'function levelTrafficRequirements('), state)
   return state
 }
 
@@ -219,4 +220,37 @@ test('strict boundaries and rounding cannot report an incomplete level as 100 pe
   assert.equal(state.averageRequirementProgress([
     { complete: true, progress: 100 }, { complete: false, progress: 99.9 },
   ]), 99)
+})
+
+test('Spring combines download choices into one shared requirement and shows two points tasks', () => {
+  const state = retirementFixture()
+  const real = { key: 'real_download', label: '真实下载量', target: '> 2048 GB' }
+  const level = {
+    name: '精英(Elite)', min_ratio: 1.2, min_ratio_strict: true, min_join_days: 35,
+    alternatives: [
+      { min_download: 500, min_download_strict: true, min_seeding_points: 100000, min_torrent_uploads: 1, min_torrent_uploads_strict: true },
+      { min_download: 500, min_download_strict: true, min_seeding_points: 150000 },
+      { unsupported_requirements: [real], min_seeding_points: 100000, min_torrent_uploads: 1, min_torrent_uploads_strict: true },
+      { unsupported_requirements: [real], min_seeding_points: 150000 },
+    ],
+  }
+  const site = { site_name: '春天', download: 501, seeding_points: 150000, torrent_uploads: 0, ratio: 1.3, join_at: '2026-08-01' }
+  const tasks = state.alternativeTaskOptions(site, level)
+  assert.equal(tasks.length, 2)
+  assert.equal(tasks[0].subtitle, '积分 ≥ 100000 · 发布 > 1')
+  assert.equal(tasks[1].subtitle, '积分 ≥ 150000')
+  const first = state.requirementRows(site, level, 0)
+  assert.equal(first.filter(row => row.label === '下载量').length, 1)
+  assert(first.find(row => row.label === '下载量').target.includes('真实下载量'))
+  assert.equal(first.find(row => row.label === '发布数').complete, false)
+  assert(state.averageRequirementProgress(first) < 100)
+  const second = state.requirementRows(site, level, 1)
+  assert.equal(second.some(row => row.label === '发布数'), false)
+  assert.equal(state.averageRequirementProgress(second), 100)
+  site.download = 500
+  const pending = state.requirementRows(site, level, 1)
+  assert.equal(pending.find(row => row.label === '下载量').complete, false)
+  assert(state.averageRequirementProgress(pending) < 100)
+  assert.equal(level.alternatives.length, 4)
+  assert.equal(state.alternativeTaskOptions({ site_name: 'Other' }, level).length, 4)
 })
