@@ -895,8 +895,8 @@ function requirementRows(site, level, alternativeIndex = null) {
   pushNumeric({ key: 'average-seeding-time', label: '平均做种时间', icon: 'mdi-timer-sand', current: site.average_seeding_time_days, target: level.min_average_seeding_time_days, formatter: value => `${formatNumber(value, 1)} 天`, strict: level.min_average_seeding_time_days_strict, unavailable: site.average_seeding_time_days === null || site.average_seeding_time_days === undefined })
   pushUnsupported(level.unsupported_requirements, 'requirement')
   if (level.downloadAlternatives?.length) {
-    const downloadRows = requirementRows(site, { reached, alternatives: level.downloadAlternatives })
-    rows.push(...downloadRows.map(row => ({ ...row, key: 'download-options', label: '下载量', icon: 'mdi-download-outline' })))
+    const download = level.downloadAlternatives[0]
+    pushNumeric({ key: 'download-options', label: '下载量', icon: 'mdi-download-outline', current: site.download, target: download.min_download, formatter: formatBytes, strict: download.min_download_strict })
   }
   const selectedAlternative = Number.isInteger(alternativeIndex) ? level.alternatives?.[alternativeIndex] : null
   if (selectedAlternative) {
@@ -1023,7 +1023,13 @@ function levelPointsRequirement(level) {
 function levelHasDetails(level) {
   return Boolean(level.description?.trim() || level.alternatives?.length)
 }
-function levelAlternativeRequirements(level) {
+function levelAlternativeRequirements(level, site) {
+  level = springTaskLevel(site, level)
+  const download = level.downloadAlternatives?.[0]
+  const realDownload = level.downloadAlternatives?.[1]?.unsupported_requirements?.[0]
+  const commonDownload = download && realDownload
+    ? `下载量 ${download.min_download_strict ? '>' : '≥'} ${formatBytes(download.min_download)} 或 ${realDownload.label} ${realDownload.target}`
+    : ''
   const numerals = ['一', '二', '三', '四', '五', '六']
   const fields = [
     ['min_join_days', '注册', durationLabel],
@@ -1040,6 +1046,7 @@ function levelAlternativeRequirements(level) {
   return (level.alternatives || []).map((option, index) => ({
     title: `任务${numerals[index] || index + 1}`,
     requirements: [
+      ...(commonDownload ? [commonDownload] : []),
       ...fields.filter(([key]) => Number(option[key]) > 0).map(([key, label, formatter]) => (
         `${label} ${option[`${key}_strict`] ? '>' : '≥'} ${formatter(option[key])}`
       )),
@@ -1456,7 +1463,7 @@ onBeforeUnmount(() => {
                         <div class="retirement-level-row__detail-title"><VIcon icon="mdi-call-split" size="18" /><strong>任选条件</strong></div>
                         <p>满足以下任一任务即可达到该等级</p>
                         <div class="retirement-level-row__tasks">
-                          <div v-for="task in levelAlternativeRequirements(level)" :key="task.title" class="retirement-level-row__task">
+                          <div v-for="task in levelAlternativeRequirements(level, selectedRetirementSite)" :key="task.title" class="retirement-level-row__task">
                             <strong>{{ task.title }}</strong>
                             <span v-for="requirement in task.requirements" :key="requirement">{{ requirement }}</span>
                           </div>
