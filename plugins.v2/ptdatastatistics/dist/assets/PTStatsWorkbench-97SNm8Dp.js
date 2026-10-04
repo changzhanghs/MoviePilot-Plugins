@@ -15171,6 +15171,8 @@ const retirementSortOptions = [
   { title: '站点名称', value: 'site_name' },
 ];
 let distributionRequestSequence = 0;
+let historyRequestSequence = 0;
+let hourlyRequestSequence = 0;
 const ptdUuidVisible = ref(false);
 const ptdPasswordVisible = ref(false);
 const settingsDraft = ref({
@@ -15443,20 +15445,26 @@ function selectHistorySite(item) {
   selectedHistorySiteId.value = Number(selectedHistorySiteId.value) === value ? null : value;
 }
 async function loadHourlyTraffic() {
+  const requestSequence = ++hourlyRequestSequence;
   const period = selectedHistoryPeriod.value;
-  if (historyScope.value !== 'day' || !period) return
+  const siteId = selectedHistorySiteId.value;
+  if (historyScope.value !== 'day' || !period) {
+    hourlyLoading.value = false;
+    return
+  }
   hourlyLoading.value = true;
   try {
     const response = await props.api.get(withQuery(`${pluginBase.value}/history/hourly`, {
       day: period.startDay,
-      site_id: selectedHistorySiteId.value || '',
+      site_id: siteId || '',
     }), { feedback: 'silent' });
-    hourlyTraffic.value = unwrapResponse(response) || hourlyTraffic.value;
+    if (requestSequence === hourlyRequestSequence) hourlyTraffic.value = unwrapResponse(response) || hourlyTraffic.value;
   } catch (err) {
+    if (requestSequence !== hourlyRequestSequence) return
     notify(err?.message || '加载小时流量失败', 'error');
-    hourlyTraffic.value = { day: period.startDay, site_id: selectedHistorySiteId.value, site_name: selectedHistorySite.value?.site_name || '全部站点', baseline_valid: false, sample_count: 0, points: [] };
+    hourlyTraffic.value = { day: period.startDay, site_id: siteId, site_name: selectedHistorySite.value?.site_name || '全部站点', baseline_valid: false, sample_count: 0, points: [] };
   } finally {
-    hourlyLoading.value = false;
+    if (requestSequence === hourlyRequestSequence) hourlyLoading.value = false;
   }
 }
 function setHistoryChartCanvas(element) {
@@ -15549,8 +15557,8 @@ function setDefaultRanges() {
   const end = overview.value.last_history_day || overview.value.server_date;
   if (!end) return
   if (!historyFilters.value.endDay) {
-    const startDate = new Date(`${end}T00:00:00`);
-    startDate.setDate(startDate.getDate() - 29);
+    const startDate = new Date(`${end}T00:00:00Z`);
+    startDate.setUTCDate(startDate.getUTCDate() - 29);
     historyFilters.value.endDay = end;
     historyFilters.value.startDay = startDate.toISOString().slice(0, 10);
     historyFilters.value.siteIds = [];
@@ -15612,19 +15620,22 @@ async function loadAll() {
   }
 }
 async function loadHistory() {
+  const requestSequence = ++historyRequestSequence;
   historyLoading.value = true;
   try {
     const path = withQuery(`${pluginBase.value}/history`, {
       start_day: historyFilters.value.startDay, end_day: historyFilters.value.endDay,
       site_ids: historyFilters.value.siteIds, include_archived: historyFilters.value.includeArchived, limit: 50000,
     });
-    history.value = unwrapResponse(await props.api.get(path, { feedback: 'silent' })) || history.value;
+    const response = await props.api.get(path, { feedback: 'silent' });
+    if (requestSequence !== historyRequestSequence) return
+    history.value = unwrapResponse(response) || history.value;
     selectedHistoryPeriodKey.value = historyPeriods.value[0]?.key || '';
     selectedHistorySiteId.value = null;
   } catch (err) {
-    notify(err?.message || '查询历史数据失败', 'error');
+    if (requestSequence === historyRequestSequence) notify(err?.message || '查询历史数据失败', 'error');
   } finally {
-    historyLoading.value = false;
+    if (requestSequence === historyRequestSequence) historyLoading.value = false;
   }
 }
 async function saveSettings() {
@@ -15859,6 +15870,26 @@ function elapsedAccountDays(site) {
   if (!Number.isFinite(start) || !Number.isFinite(end)) return null
   return Math.max(0, Math.floor((end - start) / 86400000))
 }
+function springTaskLevel(site, level) {
+  const identity = normalizedSiteName(site?.site_name);
+  if (!['春天', 'spring', 'springsunday'].includes(identity) || level?.alternatives?.length !== 4) return level
+  const [first, second, third, fourth] = level.alternatives;
+  const realDownload = option => option.unsupported_requirements?.find(item => item.key === 'real_download');
+  if (!(first.min_download > 0) || first.min_download !== second.min_download || !realDownload(third) || !realDownload(fourth)) return level
+  const task = option => {
+    const { min_download, min_download_strict, unsupported_requirements, ...requirements } = option;
+    return requirements
+  };
+  if (JSON.stringify(task(first)) !== JSON.stringify(task(third)) || JSON.stringify(task(second)) !== JSON.stringify(task(fourth))) return level
+  return {
+    ...level,
+    downloadAlternatives: [
+      { min_download: first.min_download, min_download_strict: first.min_download_strict },
+      { unsupported_requirements: [realDownload(third)] },
+    ],
+    alternatives: [task(first), task(second)],
+  }
+}
 function springUpgradeTasks(site, level) {
   const siteIdentity = normalizedSiteName(site?.site_name);
   const levelIdentity = normalizedSiteName(level?.name);
@@ -15871,6 +15902,7 @@ function springUpgradeTasks(site, level) {
   ]
 }
 function alternativeTaskOptions(site, level) {
+  level = springTaskLevel(site, level);
   const alternatives = level?.alternatives || [];
   if (alternatives.length < 2) return []
   const springTasks = springUpgradeTasks(site, level);
@@ -15878,8 +15910,8 @@ function alternativeTaskOptions(site, level) {
   const numerals = ['一', '二', '三', '四', '五', '六'];
   return alternatives.map((option, index) => {
     const targets = [];
-    if (option.min_seeding_points) targets.push(`积分 ${formatNumber$1(option.min_seeding_points, 0)}`);
-    if (option.min_torrent_uploads) targets.push(`发布 ${formatNumber$1(option.min_torrent_uploads, 0)}`);
+    if (option.min_seeding_points) targets.push(`积分 ${option.min_seeding_points_strict ? '>' : '≥'} ${formatNumber$1(option.min_seeding_points, 0)}`);
+    if (option.min_torrent_uploads) targets.push(`发布 ${option.min_torrent_uploads_strict ? '>' : '≥'} ${formatNumber$1(option.min_torrent_uploads, 0)}`);
     if (option.min_download) targets.push(`下载 ${formatBytes(option.min_download)}`);
     if (option.min_upload) targets.push(`上传 ${formatBytes(option.min_upload)}`);
     return {
@@ -15891,6 +15923,7 @@ function alternativeTaskOptions(site, level) {
 }
 function requirementRows(site, level, alternativeIndex = null) {
   if (!site || !level) return []
+  level = springTaskLevel(site, level);
   const rows = [];
   const reached = Boolean(level.reached);
   const pushNumeric = ({ key, label, icon, current, target, formatter, strict = false, unavailable = false, etaDate = '' }) => {
@@ -15899,7 +15932,7 @@ function requirementRows(site, level, alternativeIndex = null) {
     const targetNumber = Number(target);
     const available = !unavailable && Number.isFinite(currentNumber);
     const complete = reached || (available && (strict ? currentNumber > targetNumber : currentNumber >= targetNumber));
-    const progress = complete ? 100 : available ? Math.max(0, Math.min(100, currentNumber * 100 / targetNumber)) : 0;
+    const progress = complete ? 100 : available ? Math.max(0, Math.min(99, currentNumber * 100 / targetNumber)) : 0;
     const difference = available ? Math.max(targetNumber - currentNumber, 0) : null;
     let detail = '数据未提供';
     if (complete) detail = '已达成';
@@ -15918,25 +15951,53 @@ function requirementRows(site, level, alternativeIndex = null) {
     });
   };
 
-  let joinRow = null;
-  if (level.min_join_days) {
+  const joinTimeRow = (requirement, key) => {
+    if (!(Number(requirement.min_join_days) > 0)) return null
     const currentDays = elapsedAccountDays(site);
-    const strict = Boolean(level.min_join_days_strict);
-    const complete = reached || (currentDays !== null && (strict ? currentDays > level.min_join_days : currentDays >= level.min_join_days));
-    const requiredDays = Number(level.min_join_days) + (strict ? 1 : 0);
-    joinRow = {
-      key: 'join-time',
+    const minimumDays = Number(requirement.min_join_days);
+    const strict = Boolean(requirement.min_join_days_strict);
+    const complete = reached || (currentDays !== null && (strict ? currentDays > minimumDays : currentDays >= minimumDays));
+    const requiredDays = minimumDays + (strict ? 1 : 0);
+    let eligibleDate = requirement.eligible_date || '';
+    if (!eligibleDate && site.join_at) {
+      const joined = new Date(`${String(site.join_at).slice(0, 10)}T00:00:00Z`);
+      if (Number.isFinite(joined.getTime())) {
+        joined.setUTCDate(joined.getUTCDate() + requiredDays);
+        eligibleDate = joined.toISOString().slice(0, 10);
+      }
+    }
+    return {
+      key,
       label: '注册时间',
       icon: 'mdi-calendar-check-outline',
       current: complete ? '达成' : currentDays === null ? '加入时间未提供' : `${currentDays} 天`,
-      target: `${strict ? '>' : '≥'} ${durationLabel(level.min_join_days)}`,
+      target: `${strict ? '>' : '≥'} ${durationLabel(minimumDays)}`,
       detail: complete ? '已达成' : currentDays === null ? '加入时间未提供' : `剩余 ${durationLabel(requiredDays - currentDays)}`,
-      eta: complete ? '—' : level.eligible_date || '—',
+      eta: complete ? '—' : eligibleDate || '—',
       complete,
       unavailable: currentDays === null,
-      progress: complete ? 100 : currentDays === null ? 0 : Math.max(0, Math.min(100, currentDays * 100 / level.min_join_days)),
-    };
-  }
+      progress: complete ? 100 : currentDays === null ? 0 : Math.max(0, Math.min(99, currentDays * 100 / minimumDays)),
+    }
+  };
+  const pushUnsupported = (requirements, prefix) => {
+    for (const [index, requirement] of (requirements || []).entries()) {
+      const key = String(requirement.key || '');
+      const icon = key.includes('seeding_bonus') ? 'mdi-star-circle-outline' : key.includes('seeding_upload') ? 'mdi-seed-outline' : key.includes('upload') ? 'mdi-cloud-upload-outline' : 'mdi-clipboard-check-outline';
+      rows.push({
+        key: `${prefix}-${key || 'requirement'}-${index}`,
+        label: requirement.label || '其他要求',
+        icon,
+        current: reached ? '达成' : '数据未提供',
+        target: String(requirement.target ?? '需人工确认'),
+        detail: reached ? '已达成' : '数据未提供，需人工确认',
+        eta: '—',
+        complete: reached,
+        unavailable: !reached,
+        progress: reached ? 100 : 0,
+      });
+    }
+  };
+  const joinRow = joinTimeRow(level, 'join-time');
   pushNumeric({ key: 'upload', label: '上传量', icon: 'mdi-upload-outline', current: site.upload, target: level.min_upload, formatter: formatBytes, strict: level.min_upload_strict });
   pushNumeric({ key: 'download', label: '下载量', icon: 'mdi-download-outline', current: site.download, target: level.min_download, formatter: formatBytes, strict: level.min_download_strict });
   pushNumeric({ key: 'ratio', label: '分享率', icon: 'mdi-chart-donut', current: site.ratio, target: level.min_ratio, formatter: value => formatNumber$1(value, 2), strict: level.min_ratio_strict });
@@ -15947,8 +16008,15 @@ function requirementRows(site, level, alternativeIndex = null) {
   pushNumeric({ key: 'seeding-size', label: '做种体积', icon: 'mdi-database-outline', current: site.seeding_size, target: level.min_seeding_size, formatter: formatBytes, strict: level.min_seeding_size_strict });
   pushNumeric({ key: 'torrent-uploads', label: '发布数', icon: 'mdi-cloud-upload-outline', current: site.torrent_uploads, target: level.min_torrent_uploads, formatter: value => formatNumber$1(value, 0), strict: level.min_torrent_uploads_strict, unavailable: site.torrent_uploads === null || site.torrent_uploads === undefined });
   pushNumeric({ key: 'average-seeding-time', label: '平均做种时间', icon: 'mdi-timer-sand', current: site.average_seeding_time_days, target: level.min_average_seeding_time_days, formatter: value => `${formatNumber$1(value, 1)} 天`, strict: level.min_average_seeding_time_days_strict, unavailable: site.average_seeding_time_days === null || site.average_seeding_time_days === undefined });
+  pushUnsupported(level.unsupported_requirements, 'requirement');
+  if (level.downloadAlternatives?.length) {
+    const download = level.downloadAlternatives[0];
+    pushNumeric({ key: 'download-options', label: '下载量', icon: 'mdi-download-outline', current: site.download, target: download.min_download, formatter: formatBytes, strict: download.min_download_strict });
+  }
   const selectedAlternative = Number.isInteger(alternativeIndex) ? level.alternatives?.[alternativeIndex] : null;
   if (selectedAlternative) {
+    const taskJoinRow = joinTimeRow(selectedAlternative, `task-${alternativeIndex}-join-time`);
+    if (taskJoinRow) rows.push(taskJoinRow);
     const taskFields = [
       ['min_upload', '上传量', 'mdi-upload-outline', site.upload, formatBytes],
       ['min_download', '下载量', 'mdi-download-outline', site.download, formatBytes],
@@ -15967,7 +16035,7 @@ function requirementRows(site, level, alternativeIndex = null) {
       const available = current !== null && current !== undefined && Number.isFinite(currentNumber);
       const strict = Boolean(selectedAlternative[`${key}_strict`]);
       const complete = reached || (available && (strict ? currentNumber > target : currentNumber >= target));
-      const progress = complete ? 100 : available ? Math.max(0, Math.min(100, currentNumber * 100 / target)) : 0;
+      const progress = complete ? 100 : available ? Math.max(0, Math.min(99, currentNumber * 100 / target)) : 0;
       const difference = available ? Math.max(target - currentNumber, 0) : null;
       rows.push({
         key: `task-${alternativeIndex}-${key}`,
@@ -15982,22 +16050,7 @@ function requirementRows(site, level, alternativeIndex = null) {
         progress,
       });
     }
-    for (const requirement of selectedAlternative.unsupported_requirements || []) {
-      const key = String(requirement.key || '');
-      const icon = key.includes('seeding_bonus') ? 'mdi-star-circle-outline' : key.includes('seeding_upload') ? 'mdi-seed-outline' : key.includes('upload') ? 'mdi-cloud-upload-outline' : 'mdi-clipboard-check-outline';
-      rows.push({
-        key: `task-${alternativeIndex}-${key || rows.length}`,
-        label: requirement.label || '其他要求',
-        icon,
-        current: '数据未提供',
-        target: String(requirement.target || '需人工确认'),
-        detail: 'MoviePilot 未提供该月度数据',
-        eta: '—',
-        complete: reached,
-        unavailable: !reached,
-        progress: reached ? 100 : 0,
-      });
-    }
+    pushUnsupported(selectedAlternative.unsupported_requirements, `task-${alternativeIndex}`);
     return rows
   }
   const alternativeRows = (level.alternatives || []).map((option, optionIndex) => {
@@ -16016,13 +16069,23 @@ function requirementRows(site, level, alternativeIndex = null) {
       const currentNumber = Number(current);
       const available = current !== null && current !== undefined && Number.isFinite(currentNumber);
       const strict = Boolean(option[`${key}_strict`]);
+      const complete = available && (strict ? currentNumber > target : currentNumber >= target);
       return {
         target: `${label} ${strict ? '>' : '≥'} ${formatter(target)}`,
         current: available ? `${label} ${formatter(currentNumber)}` : `${label}数据未提供`,
-        complete: available && (strict ? currentNumber > target : currentNumber >= target),
-        progress: available ? Math.max(0, Math.min(100, currentNumber * 100 / target)) : 0,
+        complete,
+        progress: complete ? 100 : available ? Math.max(0, Math.min(99, currentNumber * 100 / target)) : 0,
       }
     });
+    const optionJoinRow = joinTimeRow(option, `alternative-${optionIndex}-join-time`);
+    if (optionJoinRow) {
+      conditions.push({
+        target: `注册 ${optionJoinRow.target}`,
+        current: `注册 ${optionJoinRow.current}`,
+        complete: optionJoinRow.complete,
+        progress: optionJoinRow.progress,
+      });
+    }
     for (const requirement of option?.unsupported_requirements || []) {
       conditions.push({ target: `${requirement.label || '其他要求'} ${requirement.target ?? ''}`.trim(), current: `${requirement.label || '其他要求'}数据未提供`, complete: false, progress: 0 });
     }
@@ -16052,9 +16115,9 @@ function requirementRows(site, level, alternativeIndex = null) {
   return rows
 }
 function averageRequirementProgress(requirements) {
-  return requirements.length
-    ? Math.round(requirements.reduce((sum, row) => sum + Number(row.progress || 0), 0) / requirements.length)
-    : 100
+  if (!requirements.length || requirements.every(row => row.complete)) return 100
+  const progress = Math.round(requirements.reduce((sum, row) => sum + Number(row.progress || 0), 0) / requirements.length);
+  return Math.min(99, progress)
 }
 function levelTrafficRequirements(level) {
   const requirements = [];
@@ -16075,7 +16138,13 @@ function levelPointsRequirement(level) {
 function levelHasDetails(level) {
   return Boolean(level.description?.trim() || level.alternatives?.length)
 }
-function levelAlternativeRequirements(level) {
+function levelAlternativeRequirements(level, site) {
+  level = springTaskLevel(site, level);
+  const download = level.downloadAlternatives?.[0];
+  const realDownload = level.downloadAlternatives?.[1]?.unsupported_requirements?.[0];
+  const commonDownload = download && realDownload
+    ? `下载量 ${download.min_download_strict ? '>' : '≥'} ${formatBytes(download.min_download)} 或 ${realDownload.label} ${realDownload.target}`
+    : '';
   const numerals = ['一', '二', '三', '四', '五', '六'];
   const fields = [
     ['min_join_days', '注册', durationLabel],
@@ -16092,6 +16161,7 @@ function levelAlternativeRequirements(level) {
   return (level.alternatives || []).map((option, index) => ({
     title: `任务${numerals[index] || index + 1}`,
     requirements: [
+      ...(commonDownload ? [commonDownload] : []),
       ...fields.filter(([key]) => Number(option[key]) > 0).map(([key, label, formatter]) => (
         `${label} ${option[`${key}_strict`] ? '>' : '≥'} ${formatter(option[key])}`
       )),
@@ -16170,7 +16240,7 @@ watch(
 watch(
   () => [historyScope.value, selectedHistoryPeriod.value?.key, selectedHistorySiteId.value],
   async () => {
-    if (historyScope.value === 'day') await loadHourlyTraffic();
+    await loadHourlyTraffic();
     await nextTick();
     renderHistoryChart();
   },
@@ -16183,7 +16253,12 @@ watch(activeTab, value => {
   if (value === 'history' && !(history.value.records || []).length) loadHistory();
 }, { immediate: true });
 onMounted(loadAll);
-onBeforeUnmount(() => historyChart?.destroy());
+onBeforeUnmount(() => {
+  hourlyRequestSequence += 1;
+  historyRequestSequence += 1;
+  distributionRequestSequence += 1;
+  historyChart?.destroy();
+});
 
 return (_ctx, _cache) => {
   const _component_VAlert = _resolveComponent("VAlert");
@@ -17326,7 +17401,7 @@ return (_ctx, _cache) => {
                                               ]),
                                               _cache[77] || (_cache[77] = _createElementVNode("p", null, "满足以下任一任务即可达到该等级", -1)),
                                               _createElementVNode("div", _hoisted_128, [
-                                                (_openBlock(true), _createElementBlock(_Fragment, null, _renderList(levelAlternativeRequirements(level), (task) => {
+                                                (_openBlock(true), _createElementBlock(_Fragment, null, _renderList(levelAlternativeRequirements(level, selectedRetirementSite.value), (task) => {
                                                   return (_openBlock(), _createElementBlock("div", {
                                                     key: task.title,
                                                     class: "retirement-level-row__task"
@@ -17780,6 +17855,6 @@ return (_ctx, _cache) => {
 }
 
 };
-const PTStatsWorkbench = /*#__PURE__*/_export_sfc(_sfc_main, [['__scopeId',"data-v-07cd7e31"]]);
+const PTStatsWorkbench = /*#__PURE__*/_export_sfc(_sfc_main, [['__scopeId',"data-v-1877d2f3"]]);
 
 export { PTStatsWorkbench as P };

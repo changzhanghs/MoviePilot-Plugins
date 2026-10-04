@@ -154,45 +154,72 @@ def _level_patch(
     return patch
 
 
+def _spring_alternatives(download: int, real_download: str, points: int, uploads: int, points_only: int) -> list[dict[str, Any]]:
+    """展开下载二选一与积分/发种二选一的组合，保留 AND/OR 语义。"""
+    return [
+        {**download_requirement, **points_requirement}
+        for download_requirement in (
+            {"min_download": download, "min_download_strict": True},
+            {"unsupported_requirements": [{"key": "real_download", "label": "真实下载量", "target": f"> {real_download}"}]},
+        )
+        for points_requirement in (
+            {"min_seeding_points": points, "min_torrent_uploads": uploads, "min_torrent_uploads_strict": True},
+            {"min_seeding_points": points_only},
+        )
+    ]
+
+
 # 用户依据各站当前等级页校正的规则。上游生成文件保持原样，便于后续重新生成和审计。
 _SITE_RULE_PATCHES: dict[str, dict[str, Any]] = {
+    "憨憨": {
+        "retirement_source_id": 8,
+        "levels": {
+            7: {"description": "得到一个邀请名额。"},
+            8: {"description": "得到两个邀请名额。Nexus Master及以上用户会永远保留账号。"},
+        },
+    },
     "Monikadesign": {"retirement_source_id": 8},
     "MyPT": {"retirement_source_id": 10},
     "PTTime": {"retirement_source_id": 9},
     "传道院": {"retirement_source_id": 10},
     "朱雀": {"retirement_source_id": 8},
     "春天": {
-        "retirement_source_id": 5,
+        "retirement_source_id": 6,
+        "additional_levels": [
+            {"id": 0, "name": "吸血鬼(Peasant)", "privilege": "被降级的用户，有7天时间提升分享率，否则会被踢。"},
+            {"id": 6, "name": "传说(Legend)", "privilege": "权限和神王相同。传说及以上等级免除自动降级。由管理员授予，或使用茉莉购买限时传说。"},
+        ],
+        "vip_levels": [{"id": 100, "name": "荣誉会员(Honor)", "privilege": "在某些方面做出特殊贡献的会员。由管理员授予。"}],
         "levels": {
+            1: {"description_suffix": "等级提升从第5周结束后开始；系统每24小时调整一次，非实时。分享率要求使用站点分享率，并非实际分享率。"},
             2: {
-                "min_download_strict": True,
+                "min_join_days": 35,
+                "min_download": None,
+                "min_download_strict": False,
                 "min_ratio_strict": True,
+                "description": "可以查看排行榜；可以浏览论坛邀请区；自助申请保种员；等级加成0.05。",
                 "description_suffix": _downgrade_description(1.1),
-                "alternatives": [
-                    {"min_seeding_points": 100_000, "min_torrent_uploads": 1, "min_torrent_uploads_strict": True},
-                    {"min_seeding_points": 150_000},
-                ],
+                "alternatives": _spring_alternatives(500 * 1024**3, "2048 GB", 100_000, 1, 150_000),
             },
             3: {
-                "min_download_strict": True,
+                "min_join_days": 35,
+                "min_download": None,
+                "min_download_strict": False,
                 "min_ratio_strict": True,
                 "description_suffix": _downgrade_description(1.1),
-                "alternatives": [
-                    {"min_seeding_points": 500_000, "min_torrent_uploads": 100, "min_torrent_uploads_strict": True},
-                    {"min_seeding_points": 1_000_000},
-                ],
+                "alternatives": _spring_alternatives(1024**4, "4 TB", 500_000, 100, 1_000_000),
             },
             4: {
-                "min_download_strict": True,
+                "min_join_days": 35,
+                "min_download": None,
+                "min_download_strict": False,
                 "min_ratio_strict": True,
                 "description_suffix": _downgrade_description(2),
-                "alternatives": [
-                    {"min_seeding_points": 1_200_000, "min_torrent_uploads": 300, "min_torrent_uploads_strict": True},
-                    {"min_seeding_points": 2_400_000},
-                ],
+                "alternatives": _spring_alternatives(3 * 1024**4, "12 TB", 1_200_000, 300, 2_400_000),
             },
             5: {
-                "description_suffix": "每月最后一天按保种或发种两条路线评选。",
+                "min_join_days": 35,
+                "description_suffix": "每月最后一天按保种或发种两条路线评选，精英、大师、神仙或上月神王有晋级资格。此等级不免除自动降级。",
                 "alternatives": [
                     {
                         "unsupported_requirements": [
@@ -211,6 +238,7 @@ _SITE_RULE_PATCHES: dict[str, dict[str, Any]] = {
                     },
                 ],
             },
+            6: {"unsupported_requirements": [{"key": "legend_grant", "label": "传说资格", "target": "管理员授予，或茉莉购买限时资格"}]},
         },
     },
     "ilolicon": {
@@ -252,15 +280,24 @@ _SITE_RULE_PATCHES: dict[str, dict[str, Any]] = {
         },
     },
     "Depth Studio": {
+        "retirement_source_id": 10,
         "levels": {
-            3: _level_patch(alias="Power User", ratio_strict=True, points_strict=True, downgrade_ratio=1.2, min_ratio=1.2),
-            4: _level_patch(alias="Elite User", ratio_strict=True, points_strict=True, downgrade_ratio=2.55, min_ratio=2.55),
-            5: _level_patch(alias="Crazy User", ratio_strict=True, points_strict=True, downgrade_ratio=2.55, min_ratio=2.55),
-            6: _level_patch(alias="Insane User", ratio_strict=True, points_strict=True, downgrade_ratio=3.2, min_ratio=3.2),
-            7: _level_patch(alias="Veteran User", ratio_strict=True, points_strict=True, downgrade_ratio=4.05, min_ratio=4.05),
-            8: _level_patch(alias="Extreme User", ratio_strict=True, points_strict=True, downgrade_ratio=5, min_ratio=5),
-            9: _level_patch(alias="Ultimate User", ratio_strict=True, points_strict=True, downgrade_ratio=6, min_ratio=6),
-            10: _level_patch(alias="Nexus Master", ratio_strict=True, points_strict=True, downgrade_ratio=7, min_ratio=7),
+            1: {"description": "被降级的用户，他们有15天时间来提升分享率，否则会被踢。不能发表趣味盒内容；不能申请友情链接；不能上传字幕。"},
+            2: {"description": "新用户的默认级别。"},
+            3: _level_patch(alias="Power User", ratio_strict=True, points_strict=True, downgrade_ratio=1.2, min_ratio=1.2,
+                            description="可以查看NFO文档；可以请求续种；可以查看排行榜；可以查看其它用户的种子历史（隐私等级未设置为强时）；可以删除自己上传的字幕。"),
+            4: _level_patch(alias="Elite User", ratio_strict=True, points_strict=True, downgrade_ratio=2.55, min_ratio=2.55, description=""),
+            5: _level_patch(alias="Crazy User", ratio_strict=True, points_strict=True, downgrade_ratio=2.55, min_ratio=2.55,
+                            description="可以在做种、下载、发布的时候选择匿名模式。"),
+            6: _level_patch(alias="Insane User", ratio_strict=True, points_strict=True, downgrade_ratio=3.2, min_ratio=3.2,
+                            description="可以查看普通日志。"),
+            7: _level_patch(alias="Veteran User", ratio_strict=True, points_strict=True, downgrade_ratio=4.05, min_ratio=4.05,
+                            description="可以查看其它用户的评论、帖子历史。"),
+            8: _level_patch(alias="Extreme User", ratio_strict=True, points_strict=True, downgrade_ratio=5, min_ratio=5,
+                            description="可以更新过期的外部信息；可以查看Extreme User论坛。Extreme User及以上用户封存账号后不会被删除。"),
+            9: _level_patch(alias="Ultimate User", ratio_strict=True, points_strict=True, downgrade_ratio=6, min_ratio=6, description=""),
+            10: _level_patch(alias="Nexus Master", ratio_strict=True, points_strict=True, downgrade_ratio=7, min_ratio=7,
+                             description="Nexus Master及以上用户会永远保留账号。"),
         },
     },
     "GGPT": {
@@ -445,20 +482,25 @@ def bundled_retirement_rules() -> dict[str, Mapping[str, Any]]:
         if raw_rule.get("is_dead"):
             continue
         site_name = str(raw_rule.get("name") or "").strip()
+        rule_patch = _SITE_RULE_PATCHES.get(site_name, {})
         normal_levels = [
             level
             for level in raw_rule.get("levels") or ()
             if isinstance(level, Mapping) and level.get("groupType") not in {"vip", "manager"}
         ]
+        normal_levels.extend(rule_patch.get("additional_levels", ()))
+        if rule_patch.get("additional_levels"):
+            normal_levels.sort(key=lambda level: level.get("id", 0))
         kept = next((level for level in normal_levels if level.get("isKept") is True), None)
         levels = [_adapt_level(level, site_name=site_name) for level in normal_levels]
         levels = [level for level in levels if level["name"]]
-        rule_patch = _SITE_RULE_PATCHES.get(site_name, {})
         _apply_level_patches(levels, rule_patch.get("levels", {}))
         vip_levels = [
             _adapt_level(level, site_name=site_name)
-            for level in raw_rule.get("levels") or ()
-            if isinstance(level, Mapping) and level.get("groupType") == "vip"
+            for level in rule_patch.get("vip_levels", [
+                level for level in raw_rule.get("levels") or ()
+                if isinstance(level, Mapping) and level.get("groupType") == "vip"
+            ])
         ]
         vip_levels = [level for level in vip_levels if level["name"]]
         retirement_name = str(kept.get("name") or "").strip() if kept else ""

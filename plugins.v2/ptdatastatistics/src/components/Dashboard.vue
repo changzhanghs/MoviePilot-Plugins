@@ -414,8 +414,13 @@ onUnmounted(() => {
 }
 
 @container (max-width: 480px) {
-  .pt-dashboard { block-size: auto; min-block-size: 100%; }
-  .pt-dashboard__body { grid-template-columns: 1fr; }
+  /* Dashboard grid cells can have a fixed height on mobile as well. */
+  .pt-dashboard__body {
+    grid-template-columns: 1fr;
+    align-content: start;
+    overflow-y: auto;
+    overscroll-behavior-y: contain;
+  }
   .donut-wrap { place-items: center; transform: none; }
   .donut { width: min(42cqi, 170px); }
   .pt-dashboard__details { width: 100%; }

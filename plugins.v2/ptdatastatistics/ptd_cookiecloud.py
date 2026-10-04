@@ -123,7 +123,7 @@ def _extract_metrics(user_info: Any) -> list[dict[str, Any]]:
         raise PTDCookieCloudError("PTD 用户信息的数据结构不受支持")
 
     output: list[dict[str, Any]] = []
-    histories = grouped_records.items() if grouped_records else user_info.items()
+    histories = grouped_records.items() if isinstance(user_info, list) else user_info.items()
     for site_key, history in histories:
         records: list[tuple[str, dict[str, Any]]] = []
         if isinstance(history, list):

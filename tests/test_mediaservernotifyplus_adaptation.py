@@ -20,12 +20,22 @@ class AdaptationTests(unittest.TestCase):
     def test_versions_and_manifests_match(self):
         v2_package = json.loads((ROOT / "package.v2.json").read_text(encoding="utf-8"))
         v3_package = json.loads((ROOT / "package.v3.json").read_text(encoding="utf-8"))
-        self.assertEqual(v2_package["MediaServerNotifyPlus"]["version"], "2.0.11")
         self.assertFalse(v2_package["MediaServerNotifyPlus"]["v3"])
-        self.assertEqual(v3_package["MediaServerNotifyPlus"]["version"], "3.0.11")
         self.assertEqual(v3_package["MediaServerNotifyPlus"]["system_version"], ">=3.0.0")
-        for package in (v2_package, v3_package):
+        for generation, package in (("plugins.v2", v2_package), ("plugins.v3", v3_package)):
             metadata = package["MediaServerNotifyPlus"]
+            plugin = ROOT / generation / "mediaservernotifyplus"
+            tree = ast.parse((plugin / "__init__.py").read_text(encoding="utf-8"))
+            version = next(
+                ast.literal_eval(node.value)
+                for node in ast.walk(tree)
+                if isinstance(node, ast.Assign)
+                and any(isinstance(target, ast.Name) and target.id == "plugin_version" for target in node.targets)
+            )
+            frontend = json.loads((plugin / "package.json").read_text(encoding="utf-8"))
+            self.assertEqual(metadata["version"], version)
+            self.assertEqual(frontend["version"], version)
+            self.assertIn(f"v{version}", metadata["history"])
             self.assertEqual(metadata["description"], "极简配置可自定义的媒体库通知消息")
             self.assertEqual(metadata["author"], "cz")
 

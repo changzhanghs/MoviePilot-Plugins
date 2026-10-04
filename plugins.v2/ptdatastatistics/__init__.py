@@ -64,7 +64,7 @@ class PTDataStatistics(_PluginBase):
     plugin_name = "PT数据统计"
     plugin_desc = "统计 PT 站点累计与每日上传下载，提供历史、养老进度和通知。"
     plugin_icon = "https://raw.githubusercontent.com/changzhanghs/MoviePilot-Plugins/main/icons/ptdatastatistics.png"
-    plugin_version = "2.1.3"
+    plugin_version = "2.1.7"
     plugin_author = "cz"
     author_url = "https://github.com/changzhanghs"
     plugin_config_prefix = "ptdatastatistics_"
@@ -1093,6 +1093,9 @@ class PTDataStatistics(_PluginBase):
                 "这是馒头完整等级规则示例，可直接上传，也可复制后修改为其他站点。",
                 "site、aliases 和 domains 均参与 MoviePilot 站点名称及域名匹配。",
                 "levels[].aliases 用于匹配 MoviePilot 返回的本地化等级名称。",
+                "retirement_level 必须填写该站实际保号等级，可使用 levels[].name 或对应 aliases 中的别名。",
+                "保号等级按名称或别名精确匹配（忽略大小写及符号），计算结果统一显示等级主名称。",
+                "各站保号等级不同；修改为其他站点时，请同步修改完整等级路线和 retirement_level，不要照搬馒头的 Extreme User。",
                 "流量门槛使用字节；strict 为 true 表示严格大于，否则表示大于等于。",
                 "_comment 仅用于说明，导入时不会写入插件规则。",
             ],

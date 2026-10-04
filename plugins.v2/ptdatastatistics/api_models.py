@@ -6,6 +6,8 @@ from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
+from .core import normalize_identity
+
 
 class SiteSnapshotData(BaseModel):
     """单个站点的累计值与当日增量。"""
@@ -292,11 +294,11 @@ class UploadedRetirementRuleData(BaseModel):
         """等级名不可重复，保号等级必须存在于完整路线。"""
 
         identities: set[str] = set()
-        retirement_identity = "".join(character for character in self.retirement_level.casefold() if character.isalnum())
+        retirement_identity = normalize_identity(self.retirement_level)
         retirement_found = False
         for level in self.levels:
             level_identities = {
-                "".join(character for character in value.casefold() if character.isalnum())
+                normalize_identity(value)
                 for value in (level.name, *level.aliases)
             }
             if not level_identities or "" in level_identities:
