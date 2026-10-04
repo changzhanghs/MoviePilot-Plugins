@@ -129,7 +129,7 @@ function retirementFixture() {
     normalizedSiteName: value => String(value || '').toLowerCase().replace(/[^\p{L}\p{N}]/gu, ''),
   }
   vm.createContext(state)
-  vm.runInContext(sourceFunction('function durationLabel(', 'function levelTrafficRequirements('), state)
+  vm.runInContext(sourceFunction('function durationLabel(', 'const selectedRetirementView = computed('), state)
   return state
 }
 
@@ -241,7 +241,15 @@ test('Spring combines download choices into one shared requirement and shows two
   assert.equal(tasks[1].subtitle, '积分 ≥ 150000')
   const first = state.requirementRows(site, level, 0)
   assert.equal(first.filter(row => row.label === '下载量').length, 1)
-  assert(first.find(row => row.label === '下载量').target.includes('真实下载量'))
+  assert.equal(first.find(row => row.label === '下载量').target, '> 500 B')
+  assert.equal(first.find(row => row.label === '下载量').current, '501 B')
+  const detailTasks = state.levelAlternativeRequirements(level, site)
+  assert.equal(detailTasks.length, 2)
+  for (const task of detailTasks) {
+    assert.equal(task.requirements[0], '下载量 > 500 B 或 真实下载量 > 2048 GB')
+  }
+  assert(detailTasks[0].requirements.includes('发布数 > 1'))
+  assert.equal(detailTasks[1].requirements.some(item => item.includes('发布数')), false)
   assert.equal(first.find(row => row.label === '发布数').complete, false)
   assert(state.averageRequirementProgress(first) < 100)
   const second = state.requirementRows(site, level, 1)

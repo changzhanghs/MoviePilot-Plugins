@@ -16010,8 +16010,8 @@ function requirementRows(site, level, alternativeIndex = null) {
   pushNumeric({ key: 'average-seeding-time', label: '平均做种时间', icon: 'mdi-timer-sand', current: site.average_seeding_time_days, target: level.min_average_seeding_time_days, formatter: value => `${formatNumber$1(value, 1)} 天`, strict: level.min_average_seeding_time_days_strict, unavailable: site.average_seeding_time_days === null || site.average_seeding_time_days === undefined });
   pushUnsupported(level.unsupported_requirements, 'requirement');
   if (level.downloadAlternatives?.length) {
-    const downloadRows = requirementRows(site, { reached, alternatives: level.downloadAlternatives });
-    rows.push(...downloadRows.map(row => ({ ...row, key: 'download-options', label: '下载量', icon: 'mdi-download-outline' })));
+    const download = level.downloadAlternatives[0];
+    pushNumeric({ key: 'download-options', label: '下载量', icon: 'mdi-download-outline', current: site.download, target: download.min_download, formatter: formatBytes, strict: download.min_download_strict });
   }
   const selectedAlternative = Number.isInteger(alternativeIndex) ? level.alternatives?.[alternativeIndex] : null;
   if (selectedAlternative) {
@@ -16138,7 +16138,13 @@ function levelPointsRequirement(level) {
 function levelHasDetails(level) {
   return Boolean(level.description?.trim() || level.alternatives?.length)
 }
-function levelAlternativeRequirements(level) {
+function levelAlternativeRequirements(level, site) {
+  level = springTaskLevel(site, level);
+  const download = level.downloadAlternatives?.[0];
+  const realDownload = level.downloadAlternatives?.[1]?.unsupported_requirements?.[0];
+  const commonDownload = download && realDownload
+    ? `下载量 ${download.min_download_strict ? '>' : '≥'} ${formatBytes(download.min_download)} 或 ${realDownload.label} ${realDownload.target}`
+    : '';
   const numerals = ['一', '二', '三', '四', '五', '六'];
   const fields = [
     ['min_join_days', '注册', durationLabel],
@@ -16155,6 +16161,7 @@ function levelAlternativeRequirements(level) {
   return (level.alternatives || []).map((option, index) => ({
     title: `任务${numerals[index] || index + 1}`,
     requirements: [
+      ...(commonDownload ? [commonDownload] : []),
       ...fields.filter(([key]) => Number(option[key]) > 0).map(([key, label, formatter]) => (
         `${label} ${option[`${key}_strict`] ? '>' : '≥'} ${formatter(option[key])}`
       )),
@@ -17394,7 +17401,7 @@ return (_ctx, _cache) => {
                                               ]),
                                               _cache[77] || (_cache[77] = _createElementVNode("p", null, "满足以下任一任务即可达到该等级", -1)),
                                               _createElementVNode("div", _hoisted_128, [
-                                                (_openBlock(true), _createElementBlock(_Fragment, null, _renderList(levelAlternativeRequirements(level), (task) => {
+                                                (_openBlock(true), _createElementBlock(_Fragment, null, _renderList(levelAlternativeRequirements(level, selectedRetirementSite.value), (task) => {
                                                   return (_openBlock(), _createElementBlock("div", {
                                                     key: task.title,
                                                     class: "retirement-level-row__task"
@@ -17848,6 +17855,6 @@ return (_ctx, _cache) => {
 }
 
 };
-const PTStatsWorkbench = /*#__PURE__*/_export_sfc(_sfc_main, [['__scopeId',"data-v-da4cd5a5"]]);
+const PTStatsWorkbench = /*#__PURE__*/_export_sfc(_sfc_main, [['__scopeId',"data-v-1877d2f3"]]);
 
 export { PTStatsWorkbench as P };
