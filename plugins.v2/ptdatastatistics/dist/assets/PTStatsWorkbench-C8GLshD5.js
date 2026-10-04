@@ -15870,6 +15870,26 @@ function elapsedAccountDays(site) {
   if (!Number.isFinite(start) || !Number.isFinite(end)) return null
   return Math.max(0, Math.floor((end - start) / 86400000))
 }
+function springTaskLevel(site, level) {
+  const identity = normalizedSiteName(site?.site_name);
+  if (!['春天', 'spring', 'springsunday'].includes(identity) || level?.alternatives?.length !== 4) return level
+  const [first, second, third, fourth] = level.alternatives;
+  const realDownload = option => option.unsupported_requirements?.find(item => item.key === 'real_download');
+  if (!(first.min_download > 0) || first.min_download !== second.min_download || !realDownload(third) || !realDownload(fourth)) return level
+  const task = option => {
+    const { min_download, min_download_strict, unsupported_requirements, ...requirements } = option;
+    return requirements
+  };
+  if (JSON.stringify(task(first)) !== JSON.stringify(task(third)) || JSON.stringify(task(second)) !== JSON.stringify(task(fourth))) return level
+  return {
+    ...level,
+    downloadAlternatives: [
+      { min_download: first.min_download, min_download_strict: first.min_download_strict },
+      { unsupported_requirements: [realDownload(third)] },
+    ],
+    alternatives: [task(first), task(second)],
+  }
+}
 function springUpgradeTasks(site, level) {
   const siteIdentity = normalizedSiteName(site?.site_name);
   const levelIdentity = normalizedSiteName(level?.name);
@@ -15882,6 +15902,7 @@ function springUpgradeTasks(site, level) {
   ]
 }
 function alternativeTaskOptions(site, level) {
+  level = springTaskLevel(site, level);
   const alternatives = level?.alternatives || [];
   if (alternatives.length < 2) return []
   const springTasks = springUpgradeTasks(site, level);
@@ -15889,8 +15910,8 @@ function alternativeTaskOptions(site, level) {
   const numerals = ['一', '二', '三', '四', '五', '六'];
   return alternatives.map((option, index) => {
     const targets = [];
-    if (option.min_seeding_points) targets.push(`积分 ${formatNumber$1(option.min_seeding_points, 0)}`);
-    if (option.min_torrent_uploads) targets.push(`发布 ${formatNumber$1(option.min_torrent_uploads, 0)}`);
+    if (option.min_seeding_points) targets.push(`积分 ${option.min_seeding_points_strict ? '>' : '≥'} ${formatNumber$1(option.min_seeding_points, 0)}`);
+    if (option.min_torrent_uploads) targets.push(`发布 ${option.min_torrent_uploads_strict ? '>' : '≥'} ${formatNumber$1(option.min_torrent_uploads, 0)}`);
     if (option.min_download) targets.push(`下载 ${formatBytes(option.min_download)}`);
     if (option.min_upload) targets.push(`上传 ${formatBytes(option.min_upload)}`);
     return {
@@ -15902,6 +15923,7 @@ function alternativeTaskOptions(site, level) {
 }
 function requirementRows(site, level, alternativeIndex = null) {
   if (!site || !level) return []
+  level = springTaskLevel(site, level);
   const rows = [];
   const reached = Boolean(level.reached);
   const pushNumeric = ({ key, label, icon, current, target, formatter, strict = false, unavailable = false, etaDate = '' }) => {
@@ -15987,6 +16009,10 @@ function requirementRows(site, level, alternativeIndex = null) {
   pushNumeric({ key: 'torrent-uploads', label: '发布数', icon: 'mdi-cloud-upload-outline', current: site.torrent_uploads, target: level.min_torrent_uploads, formatter: value => formatNumber$1(value, 0), strict: level.min_torrent_uploads_strict, unavailable: site.torrent_uploads === null || site.torrent_uploads === undefined });
   pushNumeric({ key: 'average-seeding-time', label: '平均做种时间', icon: 'mdi-timer-sand', current: site.average_seeding_time_days, target: level.min_average_seeding_time_days, formatter: value => `${formatNumber$1(value, 1)} 天`, strict: level.min_average_seeding_time_days_strict, unavailable: site.average_seeding_time_days === null || site.average_seeding_time_days === undefined });
   pushUnsupported(level.unsupported_requirements, 'requirement');
+  if (level.downloadAlternatives?.length) {
+    const downloadRows = requirementRows(site, { reached, alternatives: level.downloadAlternatives });
+    rows.push(...downloadRows.map(row => ({ ...row, key: 'download-options', label: '下载量', icon: 'mdi-download-outline' })));
+  }
   const selectedAlternative = Number.isInteger(alternativeIndex) ? level.alternatives?.[alternativeIndex] : null;
   if (selectedAlternative) {
     const taskJoinRow = joinTimeRow(selectedAlternative, `task-${alternativeIndex}-join-time`);
@@ -17822,6 +17848,6 @@ return (_ctx, _cache) => {
 }
 
 };
-const PTStatsWorkbench = /*#__PURE__*/_export_sfc(_sfc_main, [['__scopeId',"data-v-90730eeb"]]);
+const PTStatsWorkbench = /*#__PURE__*/_export_sfc(_sfc_main, [['__scopeId',"data-v-da4cd5a5"]]);
 
 export { PTStatsWorkbench as P };
