@@ -542,7 +542,10 @@ class MediaServerNotifyCore:
             episode_name = item.get("Name") or item.get("title") or raw.get("Name")
             if episode_name and str(episode_name) not in str(title):
                 season_episode += f" - {episode_name}"
-        client = getattr(info, "client", None) or raw.get("ClientName") or ""
+        client = (
+            getattr(info, "client", None) or raw.get("ClientName")
+            or raw.get("Client") or raw.get("App") or raw.get("AppName") or ""
+        )
         device_name = getattr(info, "device_name", None) or raw.get("DeviceName") or ""
         percentage = getattr(info, "percentage", None)
         progress = ""
@@ -567,12 +570,18 @@ class MediaServerNotifyCore:
             "region": "",
             "actors": "",
             "overview": getattr(info, "overview", "") or raw.get("Overview") or item.get("Overview") or "",
-            "user": getattr(info, "user_name", "") or raw.get("NotificationUsername") or "",
+            "user": (
+                getattr(info, "user_name", None) or raw.get("NotificationUsername")
+                or raw.get("Username") or raw.get("UserName") or ""
+            ),
             "device": " · ".join(
                 value for value in (str(device_name).strip(), str(client).strip()) if value
             ),
             "client": client,
-            "ip": getattr(info, "ip", "") or raw.get("RemoteEndPoint") or "",
+            "ip": (
+                getattr(info, "ip", None) or raw.get("RemoteEndPoint")
+                or raw.get("DeviceIP") or raw.get("DeviceIp") or ""
+            ),
             "progress": progress,
             "tmdb_url": "",
             "media_source": "",
