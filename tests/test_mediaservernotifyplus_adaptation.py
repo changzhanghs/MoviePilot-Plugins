@@ -37,7 +37,7 @@ class AdaptationTests(unittest.TestCase):
             self.assertEqual(frontend["version"], version)
             self.assertIn(f"v{version}", metadata["history"])
             self.assertEqual(metadata["description"], "极简配置可自定义的媒体库通知消息")
-            self.assertEqual(metadata["author"], "cz")
+            self.assertEqual(metadata["author"], "changzhanghs")
 
     def test_v2_uses_v2_host_contracts(self):
         source = ROOT / "plugins.v2" / "mediaservernotifyplus" / "__init__.py"
