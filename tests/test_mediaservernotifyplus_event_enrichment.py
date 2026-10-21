@@ -231,7 +231,75 @@ class EnrichmentCases:
         self.assertIn("👤 用户：cz", body)
         self.assertIn("🌐 IP：192.168.31.1 测试归属地", body)
         self.assertNotIn("📱 设备", body)
-        self.assertIn("cz 上来自 cz 的登录尝试失败\n192.168.31.1", body)
+        self.assertIn("cz 上来自 cz 的登录尝试失败", body)
+        self.assertEqual(body.count("192.168.31.1"), 1)
+
+    def test_login_details_drop_duplicate_ip_and_time_footer_from_screenshot(self):
+        self.plugin.handle_webhook(self.auth_failure({
+            "Title": "cz 上来自 cz 的登录尝试失败",
+            "Description": "192.168.31.1\n\n\nTime\n2026年10月22日星期四 00:21",
+        }))
+        body = self.message()["text"]
+        self.assertEqual(body.count("192.168.31.1"), 1)
+        self.assertIn("🌐 IP：192.168.31.1 测试归属地", body)
+        self.assertIn("🕐 时间：", body)
+        self.assertNotIn("Time", body)
+        self.assertNotIn("2026年10月22日", body)
+        self.assertTrue(body.endswith("📝 事件详情\ncz 上来自 cz 的登录尝试失败"))
+
+    def test_html_login_footer_is_removed_without_losing_failure_reason(self):
+        self.plugin.handle_webhook(self.auth_failure({
+            "Title": "cz 上来自 cz 的登录尝试失败",
+            "Description": (
+                "<p>192.168.31.1</p><br/><div>Time</div>"
+                "<div>2026年10月22日星期四 00:21</div><p>账号&nbsp;已锁定。</p>"
+            ),
+        }))
+        body = self.message()["text"]
+        self.assertEqual(body.count("192.168.31.1"), 1)
+        self.assertNotIn("Time", body)
+        self.assertNotIn("2026年10月22日", body)
+        self.assertIn("账号\xa0已锁定。", body)
+
+    def test_detail_cleanup_respects_disabled_ip_and_time_fields(self):
+        configs = self.plugin._field_configs
+        for row in configs["auth_failed"]:
+            if row["key"] in {"ip", "time"}:
+                row["enabled"] = False
+        self.plugin.init_plugin({"enabled": True, "field_configs": configs})
+        self.plugin.handle_webhook(self.auth_failure({
+            "Title": "cz 上来自 cz 的登录尝试失败",
+            "Description": "192.168.31.1\nTime\n2026年10月22日星期四 00:21",
+        }))
+        body = self.message()["text"]
+        self.assertIn("用户：cz", body)
+        self.assertIn("📝 事件详情\ncz 上来自 cz 的登录尝试失败", body)
+        self.assertNotIn("192.168.31.1", body)
+        self.assertNotIn("🕐 时间", body)
+        self.assertNotIn("Time", body)
+        self.assertNotIn("2026年10月22日", body)
+
+    def test_cleanup_removes_address_only_lines_but_keeps_useful_description(self):
+        core = self.adapter.core.MediaServerNotifyCore
+        for address in ("192.0.2.1:8096", "[2001:db8::1]:8096", "IP：192.0.2.1", "Remote IP: 192.0.2.1"):
+            with self.subTest(address=address):
+                self.assertEqual(core._auth_details({
+                    "Title": "登录失败", "Description": address + "\n请检查用户权限。",
+                }), "登录失败\n请检查用户权限。")
+        self.assertEqual(core._auth_details({
+            "Description": "来自 192.0.2.1 的请求因账号已锁定而被拒绝。",
+        }), "来自 192.0.2.1 的请求因账号已锁定而被拒绝。")
+
+    def test_time_footer_cleanup_preserves_other_time_related_information(self):
+        core = self.adapter.core.MediaServerNotifyCore
+        for stamp in ("2026-10-22 00:21:46", "2026-10-22T00:21:46Z", "2026年10月22日星期四 00:21"):
+            with self.subTest(stamp=stamp):
+                self.assertEqual(core._auth_details({
+                    "Description": "密码错误\nTime: " + stamp + "\n账号暂时锁定。",
+                }), "密码错误\n账号暂时锁定。")
+        self.assertEqual(core._auth_details({
+            "Description": "Time\n服务器时间不同步，请检查系统设置。",
+        }), "Time\n服务器时间不同步，请检查系统设置。")
 
     def test_real_login_text_obeys_custom_field_order_labels_and_switches(self):
         configs = self.plugin._field_configs
