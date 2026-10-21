@@ -9,6 +9,7 @@ import ipaddress
 import re
 import threading
 import time
+from html import unescape
 from typing import Any, Dict, List, Mapping, Optional, Tuple
 from urllib.parse import urlsplit
 
@@ -569,9 +570,58 @@ class MediaServerNotifyCore:
         lines = []
         for key in ("Title", "Description", "Message", "ShortOverview", "LongOverview"):
             text = cls._first_text(raw.get(key))
-            if text and text not in lines:
-                lines.append(text)
-        return "\n".join(lines)
+            # Emby 的说明既可能是纯文本，也可能带 HTML 换行和时间尾块。
+            text = re.sub(r"<(?:br\b[^>]*|/(?:p|div|tr|li|h[1-6]))\s*>", "\n", text, flags=re.I)
+            text = unescape(re.sub(r"<[^>]+>", "", text))
+            lines.extend(line.strip() for line in text.splitlines() if line.strip())
+
+        timestamp = (
+            r"\d{4}(?:年\d{1,2}月\d{1,2}日(?:星期[一二三四五六日天]|周[一二三四五六日天])?"
+            r"|[-/]\d{1,2}[-/]\d{1,2})[T\s]+\d{1,2}:\d{2}"
+            r"(?::\d{2}(?:\.\d+)?)?(?:Z|[+-]\d{2}:?\d{2})?"
+        )
+        result = []
+        index = 0
+        while index < len(lines):
+            line = lines[index]
+            if (
+                re.fullmatch(r"Time\s*[:：]?", line, flags=re.I)
+                and index + 1 < len(lines)
+                and re.fullmatch(timestamp, lines[index + 1])
+            ):
+                index += 2
+                continue
+            index += 1
+            if re.fullmatch(r"Time\s*[:：]\s*" + timestamp, line, flags=re.I):
+                continue
+            address_line = re.sub(
+                r"^(?:IP(?:地址)?|RemoteEndPoint|Remote IP|来源IP|远程地址)\s*[:：]\s*",
+                "", line, flags=re.I,
+            )
+            if cls._parse_ip_endpoint(address_line):
+                continue
+            if line not in result:
+                result.append(line)
+        return "\n".join(result)
+
+    @staticmethod
+    def _parse_ip_endpoint(value: str) -> str:
+        """只接受完整的 IP 或 IP:端口，供文本提取及详情去重共用。"""
+        value = value.strip()
+        if value.startswith("["):
+            match = re.fullmatch(r"\[([^\]]+)\](?::(\d+))?", value)
+            if not match or (match.group(2) is not None and int(match.group(2)) > 65535):
+                return ""
+            value = match.group(1)
+        elif value.count(":") == 1 and "." in value:
+            address, port = value.rsplit(":", 1)
+            if not port.isdigit() or not 0 <= int(port) <= 65535:
+                return ""
+            value = address
+        try:
+            return str(ipaddress.ip_address(value))
+        except ValueError:
+            return ""
 
     @classmethod
     def _auth_text_identity(cls, raw: Mapping[str, Any]) -> Tuple[str, str]:
@@ -599,15 +649,9 @@ class MediaServerNotifyCore:
                 r"(?<![\w.])[\da-fA-F:.]+(?:%[\w.-]+)?(?![\w.])", text,
             )
             for candidate in candidates:
-                if candidate.count(":") == 1 and "." in candidate:
-                    address, port = candidate.rsplit(":", 1)
-                    if port.isdigit() and 0 <= int(port) <= 65535:
-                        candidate = address
-                try:
-                    address = ipaddress.ip_address(candidate)
-                except ValueError:
-                    continue
-                return username, str(address)
+                address = cls._parse_ip_endpoint(candidate)
+                if address:
+                    return username, address
         return username, ""
 
     @classmethod
