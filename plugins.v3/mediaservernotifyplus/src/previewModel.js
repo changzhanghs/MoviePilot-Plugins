@@ -17,6 +17,7 @@ export const previewFieldMeta = {
   ip: { label: 'IP', icon: '🌐' },
   time: { label: '时间', icon: '🕐' },
   overview: { label: '剧情简介', icon: '📖', block: true },
+  event_details: { label: '事件详情', icon: '📝', block: true },
 }
 
 const mediaExample = {
@@ -44,6 +45,7 @@ export function createPreviewSample() {
       ip: '66.66.66.66 本地局域网',
       time: '2026-09-23 15:06:26',
       overview: media.overview,
+      event_details: '用户预览登录失败，请核对账号信息。',
     },
   }
 }

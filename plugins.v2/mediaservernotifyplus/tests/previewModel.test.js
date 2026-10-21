@@ -29,7 +29,7 @@ test('library events discard playback-only options while playback keeps them', (
 test('fixed media preview follows every selected field, label, and order', () => {
   const sample = createPreviewSample()
   const state = reactive({
-    rows: Object.keys(previewFieldMeta).map(key => ({ key, label: previewFieldMeta[key].label, enabled: true })),
+    rows: Object.keys(previewFieldMeta).filter(key => key !== 'event_details').map(key => ({ key, label: previewFieldMeta[key].label, enabled: true })),
     sample,
   })
   const preview = computed(() => buildPreviewRows(state.rows, state.sample))
@@ -66,4 +66,26 @@ test('server selection overrides only the preview value', () => {
   assert.equal(preview.label, '媒体服务器')
   assert.equal(preview.value, '客厅 Plex')
   assert.notEqual(sample.fields.server, '客厅 Plex')
+})
+
+
+test('failed-login details appear as an optional block and migrate into saved fields', () => {
+  const sample = createPreviewSample()
+  const defaults = {
+    auth_failed: [
+      { key: 'user', label: '用户', enabled: true },
+      { key: 'event_details', label: '事件详情', enabled: true },
+    ],
+  }
+  const model = normalizeNotificationModel({
+    field_configs: { auth_failed: [{ key: 'user', label: '账号', enabled: true }] },
+    _default_field_configs: defaults,
+  })
+  const rows = buildPreviewRows(model.field_configs.auth_failed, sample)
+  assert.equal(rows[0].label, '账号')
+  assert.equal(rows[1].key, 'event_details')
+  assert.equal(rows[1].block, true)
+  assert.match(rows[1].value, /登录失败/)
+  model.field_configs.auth_failed[1].enabled = false
+  assert.equal(buildPreviewRows(model.field_configs.auth_failed, sample).length, 1)
 })

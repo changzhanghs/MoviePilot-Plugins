@@ -319,7 +319,7 @@ class TemplateTests(unittest.TestCase):
         self.assertNotIn("ip_location", CORE.FIELD_CATALOG)
         self.assertNotIn("play_link", CORE.FIELD_CATALOG)
         self.assertEqual(CORE.FIELD_CATALOG["library"]["label"], "媒体库分类")
-        self.assertEqual(set(CORE.FIELD_CATALOG), set(CORE.COMMON_MEDIA_FIELDS))
+        self.assertEqual(set(CORE.FIELD_CATALOG), set(CORE.COMMON_MEDIA_FIELDS) | {"event_details"})
 
     def test_legacy_field_config_is_migrated_before_sending(self):
         normalized = CORE.normalize_field_configs({
