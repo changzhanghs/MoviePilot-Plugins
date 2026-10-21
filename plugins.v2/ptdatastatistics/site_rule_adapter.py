@@ -112,6 +112,7 @@ _SITE_COMPATIBILITY_ALIASES = {
     "Monikadesign": ("莫妮卡",),
     "MyPT": ("我的PT",),
     "PTTime": ("PT时间",),
+    "朱雀": ("ZhuQue",),
     "传道院": ("修道院",),
     "馒头": ("M-Team", "MTeam", "m-team"),
     "观众": ("Audiences", "Audience"),

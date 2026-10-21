@@ -6,11 +6,14 @@ import base64
 import hashlib
 import json
 from dataclasses import dataclass
+from functools import lru_cache
 from typing import Any
 from urllib.parse import urlparse
 
 from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
 from cryptography.hazmat.primitives.padding import PKCS7
+
+from .site_rule_adapter import bundled_retirement_rules
 
 
 _METRIC_KEYS = {
@@ -240,13 +243,28 @@ def _manual_mappings(raw: str) -> dict[str, str]:
     return output
 
 
+@lru_cache(maxsize=1)
+def _site_alias_groups() -> tuple[frozenset[str], ...]:
+    """Share the bundled PTD/MP site names without depending on their domains."""
+
+    groups = [
+        frozenset(_identity(value) for value in (key, *aliases))
+        for key, aliases in _KNOWN_ALIASES.items()
+    ]
+    for name, rule in bundled_retirement_rules().items():
+        groups.append(frozenset(
+            _identity(value) for value in (name, *(rule.get("aliases") or ())) if value
+        ))
+    return tuple(groups)
+
+
 def match_metrics(
     metrics: list[dict[str, Any]],
     metadata: dict[str, Any],
     configured_sites: list[dict[str, Any]],
     manual_mappings: str = "",
 ) -> list[dict[str, Any]]:
-    """Match PTD site identifiers to MP sites without importing other fields."""
+    """Match explicit mappings, then site names/aliases, then domain fallbacks."""
 
     host_map = _find_mapping(metadata, "siteHostMap")
     name_map = _find_mapping(metadata, "siteNameMap")
@@ -255,27 +273,40 @@ def match_metrics(
     for metric in metrics:
         ptd_site = str(metric.get("ptd_site") or "")
         ptd_identity = _identity(ptd_site)
-        candidates = [ptd_site, metric.get("site_name") or ""]
-        candidates.extend(_mapping_values(host_map, ptd_site))
-        candidates.extend(_mapping_values(name_map, ptd_site))
-        candidates.extend(_KNOWN_ALIASES.get(ptd_identity, ()))
-        if ptd_identity in manual:
-            candidates.insert(0, manual[ptd_identity])
-        identities = {_identity(value) for value in candidates if value}
-        hostnames = {_hostname(value) for value in candidates if value}
+        names = [
+            ptd_site, metric.get("site_name") or "",
+            *_mapping_values(name_map, ptd_site),
+        ]
+        identities = {_identity(value) for value in names if _identity(value)}
+        aliases = set(identities)
+        for group in _site_alias_groups():
+            if identities.intersection(group):
+                aliases.update(group)
+        hosts = [*names, *_mapping_values(host_map, ptd_site)]
+        hostnames = {_hostname(value) for value in hosts if value}
+        domain_identities = aliases | {_identity(value) for value in hosts if _identity(value)}
         selected = None
-        for site in configured_sites:
-            domain = _hostname(site.get("domain"))
-            name = _identity(site.get("name"))
-            domain_identity = _identity(domain)
-            if (
-                domain in hostnames
-                or name in identities
-                or domain_identity in identities
-                or any(identity and identity in domain_identity for identity in identities)
-            ):
-                selected = site
-                break
+        if target := manual.get(ptd_identity):
+            selected = next((site for site in configured_sites if (
+                _identity(site.get("name")) == _identity(target)
+                or _hostname(site.get("domain")) == _hostname(target)
+            )), None)
+        # Search every MP name before considering any site's domain. A changed
+        # PTD host must not hide its points or bind them to an unrelated site.
+        for wanted in (identities, aliases):
+            if selected is None:
+                selected = next((site for site in configured_sites
+                                 if _identity(site.get("name")) in wanted), None)
+        if selected is None:
+            selected = next((site for site in configured_sites if (
+                _hostname(site.get("domain")) in hostnames
+                or _identity(_hostname(site.get("domain"))) in domain_identities
+            )), None)
+        if selected is None:
+            selected = next((site for site in configured_sites if any(
+                len(identity) >= 4 and identity in _identity(_hostname(site.get("domain")))
+                for identity in domain_identities
+            )), None)
         if not selected:
             continue
         domain = str(selected.get("domain") or "").casefold()
