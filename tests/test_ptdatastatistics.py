@@ -173,6 +173,96 @@ class PTDCookieCloudTests(unittest.TestCase):
         pttime = next(item for item in matched if item["domain"] == "pttime.org")
         self.assertEqual(pttime["user_level"], "Elite User")
 
+    def test_matches_site_name_with_different_ptd_and_mp_domains(self):
+        metrics = ptd_cookiecloud._extract_metrics({
+            "old.example": {"siteName": "示例站", "seedingBonus": 1234},
+        })
+        configured = [{"id": 8, "name": "示例站", "domain": "new.example"}]
+
+        matched = ptd_cookiecloud.match_metrics(metrics, {}, configured)
+
+        self.assertEqual(len(matched), 1)
+        self.assertEqual(matched[0]["site_id"], 8)
+        self.assertEqual(matched[0]["domain"], "new.example")
+        self.assertEqual(matched[0]["seeding_points"], 1234)
+
+    def test_matches_bundled_site_aliases_without_domain_agreement(self):
+        for ptd_name, mp_name in (
+            ("Monikadesign", "莫妮卡"),
+            ("MyPT", "我的PT"),
+            ("zhuque", "朱雀"),
+            ("hhanclub", "憨憨"),
+            ("憨憨", "HHanClub"),
+            ("open.cd", "皇后"),
+        ):
+            with self.subTest(ptd_name=ptd_name, mp_name=mp_name):
+                matched = ptd_cookiecloud.match_metrics(
+                    [{"ptd_site": ptd_name, "seeding_points": 42}], {},
+                    [{"id": 1, "name": mp_name, "domain": "unrelated.example"}],
+                )
+                self.assertEqual(len(matched), 1)
+                self.assertEqual(matched[0]["seeding_points"], 42)
+
+    def test_matches_metadata_site_names_in_both_directions(self):
+        for name_map in ({"custom": "示例站"}, {"示例站": ["custom"]}):
+            with self.subTest(name_map=name_map):
+                matched = ptd_cookiecloud.match_metrics(
+                    [{"ptd_site": "custom", "seeding_points": 42}],
+                    {"nested": {"siteNameMap": name_map,
+                                "siteHostMap": {"custom": "old.example"}}},
+                    [{"id": 1, "name": "示例站", "domain": "new.example"}],
+                )
+                self.assertEqual(len(matched), 1)
+                self.assertEqual(matched[0]["domain"], "new.example")
+
+    def test_site_name_takes_priority_over_domain_matches(self):
+        for other_domain in ("old.example", "xcustom.example"):
+            with self.subTest(other_domain=other_domain):
+                matched = ptd_cookiecloud.match_metrics(
+                    [{"ptd_site": "custom", "site_name": "目标站"}],
+                    {"siteHostMap": {"custom": "old.example"}},
+                    [{"id": 1, "name": "其它站", "domain": other_domain},
+                     {"id": 2, "name": "目标站", "domain": "new.example"}],
+                )
+                self.assertEqual(matched[0]["site_id"], 2)
+
+    def test_exact_site_name_takes_priority_over_alias(self):
+        matched = ptd_cookiecloud.match_metrics(
+            [{"ptd_site": "hhanclub"}], {},
+            [{"id": 1, "name": "憨憨", "domain": "one.example"},
+             {"id": 2, "name": "HHanClub", "domain": "two.example"}],
+        )
+        self.assertEqual(matched[0]["site_id"], 2)
+
+    def test_manual_mapping_takes_priority_over_automatic_site_name(self):
+        configured = [
+            {"id": 1, "name": "观众", "domain": "audiences.me"},
+            {"id": 2, "name": "目标站", "domain": "target.example"},
+        ]
+        for target in ("目标站", "https://www.target.example/path"):
+            with self.subTest(target=target):
+                matched = ptd_cookiecloud.match_metrics(
+                    [{"ptd_site": "audiences"}], {}, configured,
+                    f"audiences={target}",
+                )
+                self.assertEqual(matched[0]["site_id"], 2)
+
+    def test_exact_domain_takes_priority_over_domain_substring(self):
+        matched = ptd_cookiecloud.match_metrics(
+            [{"ptd_site": "custom"}],
+            {"siteHostMap": {"custom": "https://www.target.example/path"}},
+            [{"id": 1, "name": "其它站", "domain": "xcustom.example"},
+             {"id": 2, "name": "目标站", "domain": "target.example"}],
+        )
+        self.assertEqual(matched[0]["site_id"], 2)
+
+    def test_short_identifier_does_not_match_unrelated_domain_substring(self):
+        matched = ptd_cookiecloud.match_metrics(
+            [{"ptd_site": "abc"}], {},
+            [{"id": 1, "name": "其它站", "domain": "xabc.example"}],
+        )
+        self.assertEqual(matched, [])
+
     def test_decrypts_cookiecloud_legacy_payload(self):
         from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
         from cryptography.hazmat.primitives.padding import PKCS7
