@@ -222,6 +222,75 @@ class EnrichmentCases:
         self.plugin.handle_webhook(self.auth_failure({"Title": "should-be-hidden"}))
         self.assertNotIn("should-be-hidden", self.message()["text"])
 
+    def test_screenshot_login_message_populates_selected_user_and_ip_fields(self):
+        self.plugin.handle_webhook(self.auth_failure({
+            "Title": "cz 上来自 cz 的登录尝试失败",
+            "Description": "192.168.31.1",
+        }))
+        body = self.message()["text"]
+        self.assertIn("👤 用户：cz", body)
+        self.assertIn("🌐 IP：192.168.31.1 测试归属地", body)
+        self.assertNotIn("📱 设备", body)
+        self.assertIn("cz 上来自 cz 的登录尝试失败\n192.168.31.1", body)
+
+    def test_real_login_text_obeys_custom_field_order_labels_and_switches(self):
+        configs = self.plugin._field_configs
+        configs["auth_failed"] = [
+            {"key": "ip", "label": "来源地址", "enabled": True},
+            {"key": "user", "label": "登录账号", "enabled": True},
+            {"key": "server", "label": "节点", "enabled": True},
+            {"key": "device", "label": "设备", "enabled": False},
+            {"key": "time", "label": "时间", "enabled": False},
+            {"key": "event_details", "label": "事件详情", "enabled": False},
+        ]
+        self.plugin.init_plugin({"enabled": True, "field_configs": configs})
+        self.plugin.handle_webhook(self.auth_failure({
+            "Title": "cz 上来自 测试 用户 的登录尝试失败",
+            "Description": "192.168.31.1",
+            "Session": {"DeviceName": "Phone"},
+        }))
+        self.assertEqual(self.message()["text"],
+                         "🌐 来源地址：192.168.31.1 测试归属地\n👤 登录账号：测试 用户\n🖥️ 节点：cz")
+
+    def test_structured_identity_has_priority_over_parsed_notification_text(self):
+        self.plugin.handle_webhook(self.auth_failure({
+            "Title": "cz 上来自 text-user 的登录尝试失败",
+            "Description": "192.168.31.1",
+            "User": {"Name": "structured-user"},
+            "Session": {"RemoteEndPoint": "192.0.2.1"},
+        }))
+        body = self.message()["text"]
+        self.assertIn("👤 用户：structured-user", body)
+        self.assertIn("🌐 IP：192.0.2.1 测试归属地", body)
+        self.assertNotIn("👤 用户：text-user", body)
+
+    def test_notification_text_identity_handles_ipv6_endpoints_and_english_titles(self):
+        for title, description, username, address in (
+            ("Failed login attempt from alice on cz", "Remote IP: 192.0.2.5:8096", "alice", "192.0.2.5"),
+            ("Authentication failed for Bob on cz", "[2001:db8::5]:8096", "Bob", "2001:db8::5"),
+            ("cz 上来自 中文用户 的登录尝试失败", "远程地址：::1", "中文用户", "::1"),
+        ):
+            with self.subTest(description=description):
+                user, ip = self.adapter.core.MediaServerNotifyCore._auth_text_identity({
+                    "Title": title, "Description": description,
+                })
+                self.assertEqual((user, ip), (username, address))
+
+    def test_notification_text_does_not_treat_dates_or_invalid_addresses_as_ip(self):
+        user, ip = self.adapter.core.MediaServerNotifyCore._auth_text_identity({
+            "Title": "登录尝试失败", "Description": "2026-10-22 00:12:01 999.168.31.1",
+        })
+        self.assertEqual((user, ip), ("", ""))
+
+    def test_parsed_users_and_ips_are_distinct_for_deduplication(self):
+        for user, address in (("alice", "192.0.2.1"), ("bob", "192.0.2.1"), ("bob", "192.0.2.2")):
+            event = self.auth_failure({
+                "Title": f"cz 上来自 {user} 的登录尝试失败", "Description": address,
+            })
+            self.plugin.handle_webhook(event)
+            self.plugin.handle_webhook(event)
+        self.assertEqual(self.plugin.post_message.call_count, 3)
+
 
 class V2Enrichment(EnrichmentCases, unittest.TestCase):
     generation = "plugins.v2"

@@ -5,6 +5,8 @@
 
 from __future__ import annotations
 
+import ipaddress
+import re
 import threading
 import time
 from typing import Any, Dict, List, Mapping, Optional, Tuple
@@ -572,12 +574,50 @@ class MediaServerNotifyCore:
         return "\n".join(lines)
 
     @classmethod
+    def _auth_text_identity(cls, raw: Mapping[str, Any]) -> Tuple[str, str]:
+        """Emby 登录失败可能只提供本地化标题和包含 IP 的说明。"""
+        username = ""
+        patterns = (
+            r"^.+?\s*上来自\s*(?P<user>.+?)\s*的登录尝试失败[。.!！]?$",
+            r"^Failed login attempt from\s+(?P<user>.+?)\s+on\s+.+?[.!]?$",
+            r"^Authentication failed for\s+(?P<user>.+?)(?:\s+on\s+.+?)?[.!]?$",
+        )
+        for key in ("Title", "ShortOverview", "Message"):
+            text = cls._first_text(raw.get(key))
+            for pattern in patterns:
+                match = re.fullmatch(pattern, text, flags=re.IGNORECASE)
+                if match:
+                    username = match.group("user").strip()
+                    break
+            if username:
+                break
+
+        # 说明中的地址优先于标题；只接受标准库能验证的 IP，不猜测设备或客户端。
+        for key in ("Description", "LongOverview", "Message", "ShortOverview", "Title"):
+            text = cls._first_text(raw.get(key))
+            candidates = re.findall(
+                r"(?<![\w.])[\da-fA-F:.]+(?:%[\w.-]+)?(?![\w.])", text,
+            )
+            for candidate in candidates:
+                if candidate.count(":") == 1 and "." in candidate:
+                    address, port = candidate.rsplit(":", 1)
+                    if port.isdigit() and 0 <= int(port) <= 65535:
+                        candidate = address
+                try:
+                    address = ipaddress.ip_address(candidate)
+                except ValueError:
+                    continue
+                return username, str(address)
+        return username, ""
+
+    @classmethod
     def _base_context(cls, info: Any, action: str) -> Dict[str, Any]:
         raw = cls._raw_object(info)
         item = cls._raw_item(info)
         user = raw.get("User") if isinstance(raw.get("User"), dict) else {}
         session = raw.get("Session") if isinstance(raw.get("Session"), dict) else {}
         auth = raw.get("AuthenticationInfo") if isinstance(raw.get("AuthenticationInfo"), dict) else {}
+        text_user, text_ip = cls._auth_text_identity(raw) if action == "auth_failed" else ("", "")
         title = (
             item.get("SeriesName") or item.get("grandparentTitle") or raw.get("SeriesName")
             or item.get("Name") or item.get("title") or raw.get("Name")
@@ -642,6 +682,7 @@ class MediaServerNotifyCore:
                 raw.get("Username"), raw.get("UserName"), user.get("Name"),
                 user.get("Username"), user.get("UserName"), auth.get("UserName"),
                 auth.get("Username"), session.get("UserName"), session.get("Username"),
+                text_user,
             ),
             "device": " · ".join(
                 value for value in (str(device_name).strip(), str(client).strip()) if value
@@ -653,6 +694,7 @@ class MediaServerNotifyCore:
                 raw.get("IpAddress"), raw.get("IPAddress"),
                 session.get("RemoteEndPoint"), session.get("RemoteEndpoint"),
                 auth.get("RemoteEndPoint"), auth.get("RemoteEndpoint"),
+                text_ip,
             ),
             "event_details": cls._auth_details(raw) if action == "auth_failed" else "",
             "progress": progress,
