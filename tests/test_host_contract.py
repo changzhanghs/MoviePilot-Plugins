@@ -601,7 +601,7 @@ class HostContractTests(unittest.TestCase):
         self.assertEqual(result.monthly[0].upload, 70)
         self.assertEqual(result.daily[0].download, 30)
 
-    def test_retirement_and_twelve_progress_include_inactive_sites_with_data(self):
+    def test_only_twelve_progress_includes_inactive_sites_with_data(self):
         repository = SnapshotRepository(DatabaseHandle())
         repository.upsert(
             [
@@ -627,8 +627,8 @@ class HostContractTests(unittest.TestCase):
         result = plugin._build_overview()
 
         self.assertEqual(result.sites, [])
-        self.assertEqual(result.retirement.total, 1)
-        self.assertEqual(result.retirement.sites[0].site_priority, 6)
+        self.assertEqual(result.retirement.total, 0)
+        self.assertEqual(result.retirement.sites, [])
         queen = next(item for item in result.twelve.items if item.key == "queen")
         self.assertEqual(queen.state, "joined")
 

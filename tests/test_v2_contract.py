@@ -197,7 +197,7 @@ class V2ContractTests(unittest.TestCase):
                 DummySiteOper.sites = []
                 DummySiteOper.user_data = []
 
-    def test_retirement_uses_current_mp_domains_and_preserves_history(self):
+    def test_retirement_uses_active_mp_domains_and_preserves_history(self):
         sites = [
             SimpleNamespace(id=7, name="同名站", domain="NEW.EXAMPLE.TEST", is_active=True),
             SimpleNamespace(id=8, name="停用站", domain="inactive.example.test", is_active=False),
@@ -233,15 +233,55 @@ class V2ContractTests(unittest.TestCase):
 
             self.assertFalse(plugin._ptd_cookiecloud_enabled)
             self.assertEqual(result.summary.valid_sites, 2)
-            self.assertEqual(result.retirement.total, 3)
+            self.assertEqual(result.retirement.total, 2)
             by_id = {site.site_id: site for site in result.retirement.sites}
-            self.assertEqual(set(by_id), {7, 8, 9})
+            self.assertEqual(set(by_id), {7, 9})
             self.assertEqual(by_id[7].site_name, "同名站")
             self.assertEqual(by_id[7].upload, 200)
             self.assertEqual(by_id[9].site_name, "同名站")
             self.assertEqual(len(result.history_sites), 5)
             self.assertEqual(sum(site.site_id is None for site in result.history_sites), 2)
             self.assertIn("已删除站", {site.site_name for site in result.history_sites})
+
+    def test_caishen_retirement_excludes_disabled_old_domain_and_uses_last_success(self):
+        sites = [
+            SimpleNamespace(id=7, name="财神", domain="current.example.test", is_active=True),
+            SimpleNamespace(id=8, name="财神", domain="old.example.test", is_active=False),
+        ]
+        rows = [
+            SimpleNamespace(
+                domain=domain,
+                name="财神",
+                updated_day=day,
+                updated_time="09:00:00",
+                upload=upload,
+                user_level=level,
+                err_msg=error,
+            )
+            for domain, day, upload, level, error in [
+                ("current.example.test", "2026-10-20", 200, "Power User", ""),
+                ("current.example.test", "2026-10-21", 0, "", "刷新失败"),
+                ("old.example.test", "2026-10-21", 900, "Veteran User", ""),
+            ]
+        ]
+        with tempfile.TemporaryDirectory() as directory, \
+                patch.object(DummySiteOper, "sites", sites), \
+                patch.object(DummySiteOper, "user_data", rows):
+            plugin = self.create_plugin(Path(directory))
+            try:
+                result = plugin._build_overview()
+            finally:
+                plugin.stop_service()
+
+            self.assertEqual(result.summary.valid_sites, 1)
+            self.assertEqual(result.retirement.total, 1)
+            site = result.retirement.sites[0]
+            self.assertEqual(site.site_id, 7)
+            self.assertEqual(site.current_level, "Power User")
+            self.assertEqual(site.retirement_level, "Veteran User")
+            self.assertEqual(site.upload, 200)
+            self.assertEqual(site.updated_day, "2026-10-20")
+            self.assertEqual({item.site_id for item in result.history_sites}, {7, 8})
 
     def test_retirement_is_empty_when_mp_has_no_configured_sites(self):
         row = SimpleNamespace(
