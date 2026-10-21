@@ -21,7 +21,7 @@ class MediaServerNotifyPlus(MediaServerNotifyCore, _PluginBase):
     plugin_name = "媒体库通知"
     plugin_desc = "极简配置可自定义的媒体库通知消息"
     plugin_icon = "mediaplay.png"
-    plugin_version = "2.1.3"
+    plugin_version = "2.1.4"
     plugin_author = "changzhanghs"
     author_url = "https://github.com/changzhanghs"
     plugin_config_prefix = "mediaservernotifyplus_"
@@ -133,6 +133,9 @@ class MediaServerNotifyPlus(MediaServerNotifyCore, _PluginBase):
             except Exception as error:
                 logger.debug(f"查询 IP 归属地失败：{error}")
 
+        if action in {"auth_success", "auth_failed", "test"}:
+            return
+
         tmdb_id = self._resolve_tmdb_id(info)
         if not tmdb_id:
             return
@@ -142,6 +145,12 @@ class MediaServerNotifyPlus(MediaServerNotifyCore, _PluginBase):
         context["tmdb_url"] = (
             f"https://www.themoviedb.org/movie/{tmdb_id}"
             if kind == MediaType.MOVIE else f"https://www.themoviedb.org/tv/{tmdb_id}"
+        )
+        self._enrich_tmdb_image(
+            info, context, tmdb_id, kind,
+            image_types=(MediaImageType.Poster,) if kind == MediaType.MOVIE else (
+                MediaImageType.Backdrop, MediaImageType.Poster,
+            ),
         )
         if not any(self._field_enabled(action, field) for field in (
             "rating", "region", "actors", "overview",
@@ -166,14 +175,6 @@ class MediaServerNotifyPlus(MediaServerNotifyCore, _PluginBase):
         context["actors"] = self._names(credits.get("cast") if isinstance(credits, dict) else [], 5)
         countries = tmdb.get("production_countries") or tmdb.get("origin_country") or []
         context["region"] = self._names(countries, 3)
-        if not context.get("_image"):
-            context["_image"] = self.chain.obtain_specific_image(
-                mediaid=tmdb_id,
-                mtype=kind,
-                image_type=MediaImageType.Poster if kind == MediaType.MOVIE else MediaImageType.Backdrop,
-                season=getattr(info, "season_id", None),
-                episode=getattr(info, "episode_id", None),
-            )
 
     @staticmethod
     def _log_debug(message: str) -> None:

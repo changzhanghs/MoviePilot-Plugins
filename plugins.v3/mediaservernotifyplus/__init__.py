@@ -22,7 +22,7 @@ class MediaServerNotifyPlus(MediaServerNotifyCore, _PluginBase):
     plugin_name = "媒体库通知"
     plugin_desc = "极简配置可自定义的媒体库通知消息"
     plugin_icon = "mediaplay.png"
-    plugin_version = "3.1.3"
+    plugin_version = "3.1.4"
     plugin_author = "changzhanghs"
     author_url = "https://github.com/changzhanghs"
     plugin_config_prefix = "mediaservernotifyplus_"
@@ -106,6 +106,10 @@ class MediaServerNotifyPlus(MediaServerNotifyCore, _PluginBase):
         source, media_id = resolve_media_identity(media=info)
         if source and media_id:
             return source, str(media_id)
+        # 删除后已无法回查条目，直接使用 Webhook 保留的 ProviderIds。
+        provider_ids = self._raw_item(info).get("ProviderIds") or {}
+        if isinstance(provider_ids, dict) and provider_ids.get("Tmdb"):
+            return MediaSource.TMDB, str(provider_ids["Tmdb"])
         item_path = getattr(info, "item_path", None)
         if item_path:
             source, media_id = resolve_media_identity(media=MetaInfoPath(Path(str(item_path))))
@@ -135,6 +139,9 @@ class MediaServerNotifyPlus(MediaServerNotifyCore, _PluginBase):
             except Exception as error:
                 logger.debug(f"查询 IP 归属地失败：{error}")
 
+        if action in {"auth_success", "auth_failed", "test"}:
+            return
+
         source, media_id = self._resolve_identity(info)
         if not source or not media_id:
             return
@@ -146,6 +153,12 @@ class MediaServerNotifyPlus(MediaServerNotifyCore, _PluginBase):
         context["tmdb_url"] = (
             f"https://www.themoviedb.org/movie/{media_id}"
             if kind == MediaType.MOVIE else f"https://www.themoviedb.org/tv/{media_id}"
+        )
+        self._enrich_tmdb_image(
+            info, context, media_id, kind,
+            image_types=(MediaImageType.Poster,) if kind == MediaType.MOVIE else (
+                MediaImageType.Backdrop, MediaImageType.Poster,
+            ),
         )
         if not any(self._field_enabled(action, field) for field in (
             "rating", "region", "actors", "overview",
@@ -171,14 +184,6 @@ class MediaServerNotifyPlus(MediaServerNotifyCore, _PluginBase):
         context["region"] = self._names(
             tmdb.get("production_countries") or tmdb.get("origin_country") or [], 3
         )
-        if not context.get("_image"):
-            context["_image"] = self.chain.obtain_specific_image(
-                mediaid=media_id,
-                mtype=kind,
-                image_type=MediaImageType.Poster if kind == MediaType.MOVIE else MediaImageType.Backdrop,
-                season=getattr(info, "season_id", None),
-                episode=getattr(info, "episode_id", None),
-            )
 
     @staticmethod
     def _log_debug(message: str) -> None:

@@ -8,6 +8,14 @@ from __future__ import annotations
 import threading
 import time
 from typing import Any, Dict, List, Mapping, Optional, Tuple
+from urllib.parse import urlsplit
+
+
+# 消息渠道使用可公开访问的图片 URL；原图随仓库 icons 资源发布。
+DEFAULT_NOTIFICATION_IMAGE = (
+    "https://raw.githubusercontent.com/changzhanghs/MoviePilot-Plugins/"
+    "main/icons/mediaservernotifyplus-default.jpg"
+)
 
 
 ACTION_LABELS: Dict[str, str] = {
@@ -62,6 +70,7 @@ FIELD_CATALOG: Dict[str, Dict[str, str]] = {
     "device": {"label": "设备", "icon": "📱"},
     "ip": {"label": "IP", "icon": "🌐"},
     "progress": {"label": "播放进度", "icon": "⏱️"},
+    "event_details": {"label": "事件详情", "icon": "📝", "style": "block"},
 }
 
 COMMON_MEDIA_FIELDS: Tuple[str, ...] = (
@@ -81,7 +90,7 @@ ACTION_FIELDS: Dict[str, Tuple[str, ...]] = {
     "playback_paused": COMMON_MEDIA_FIELDS,
     "playback_resumed": COMMON_MEDIA_FIELDS,
     "auth_success": ("user", "device", "ip", "server", "time"),
-    "auth_failed": ("user", "device", "ip", "server", "time"),
+    "auth_failed": ("user", "device", "ip", "server", "time", "event_details"),
     "rated": COMMON_MEDIA_FIELDS,
     "test": ("server", "time"),
 }
@@ -94,7 +103,7 @@ DEFAULT_ENABLED_FIELDS: Dict[str, Tuple[str, ...]] = {
     "playback_paused": ("season_episode", "user", "device", "ip", "progress", "time"),
     "playback_resumed": ("season_episode", "user", "device", "ip", "progress", "time"),
     "auth_success": ("user", "device", "ip", "server", "time"),
-    "auth_failed": ("user", "device", "ip", "server", "time"),
+    "auth_failed": ("user", "device", "ip", "server", "time", "event_details"),
     "rated": ("season_episode", "user", "rating", "server", "time"),
     "test": ("server", "time"),
 }
@@ -313,7 +322,7 @@ class MediaServerNotifyCore:
 
     def init_plugin(self, config: Optional[dict] = None) -> None:
         """可重复调用地读取配置并重建运行状态。"""
-        if not self._quiesce(flush=False):
+        if not self._quiesce():
             self._log_debug("旧通知任务停止超时，已隔离旧任务并重建配置")
         config = config or {}
         field_configs = normalize_field_configs(config.get("field_configs"))
@@ -455,6 +464,32 @@ class MediaServerNotifyCore:
             for row in self._field_configs.get(action, [])
         )
 
+    def _enrich_tmdb_image(
+        self, info: Any, context: Dict[str, Any], media_id: str, kind: Any,
+        *, image_types: Tuple[Any, ...],
+    ) -> None:
+        """补图独立于文字字段；删除事件使用不依赖媒体服务器的整部作品图片。"""
+        deleted = context.get("_action") == "library_deleted"
+        if context.get("_image") and not deleted:
+            return
+        lookups = []
+        season = getattr(info, "season_id", None)
+        episode = getattr(info, "episode_id", None)
+        if not deleted and (season is not None or episode is not None):
+            lookups.append((image_types[0], season, episode))
+        lookups.extend((image_type, None, None) for image_type in image_types)
+        for image_type, season, episode in lookups:
+            try:
+                image = self.chain.obtain_specific_image(
+                    mediaid=media_id, mtype=kind, image_type=image_type,
+                    season=season, episode=episode,
+                )
+                if image and str(image).strip():
+                    context["_image"] = str(image).strip()
+                    return
+            except Exception as error:
+                self._log_debug(f"补查媒体图片失败：{error}")
+
     def handle_webhook(self, event: Any) -> None:
         """标准化并处理 MoviePilot WebhookMessage 事件。"""
         generation = self._begin_operation()
@@ -519,10 +554,30 @@ class MediaServerNotifyCore:
         item = raw.get("Item") or raw.get("Metadata") or {}
         return item if isinstance(item, dict) else {}
 
+    @staticmethod
+    def _first_text(*values: Any) -> str:
+        for value in values:
+            if isinstance(value, str) and value.strip():
+                return value.strip()
+        return ""
+
+    @classmethod
+    def _auth_details(cls, raw: Mapping[str, Any]) -> str:
+        # 仅保留服务器的事件说明，避免将整个认证请求（可能含凭据）发入通知。
+        lines = []
+        for key in ("Title", "Description", "Message", "ShortOverview", "LongOverview"):
+            text = cls._first_text(raw.get(key))
+            if text and text not in lines:
+                lines.append(text)
+        return "\n".join(lines)
+
     @classmethod
     def _base_context(cls, info: Any, action: str) -> Dict[str, Any]:
         raw = cls._raw_object(info)
         item = cls._raw_item(info)
+        user = raw.get("User") if isinstance(raw.get("User"), dict) else {}
+        session = raw.get("Session") if isinstance(raw.get("Session"), dict) else {}
+        auth = raw.get("AuthenticationInfo") if isinstance(raw.get("AuthenticationInfo"), dict) else {}
         title = (
             item.get("SeriesName") or item.get("grandparentTitle") or raw.get("SeriesName")
             or item.get("Name") or item.get("title") or raw.get("Name")
@@ -542,11 +597,15 @@ class MediaServerNotifyCore:
             episode_name = item.get("Name") or item.get("title") or raw.get("Name")
             if episode_name and str(episode_name) not in str(title):
                 season_episode += f" - {episode_name}"
-        client = (
-            getattr(info, "client", None) or raw.get("ClientName")
-            or raw.get("Client") or raw.get("App") or raw.get("AppName") or ""
+        client = cls._first_text(
+            getattr(info, "client", None), raw.get("ClientName"), raw.get("Client"),
+            raw.get("App"), raw.get("AppName"), session.get("Client"),
+            session.get("ClientName"), auth.get("Client"), auth.get("App"),
         )
-        device_name = getattr(info, "device_name", None) or raw.get("DeviceName") or ""
+        device_name = cls._first_text(
+            getattr(info, "device_name", None), raw.get("DeviceName"),
+            session.get("DeviceName"), auth.get("DeviceName"),
+        )
         percentage = getattr(info, "percentage", None)
         progress = ""
         if percentage is not None:
@@ -556,6 +615,14 @@ class MediaServerNotifyCore:
                 progress = str(percentage)
         raw_server = raw.get("Server")
         raw_server_name = raw_server.get("Name", "") if isinstance(raw_server, dict) else ""
+        image = cls._first_text(getattr(info, "image_url", None))
+        if action == "library_deleted" and image:
+            # Item 图片接口在删除后失效，交给 TMDB 补图或默认图处理。
+            path = urlsplit(image).path.lower()
+            if ("/items/" in path and "/images/" in path) or (
+                "/library/metadata/" in path and "/thumb" in path
+            ):
+                image = ""
         return {
             "_action": action,
             "channel": getattr(info, "channel", ""),
@@ -570,23 +637,29 @@ class MediaServerNotifyCore:
             "region": "",
             "actors": "",
             "overview": getattr(info, "overview", "") or raw.get("Overview") or item.get("Overview") or "",
-            "user": (
-                getattr(info, "user_name", None) or raw.get("NotificationUsername")
-                or raw.get("Username") or raw.get("UserName") or ""
+            "user": cls._first_text(
+                getattr(info, "user_name", None), raw.get("NotificationUsername"),
+                raw.get("Username"), raw.get("UserName"), user.get("Name"),
+                user.get("Username"), user.get("UserName"), auth.get("UserName"),
+                auth.get("Username"), session.get("UserName"), session.get("Username"),
             ),
             "device": " · ".join(
                 value for value in (str(device_name).strip(), str(client).strip()) if value
             ),
             "client": client,
-            "ip": (
-                getattr(info, "ip", None) or raw.get("RemoteEndPoint")
-                or raw.get("DeviceIP") or raw.get("DeviceIp") or ""
+            "ip": cls._first_text(
+                getattr(info, "ip", None), raw.get("RemoteEndPoint"),
+                raw.get("RemoteEndpoint"), raw.get("DeviceIP"), raw.get("DeviceIp"),
+                raw.get("IpAddress"), raw.get("IPAddress"),
+                session.get("RemoteEndPoint"), session.get("RemoteEndpoint"),
+                auth.get("RemoteEndPoint"), auth.get("RemoteEndpoint"),
             ),
+            "event_details": cls._auth_details(raw) if action == "auth_failed" else "",
             "progress": progress,
             "tmdb_url": "",
             "media_source": "",
             "media_id": "",
-            "_image": getattr(info, "image_url", None),
+            "_image": image or None,
             "_link": None,
         }
 
@@ -662,7 +735,7 @@ class MediaServerNotifyCore:
             with self._condition:
                 if not self._accepting_events or self._aggregate_timers.get(key) is not timer:
                     return
-            self._flush_aggregate(key, expected_generation=generation)
+            self._flush_aggregate(key, expected_generation=generation, expected_timer=timer)
         finally:
             with self._condition:
                 if self._aggregate_timers.get(key) is timer:
@@ -670,23 +743,26 @@ class MediaServerNotifyCore:
                 self._condition.notify_all()
 
     def _flush_aggregate(
-        self, key: str, *, expected_generation: Optional[int] = None, allow_stopped: bool = False
+        self, key: str, *, expected_generation: Optional[int] = None,
+        expected_timer: Optional[threading.Timer] = None, allow_stopped: bool = False
     ) -> None:
         with self._condition:
             if expected_generation is not None and expected_generation != self._generation:
                 return
+            if expected_timer is not None and self._aggregate_timers.get(key) is not expected_timer:
+                return
             messages = self._pending_messages.pop(key, [])
-        if not messages:
-            return
-        context = dict(messages[0])
-        episodes = []
-        for message in messages:
-            value = str(message.get("season_episode") or "").strip()
-            if value and value not in episodes:
-                episodes.append(value)
-        context["season_episode"] = "、".join(episodes)
-        context["file_count"] = str(len(messages))
-        self._send_context("library_added", context, allow_stopped=allow_stopped)
+            if not messages:
+                return
+            context = dict(messages[0])
+            episodes = []
+            for message in messages:
+                value = str(message.get("season_episode") or "").strip()
+                if value and value not in episodes:
+                    episodes.append(value)
+            context["season_episode"] = "、".join(episodes)
+            context["file_count"] = str(len(messages))
+            self._send_context("library_added", context, allow_stopped=allow_stopped)
 
     def _send_context(self, action: str, context: Dict[str, Any], *, allow_stopped: bool = False) -> None:
         with self._condition:
@@ -703,13 +779,14 @@ class MediaServerNotifyCore:
         with self._condition:
             if not allow_stopped and not self._context_is_current(context):
                 return
-        self.post_message(
-            mtype=self._notification_type,
-            title=title,
-            text=body,
-            image=context.get("_image"),
-            link=context.get("_link"),
-        )
+            # 校验和提交在同一临界区，停止不能插入两者之间。
+            self.post_message(
+                mtype=self._notification_type,
+                title=title,
+                text=body,
+                image=str(context.get("_image") or "").strip() or DEFAULT_NOTIFICATION_IMAGE,
+                link=context.get("_link"),
+            )
 
     def _send_template_test(self, action: str) -> None:
         """使用稳定的示例字段测试指定通知排版。"""
@@ -727,7 +804,11 @@ class MediaServerNotifyCore:
             "progress": "36%", "tmdb_url": "https://www.themoviedb.org/movie/1",
             "media_source": "themoviedb", "media_id": "1", "file_count": "3",
             "library": "电影库",
-            "_image": "https://image.tmdb.org/t/p/w500/1E5baAaEse26fej7uHcjOgEE2t2.jpg",
+            "event_details": "测试用户登录失败，请核对账号信息。" if action == "auth_failed" else "",
+            "_image": (
+                "https://image.tmdb.org/t/p/w500/1E5baAaEse26fej7uHcjOgEE2t2.jpg"
+                if action not in {"auth_success", "auth_failed", "test"} else None
+            ),
             "_link": None,
         }
         self._send_context(action, sample)
