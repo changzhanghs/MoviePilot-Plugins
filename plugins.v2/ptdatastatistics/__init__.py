@@ -64,7 +64,7 @@ class PTDataStatistics(_PluginBase):
     plugin_name = "PT数据统计"
     plugin_desc = "统计 PT 站点累计与每日上传下载，提供历史、养老进度和通知。"
     plugin_icon = "https://raw.githubusercontent.com/changzhanghs/MoviePilot-Plugins/main/icons/ptdatastatistics.png"
-    plugin_version = "2.1.8"
+    plugin_version = "2.1.9"
     plugin_author = "changzhanghs"
     author_url = "https://github.com/changzhanghs"
     plugin_config_prefix = "ptdatastatistics_"
@@ -861,6 +861,8 @@ class PTDataStatistics(_PluginBase):
         twelve = TwelveProgressData.model_validate(
             build_twelve_progress(configured_all, valid_by_site_id)
         )
+        # 养老列表以 MP 站点管理中的域名为准，排除更换域名或删除站点后的历史残留。
+        # 当前配置中停用的站点仍需展示，不能仅按 is_active 筛选。
         retirement_snapshots = [
             {
                 **item,
@@ -886,6 +888,7 @@ class PTDataStatistics(_PluginBase):
                 ),
             }
             for item in latest_valid_all
+            if item["domain"] in configured_by_domain
         ]
         retirement = RetirementProgressData.model_validate(
             build_retirement_progress(

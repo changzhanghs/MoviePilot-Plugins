@@ -9,6 +9,7 @@ import unittest
 from pathlib import Path
 from types import SimpleNamespace
 from typing import ClassVar
+from unittest.mock import patch
 
 from sqlalchemy import inspect
 
@@ -195,6 +196,73 @@ class V2ContractTests(unittest.TestCase):
             finally:
                 DummySiteOper.sites = []
                 DummySiteOper.user_data = []
+
+    def test_retirement_uses_current_mp_domains_and_preserves_history(self):
+        sites = [
+            SimpleNamespace(id=7, name="同名站", domain="NEW.EXAMPLE.TEST", is_active=True),
+            SimpleNamespace(id=8, name="停用站", domain="inactive.example.test", is_active=False),
+            SimpleNamespace(id=9, name="同名站", domain="other.example.test", is_active=True),
+        ]
+        rows = [
+            SimpleNamespace(
+                domain=domain,
+                name=name,
+                updated_day=day,
+                updated_time="09:00:00",
+                upload=upload,
+                download=50,
+                err_msg="",
+            )
+            for domain, name, day, upload in [
+                ("old.example.test", "同名站", "2026-10-19", 500),
+                ("new.example.test", "旧名称", "2026-10-19", 100),
+                ("NEW.EXAMPLE.TEST", "旧名称", "2026-10-20", 200),
+                ("inactive.example.test", "停用站", "2026-10-20", 300),
+                ("other.example.test", "同名站", "2026-10-20", 400),
+                ("deleted.example.test", "已删除站", "2026-10-20", 600),
+            ]
+        ]
+        with tempfile.TemporaryDirectory() as directory, \
+                patch.object(DummySiteOper, "sites", sites), \
+                patch.object(DummySiteOper, "user_data", rows):
+            plugin = self.create_plugin(Path(directory))
+            try:
+                result = plugin._build_overview()
+            finally:
+                plugin.stop_service()
+
+            self.assertFalse(plugin._ptd_cookiecloud_enabled)
+            self.assertEqual(result.summary.valid_sites, 2)
+            self.assertEqual(result.retirement.total, 3)
+            by_id = {site.site_id: site for site in result.retirement.sites}
+            self.assertEqual(set(by_id), {7, 8, 9})
+            self.assertEqual(by_id[7].site_name, "同名站")
+            self.assertEqual(by_id[7].upload, 200)
+            self.assertEqual(by_id[9].site_name, "同名站")
+            self.assertEqual(len(result.history_sites), 5)
+            self.assertEqual(sum(site.site_id is None for site in result.history_sites), 2)
+            self.assertIn("已删除站", {site.site_name for site in result.history_sites})
+
+    def test_retirement_is_empty_when_mp_has_no_configured_sites(self):
+        row = SimpleNamespace(
+            domain="deleted.example.test",
+            name="已删除站",
+            updated_day="2026-10-20",
+            upload=100,
+            err_msg="",
+        )
+        with tempfile.TemporaryDirectory() as directory, \
+                patch.object(DummySiteOper, "sites", []), \
+                patch.object(DummySiteOper, "user_data", [row]):
+            plugin = self.create_plugin(Path(directory))
+            try:
+                result = plugin._build_overview()
+            finally:
+                plugin.stop_service()
+
+            self.assertEqual(result.retirement.total, 0)
+            self.assertEqual(result.retirement.sites, [])
+            self.assertEqual(len(result.history_sites), 1)
 
 
 if __name__ == "__main__":
