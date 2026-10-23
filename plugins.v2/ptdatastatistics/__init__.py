@@ -66,7 +66,7 @@ class PTDataStatistics(_PluginBase):
     plugin_name = "PT数据统计"
     plugin_desc = "统计 PT 站点累计与每日上传下载，提供历史、养老进度和通知。"
     plugin_icon = "https://raw.githubusercontent.com/changzhanghs/MoviePilot-Plugins/main/icons/ptdatastatistics.png"
-    plugin_version = "2.1.12"
+    plugin_version = "2.1.13"
     plugin_author = "changzhanghs"
     author_url = "https://github.com/changzhanghs"
     plugin_config_prefix = "ptdatastatistics_"
@@ -1091,21 +1091,14 @@ class PTDataStatistics(_PluginBase):
         """只读取已保存数据，不刷新站点、导入 PTD 或写入历史。"""
 
         configured = self._configured_sites()
-        by_domain = {site["domain"]: site for site in configured if site.get("domain")}
-        raw_records = [self._snapshot_dict(row, by_domain) for row in SiteOper().get_userdata() or []]
-        daily_records = self._deduplicate_daily_snapshots(raw_records)
-        repository = SnapshotRepository(None, daily_records)
-        ptd_metrics = self._ptd_metrics_by_domain()
-        inputs = self._retirement_snapshots(repository, configured, ptd_metrics)
+        repository = SnapshotRepository(None, self._mp_daily_snapshots())
         return build_diagnostic_export(
             plugin_version=self.plugin_version,
             generated_at=self._now().isoformat(timespec="seconds"),
-            timezone=settings.TZ,
             configured_sites=configured,
-            raw_records=raw_records,
-            daily_records=daily_records,
-            calculation_inputs=inputs,
-            ptd_metrics=ptd_metrics,
+            latest_successful=repository.latest(active_only=True, valid_only=True),
+            latest_records=repository.latest(active_only=True, valid_only=False),
+            ptd_metrics=self._ptd_metrics_by_domain(),
             settings=self._settings().model_dump(),
             rules=self._retirement_rules(),
         )

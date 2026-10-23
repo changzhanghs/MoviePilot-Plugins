@@ -71,7 +71,7 @@ function diagnosticFixture() {
 
 test('diagnostic download uses the authenticated API once and writes the returned JSON', async () => {
   const { state, requests, downloads, blobs, revoked, timers } = diagnosticFixture()
-  const data = { manifest: { generated_at: '2026-10-23T14:35:00+08:00' }, settings_and_rules: {} }
+  const data = { manifest: { generated_at: '2026-10-23T14:35:00+08:00' }, failed_sites: [] }
   const pending = state.exportDiagnostics()
   await state.exportDiagnostics()
   assert.equal(requests.length, 1)
@@ -99,7 +99,7 @@ test('failed or invalid diagnostic responses show an error and allow retry witho
     assert.deepEqual(downloads, [])
     const retry = state.exportDiagnostics()
     assert.equal(requests.length, 2)
-    requests[1].resolve({ manifest: {}, settings_and_rules: {} })
+    requests[1].resolve({ manifest: {}, failed_sites: [] })
     await retry
     assert.equal(downloads.length, 1)
   }
