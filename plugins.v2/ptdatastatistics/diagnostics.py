@@ -86,12 +86,12 @@ def build_diagnostic_export(
     latest_records: list[dict[str, Any]], ptd_metrics: dict[str, dict[str, Any]],
     settings: dict[str, Any], rules: dict[str, Mapping[str, Any]],
 ) -> dict[str, Any]:
-    """每个异常站点仅导出一条匹配诊断，不导出历史或账户指标。"""
+    """每个启用站点仅导出一条匹配诊断，便于核对误匹配。"""
 
     successful = {item["domain"]: item for item in latest_successful}
     latest = {item["domain"]: item for item in latest_records}
     manually_wealthy = {normalize_identity(value) for value in settings.get("wealthy_retirement_sites") or []}
-    failures = []
+    records = []
     active_sites = [site for site in configured_sites if site.get("is_active")]
     for site in active_sites:
         domain = as_text(site.get("domain"))
@@ -99,8 +99,8 @@ def build_diagnostic_export(
         base = {"site_id": site.get("id"), "site_name": site.get("name", "")}
         if mp is None:
             row = latest.get(domain, {})
-            failures.append({
-                **base, "reason": "没有成功的 MoviePilot 站点数据，未进入养老进度计算",
+            records.append({
+                **base, "status": "no_data", "reason": "没有成功的 MoviePilot 站点数据，未进入养老进度计算",
                 "mp_updated_at": row.get("source_updated_at", ""),
                 "err_msg": row.get("err_msg", ""),
             })
@@ -115,47 +115,57 @@ def build_diagnostic_export(
         levels = list(rule.get("levels") or [])
         vip_levels = list(rule.get("vip_levels") or [])
         retirement = as_text(rule.get("retirement_level"))
-        special_member = any(
+        manual_wealthy = any(
             normalize_identity(value) in manually_wealthy
             for value in (domain, site.get("id"), snapshot.get("site_name"))
             if normalize_identity(value)
-        ) or _match_level_index(effective_level, vip_levels) >= 0
+        )
+        vip_index = _match_level_index(effective_level, vip_levels)
+        current_index = _match_level_index(effective_level, levels)
+        special_member = manual_wealthy or vip_index >= 0
+        reason = ""
         if not levels:
-            if special_member:
-                continue
-            reason = "未匹配到站点规则" if match["rule"] is None else "命中规则但没有普通等级列表"
+            if not special_member:
+                reason = "未匹配到站点规则" if match["rule"] is None else "命中规则但没有普通等级列表"
         elif retirement and _match_level_index(retirement, levels, exact_only=True) < 0:
             reason = "规则中的保号等级不在等级列表中"
-        elif not special_member and _match_level_index(effective_level, levels) < 0:
+        elif not special_member and current_index < 0:
             reason = "当前等级未提供" if not effective_level else "当前等级无法匹配规则中的等级名称或别名"
-        else:
-            continue
-        failure = {
-            **base, "reason": reason,
+        record = {
+            **base, "status": "unmatched" if reason else "matched", "reason": reason,
             "mp_updated_at": mp.get("source_updated_at", ""),
             "mp_level": mp_level, "ptd_level": ptd_level,
             "effective_level": effective_level,
             "level_source": "moviepilot" if mp_level else "ptd" if ptd_level else "unavailable",
             "rule_match": {
                 "name": match["rule_key"], "source": match["source"], "matched_by": match["matched_by"],
+                "matched_level": (
+                    vip_levels[vip_index].get("name", "") if vip_index >= 0
+                    else levels[current_index].get("name", "") if current_index >= 0 else ""
+                ),
             },
         }
+        if manual_wealthy:
+            record["manual_wealthy"] = True
+        if vip_index >= 0:
+            record["vip_matched"] = True
         if rule:
-            failure["rule_match"].update({
+            record["rule_match"].update({
                 "retirement_level": retirement,
                 "levels": _level_names(levels), "vip_levels": _level_names(vip_levels),
             })
-        failures.append(failure)
+        records.append(record)
 
     payload = {
         "manifest": {
-            "schema_version": 2, "plugin_version": plugin_version, "generated_at": generated_at,
-            "checked_sites": len(active_sites), "failed_sites": len(failures),
+            "schema_version": 3, "plugin_version": plugin_version, "generated_at": generated_at,
+            "checked_sites": len(active_sites),
+            "failed_sites": sum(record["status"] != "matched" for record in records),
         },
-        "failed_sites": failures,
+        "sites": records,
     }
     # 无法命中规则时，仅补充自定义站点名称及别名以核对覆盖配置。
-    if any(item.get("rule_match", {}).get("matched_by") == "unmatched" for item in failures):
+    if any(item.get("rule_match", {}).get("matched_by") == "unmatched" for item in records):
         custom_names = [
             {"name": name, "aliases": list(rule.get("aliases") or [])}
             for name, rule in rules.items() if rule.get("_custom_rule")
