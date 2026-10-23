@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import importlib
+import json
 import sys
 import tempfile
 import types
@@ -10,7 +11,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import ClassVar
 from types import SimpleNamespace
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 from zoneinfo import ZoneInfo
 
 from fastapi import HTTPException, Request
@@ -115,6 +116,118 @@ class DatabaseHandle:
 
 
 class HostContractTests(unittest.TestCase):
+    def test_diagnostic_export_is_read_only_complete_and_sanitized(self):
+        plugin = PTDataStatistics.__new__(PTDataStatistics)
+        plugin._apply_settings(SettingsData(
+            enabled=True, ptd_cookiecloud_enabled=True,
+            ptd_cookiecloud_uuid="private-uuid", ptd_cookiecloud_password="private-password",
+            ptd_cookiecloud_headers="X-Token: private-header",
+            ptd_site_mappings="ptd-site=private.test", wealthy_retirement_sites=["private.test"],
+            custom_retirement_rules=[{
+                "site": "测试规则", "domains": ["private.test"],
+                "retirement_level": "Keeper", "levels": [
+                    {"name": "User"},
+                    {"name": "Keeper", "min_seeding_points": 100, "min_torrent_uploads": 5,
+                     "min_upload": 500, "min_upload_strict": True,
+                     "description": "详见 https://private.test/rule?token=private-token",
+                     "unsupported_requirements": [{"key": "unknown", "label": "待核实", "token": "nested-token"}]},
+                ],
+            }],
+        ))
+        plugin._now = lambda: datetime(2026, 10, 23, 12, 0, tzinfo=ZoneInfo("Asia/Shanghai"))
+        site = SimpleNamespace(id=7, name="测试站点", domain="private.test", is_active=True, pri=1, cookie="private-cookie")
+        rows = [SimpleNamespace(
+            domain="private.test", name="测试站点", username="private-user", userid="999888",
+            join_at="2026-01-01", user_level="", upload=500, download=10, ratio=50,
+            bonus=100, seeding=4, seeding_size=200, updated_day="2026-10-23",
+            updated_time=time, err_msg=error,
+        ) for time, error in (
+            ("09:00:00", ""), ("10:00:00", ""),
+            ("11:00:00", "连接 https://private.test/?passkey=private-passkey 失败 用户private-user登录 999888 token=unknown-token Authorization: Bearer unknown-auth"),
+        )]
+        plugin.save_data("ptd_latest_metrics_v1", {"metrics": [{
+            "domain": "private.test", "site_id": 7, "ptd_site": "private.test",
+            "user_level": "User", "seeding_points": 25, "seeding_points_hourly": 2,
+            "estimated_bonus_hourly": 3, "torrent_uploads": 2, "source_updated_at": "2026-10-23 08:00",
+        }]})
+        plugin.save_data = Mock(side_effect=AssertionError("export must not write"))
+        plugin.sync_from_mp = Mock(side_effect=AssertionError("export must not refresh"))
+        plugin.sync_from_ptd = Mock(side_effect=AssertionError("export must not import"))
+        with patch.object(plugin_module, "SiteOper") as oper:
+            oper.return_value.list.return_value = [site]
+            oper.return_value.get_userdata.return_value = rows
+            data = plugin.api_export_diagnostics()
+            expected = plugin._build_overview().retirement.sites[0].model_dump()
+
+        history = data["accounts_and_history"]
+        self.assertEqual(len(history["raw_daily_records"]), 3)
+        self.assertEqual(len(history["daily_records"]), 1)
+        self.assertEqual(history["daily_records"][0]["updated_time"], "10:00:00")
+        self.assertTrue(history["raw_daily_records"][2]["err_msg"])
+        value = history["calculation_inputs"][0]
+        self.assertEqual(value["user_level"], "User")
+        self.assertEqual(value["seeding_points"], 25)
+        self.assertEqual(value["field_sources"]["user_level"], "ptd")
+        self.assertEqual(value["field_sources"]["seeding_points"], "ptd")
+        self.assertEqual(value["field_sources"]["upload"], "moviepilot")
+        matched = data["settings_and_rules"]["site_rules"][0]
+        self.assertEqual(matched["rule_source"], "custom")
+        self.assertEqual(matched["matched_by"], "domain")
+        self.assertEqual(matched["result"]["status"], "wealthy_retired")
+        self.assertEqual(matched["result"]["current_level"], expected["current_level"])
+        self.assertEqual(matched["result"]["route"][1]["missing"], expected["route"][1]["missing"])
+        self.assertIn("上传需大于 500 B", matched["result"]["route"][1]["missing"])
+        refs = {item["site_ref"] for item in history["raw_daily_records"]}
+        self.assertEqual(refs, {data["sites"][0]["site_ref"]})
+        serialized = json.dumps(data, ensure_ascii=False)
+        for secret in (
+            "private.test", "private-uuid", "private-password", "private-header", "private-cookie",
+            "private-token", "private-passkey", "unknown-token", "unknown-auth", "nested-token", "private-user", "999888",
+        ):
+            self.assertNotIn(secret, serialized)
+        def assert_private_keys_removed(value):
+            if isinstance(value, dict):
+                self.assertFalse({"domain", "domains", "username", "userid"}.intersection(value))
+                for child in value.values():
+                    assert_private_keys_removed(child)
+            elif isinstance(value, list):
+                for child in value:
+                    assert_private_keys_removed(child)
+        assert_private_keys_removed(data)
+        plugin.save_data.assert_not_called()
+        plugin.sync_from_mp.assert_not_called()
+        plugin.sync_from_ptd.assert_not_called()
+        route = next(item for item in plugin.get_api() if item["path"] == "/diagnostics/export")
+        self.assertEqual(route["auth"], "bear")
+        self.assertFalse(route.get("allow_anonymous", False))
+
+    def test_diagnostic_export_handles_empty_inactive_unmatched_and_archived_sites(self):
+        plugin = PTDataStatistics.__new__(PTDataStatistics)
+        plugin._apply_settings(SettingsData())
+        with patch.object(plugin_module, "SiteOper") as oper:
+            oper.return_value.list.return_value = []
+            oper.return_value.get_userdata.return_value = []
+            empty = plugin.api_export_diagnostics()
+        self.assertEqual(empty["sites"], [])
+        self.assertEqual(empty["settings_and_rules"]["site_rules"], [])
+        sites = [SimpleNamespace(id=i, name=f"Unlisted{i}", domain=f"site{i}.invalid", is_active=i != 2)
+                 for i in (1, 2, 3)]
+        rows = [SimpleNamespace(domain=domain, upload=100, user_level="User", updated_day="2026-10-23")
+                for domain in ("site1.invalid", "site2.invalid", "archived.invalid")]
+        with patch.object(plugin_module, "SiteOper") as oper:
+            oper.return_value.list.return_value = sites
+            oper.return_value.get_userdata.return_value = rows
+            data = plugin.api_export_diagnostics()
+        rules = data["settings_and_rules"]["site_rules"]
+        self.assertEqual(rules[0]["matched_by"], "unmatched")
+        self.assertEqual(rules[0]["result"]["status"], "rule_missing")
+        self.assertEqual(rules[1]["calculation_status"], "inactive")
+        self.assertEqual(rules[2]["calculation_status"], "no_successful_snapshot")
+        history = data["accounts_and_history"]
+        self.assertEqual(len(history["raw_daily_records"]), 3)
+        self.assertEqual(len(history["calculation_inputs"]), 1)
+        self.assertEqual(len({row["site_ref"] for row in history["raw_daily_records"]}), 3)
+
     def test_site_projection_exposes_priority_without_credentials(self):
         site = SimpleNamespace(
             id=7,
