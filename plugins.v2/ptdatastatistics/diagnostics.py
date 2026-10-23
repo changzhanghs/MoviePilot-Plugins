@@ -6,7 +6,7 @@ import re
 from collections.abc import Mapping
 from typing import Any
 
-from .core import as_text, build_retirement_progress, match_retirement_rule
+from .core import _match_level_index, as_text, match_retirement_rule, normalize_identity
 
 _PRIVATE_KEYS = {
     "domain", "domains", "username", "userid", "cookie", "password", "encrypted",
@@ -71,100 +71,95 @@ def _sanitizer(settings: dict[str, Any], records: list[dict[str, Any]]):
     return clean
 
 
+def _level_names(levels) -> list[dict[str, Any]]:
+    """仅保留等级匹配所需的名称和别名。"""
+
+    return [
+        {"name": level.get("name", ""), **({"aliases": list(level["aliases"])} if level.get("aliases") else {})}
+        for level in levels
+    ]
+
+
 def build_diagnostic_export(
-    *, plugin_version: str, generated_at: str, timezone: str,
-    configured_sites: list[dict[str, Any]], raw_records: list[dict[str, Any]],
-    daily_records: list[dict[str, Any]], calculation_inputs: list[dict[str, Any]],
-    ptd_metrics: dict[str, dict[str, Any]], settings: dict[str, Any],
-    rules: dict[str, Mapping[str, Any]],
+    *, plugin_version: str, generated_at: str,
+    configured_sites: list[dict[str, Any]], latest_successful: list[dict[str, Any]],
+    latest_records: list[dict[str, Any]], ptd_metrics: dict[str, dict[str, Any]],
+    settings: dict[str, Any], rules: dict[str, Mapping[str, Any]],
 ) -> dict[str, Any]:
-    """保留三类数据，以及同一批输入对应的规则匹配与计算结果。"""
+    """每个异常站点仅导出一条匹配诊断，不导出历史或账户指标。"""
 
-    all_records = [*configured_sites, *raw_records, *ptd_metrics.values()]
-    clean = _sanitizer(settings, all_records)
-    # 旧域名可能已经没有 MP 站点 ID，以导出内的序号关联历史，避免泄露域名。
-    references: dict[str, str] = {}
-    for record in all_records:
-        domain = as_text(record.get("domain"))
-        if domain not in references:
-            references[domain] = f"site-{len(references) + 1}"
+    successful = {item["domain"]: item for item in latest_successful}
+    latest = {item["domain"]: item for item in latest_records}
+    manually_wealthy = {normalize_identity(value) for value in settings.get("wealthy_retirement_sites") or []}
+    failures = []
+    active_sites = [site for site in configured_sites if site.get("is_active")]
+    for site in active_sites:
+        domain = as_text(site.get("domain"))
+        mp = successful.get(domain)
+        base = {"site_id": site.get("id"), "site_name": site.get("name", "")}
+        if mp is None:
+            row = latest.get(domain, {})
+            failures.append({
+                **base, "reason": "没有成功的 MoviePilot 站点数据，未进入养老进度计算",
+                "mp_updated_at": row.get("source_updated_at", ""),
+                "err_msg": row.get("err_msg", ""),
+            })
+            continue
 
-    def with_ref(record: Mapping[str, Any]) -> dict[str, Any]:
-        return {**record, "site_ref": references.get(as_text(record.get("domain")), "")}
-
-    progress = build_retirement_progress(
-        calculation_inputs, rules, settings.get("wealthy_retirement_sites") or [],
-    )
-    results = {as_text(item.get("domain")): item for item in progress["sites"]}
-    latest_mp = {
-        (as_text(item.get("domain")), as_text(item.get("updated_day"))): item
-        for item in daily_records
-    }
-    inputs = []
-    for snapshot in calculation_inputs:
-        domain = as_text(snapshot.get("domain"))
-        ptd = ptd_metrics.get(domain)
-        mp = latest_mp.get((domain, as_text(snapshot.get("updated_day"))), {})
-        sources = {
-            key: "moviepilot" if snapshot.get(key) is not None else "unavailable"
-            for key in (
-                "join_at", "user_level", "upload", "download", "ratio", "bonus", "seeding",
-                "seeding_size", "updated_day",
-            )
+        ptd_level = as_text(ptd_metrics.get(domain, {}).get("user_level"))
+        mp_level = as_text(mp.get("user_level"))
+        effective_level = mp_level or ptd_level
+        snapshot = {**mp, "user_level": effective_level}
+        match = match_retirement_rule(snapshot, rules)
+        rule = match["rule"] or {}
+        levels = list(rule.get("levels") or [])
+        vip_levels = list(rule.get("vip_levels") or [])
+        retirement = as_text(rule.get("retirement_level"))
+        special_member = any(
+            normalize_identity(value) in manually_wealthy
+            for value in (domain, site.get("id"), snapshot.get("site_name"))
+            if normalize_identity(value)
+        ) or _match_level_index(effective_level, vip_levels) >= 0
+        if not levels:
+            if special_member:
+                continue
+            reason = "未匹配到站点规则" if match["rule"] is None else "命中规则但没有普通等级列表"
+        elif retirement and _match_level_index(retirement, levels, exact_only=True) < 0:
+            reason = "规则中的保号等级不在等级列表中"
+        elif not special_member and _match_level_index(effective_level, levels) < 0:
+            reason = "当前等级未提供" if not effective_level else "当前等级无法匹配规则中的等级名称或别名"
+        else:
+            continue
+        failure = {
+            **base, "reason": reason,
+            "mp_updated_at": mp.get("source_updated_at", ""),
+            "mp_level": mp_level, "ptd_level": ptd_level,
+            "effective_level": effective_level,
+            "level_source": "moviepilot" if mp_level else "ptd" if ptd_level else "unavailable",
+            "rule_match": {
+                "name": match["rule_key"], "source": match["source"], "matched_by": match["matched_by"],
+            },
         }
-        if not as_text(mp.get("user_level")):
-            sources["user_level"] = "ptd" if as_text(snapshot.get("user_level")) else "unavailable"
-        for key in ("seeding_points", "seeding_points_hourly", "torrent_uploads", "estimated_bonus_hourly"):
-            sources[key] = (
-                "unavailable" if snapshot.get(key) is None
-                else "ptd" if ptd is not None else "moviepilot_estimate"
-            )
-        sources["average_seeding_time_days"] = "unavailable"
-        inputs.append({
-            **with_ref(snapshot), "field_sources": sources,
-            "ptd_source_updated_at": ptd.get("source_updated_at", "") if ptd else "",
-        })
+        if rule:
+            failure["rule_match"].update({
+                "retirement_level": retirement,
+                "levels": _level_names(levels), "vip_levels": _level_names(vip_levels),
+            })
+        failures.append(failure)
 
-    inputs_by_domain = {as_text(item.get("domain")): item for item in calculation_inputs}
-    matches = []
-    for site in configured_sites:
-        snapshot = inputs_by_domain.get(as_text(site.get("domain"))) or {
-            **site, "site_id": site.get("id"), "site_name": site.get("name"),
-        }
-        matched = match_retirement_rule(snapshot, rules)
-        result = results.get(as_text(site.get("domain")))
-        matches.append({
-            **with_ref({"site_id": site.get("id"), "site_name": site.get("name"), "domain": site.get("domain")}),
-            "rule_key": matched["rule_key"],
-            "rule_source": matched["source"],
-            "matched_by": matched["matched_by"],
-            "effective_rule": matched["rule"],
-            "calculation_status": "calculated" if result else "inactive" if not site.get("is_active") else "no_successful_snapshot",
-            "result": result,
-        })
-
-    return clean({
+    payload = {
         "manifest": {
-            "schema_version": 1, "plugin_version": plugin_version,
-            "generated_at": generated_at, "timezone": timezone,
-            "settings_scope": "saved", "raw_record_count": len(raw_records),
-            "daily_record_count": len(daily_records),
-            "limitations": ["域名及认证信息已移除；域名匹配仅保留结果，不能离线完整重放。"],
+            "schema_version": 2, "plugin_version": plugin_version, "generated_at": generated_at,
+            "checked_sites": len(active_sites), "failed_sites": len(failures),
         },
-        "sites": [with_ref(site) for site in configured_sites],
-        "accounts_and_history": {
-            "raw_daily_records": [with_ref(item) for item in raw_records],
-            "daily_records": [with_ref(item) for item in daily_records],
-            "calculation_inputs": inputs,
-            "ptd_metrics": [with_ref(item) for item in ptd_metrics.values()],
-        },
-        "settings_and_rules": {
-            "settings": settings,
-            "manual_ptd_mapping_configured": bool(settings.get("ptd_site_mappings")),
-            "manual_wealthy_site_refs": [
-                references[domain] for domain, result in results.items()
-                if result.get("wealthy_retirement_manual")
-            ],
-            "site_rules": matches,
-        },
-    })
+        "failed_sites": failures,
+    }
+    # 无法命中规则时，仅补充自定义站点名称及别名以核对覆盖配置。
+    if any(item.get("rule_match", {}).get("matched_by") == "unmatched" for item in failures):
+        custom_names = [
+            {"name": name, "aliases": list(rule.get("aliases") or [])}
+            for name, rule in rules.items() if rule.get("_custom_rule")
+        ]
+        if custom_names:
+            payload["custom_rule_names"] = custom_names
+    return _sanitizer(settings, [*configured_sites, *latest_successful, *latest_records])(payload)
