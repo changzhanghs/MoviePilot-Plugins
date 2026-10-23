@@ -251,6 +251,34 @@ class HostContractTests(unittest.TestCase):
             self.assertEqual(item["rule_match"]["matched_level"], "Power User")
             self.assertEqual(item["rule_match"]["name"], item["site_name"])
 
+    def test_diagnostic_export_supports_all_or_selected_active_sites_without_fallback(self):
+        plugin = PTDataStatistics.__new__(PTDataStatistics)
+        plugin._apply_settings(SettingsData(custom_retirement_rules=[{
+            "site": "无关的自定义站点", "retirement_level": "Keeper",
+            "levels": [{"name": "User"}, {"name": "Keeper"}],
+        }]))
+        sites = [SimpleNamespace(id=index, name=f"Unlisted{index}", domain=f"site{index}.invalid", is_active=index != 3)
+                 for index in (1, 2, 3)]
+        rows = [SimpleNamespace(domain=site.domain, user_level="User", updated_day="2026-10-23") for site in sites]
+        with patch.object(plugin_module, "SiteOper") as oper:
+            oper.return_value.list.return_value = sites
+            oper.return_value.get_userdata.return_value = rows
+            all_sites = plugin.api_export_diagnostics()
+            self.assertEqual({item["site_id"] for item in all_sites["sites"]}, {1, 2})
+            self.assertIn("custom_rule_names", all_sites)
+            for query, expected in (("1", {1}), ("2,1", {1, 2}), ("1,1", {1})):
+                data = plugin.api_export_diagnostics(site_ids=query)
+                self.assertEqual({item["site_id"] for item in data["sites"]}, expected)
+                self.assertEqual(data["manifest"]["checked_sites"], len(expected))
+                self.assertNotIn("custom_rule_names", data)
+                if expected == {1}:
+                    self.assertNotIn("Unlisted2", json.dumps(data))
+            for invalid in ("", "0", "abc", "3", "999", "1,999"):
+                with self.subTest(invalid=invalid):
+                    with self.assertRaises(HTTPException) as error:
+                        plugin.api_export_diagnostics(site_ids=invalid)
+                    self.assertEqual(error.exception.status_code, 422)
+
     def test_site_projection_exposes_priority_without_credentials(self):
         site = SimpleNamespace(
             id=7,

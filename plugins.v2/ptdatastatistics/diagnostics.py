@@ -85,6 +85,7 @@ def build_diagnostic_export(
     configured_sites: list[dict[str, Any]], latest_successful: list[dict[str, Any]],
     latest_records: list[dict[str, Any]], ptd_metrics: dict[str, dict[str, Any]],
     settings: dict[str, Any], rules: dict[str, Mapping[str, Any]],
+    include_rule_candidates: bool = True,
 ) -> dict[str, Any]:
     """每个启用站点仅导出一条匹配诊断，便于核对误匹配。"""
 
@@ -165,7 +166,7 @@ def build_diagnostic_export(
         "sites": records,
     }
     # 无法命中规则时，仅补充自定义站点名称及别名以核对覆盖配置。
-    if any(item.get("rule_match", {}).get("matched_by") == "unmatched" for item in records):
+    if include_rule_candidates and any(item.get("rule_match", {}).get("matched_by") == "unmatched" for item in records):
         custom_names = [
             {"name": name, "aliases": list(rule.get("aliases") or [])}
             for name, rule in rules.items() if rule.get("_custom_rule")
