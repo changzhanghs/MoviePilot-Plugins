@@ -681,14 +681,14 @@ async function exportDiagnostics() {
   let anchor
   try {
     const data = unwrapResponse(await props.api.get(`${pluginBase.value}/diagnostics/export`, { feedback: 'silent' }))
-    if (!data?.manifest || !Array.isArray(data?.failed_sites)) throw new Error('导出数据不完整，请刷新页面后重试')
+    if (!data?.manifest || !Array.isArray(data?.sites)) throw new Error('导出数据不完整，请更新插件并刷新页面后重试')
     url = URL.createObjectURL(new Blob([JSON.stringify(data, null, 2)], { type: 'application/json;charset=utf-8' }))
     anchor = document.createElement('a')
     anchor.href = url
     anchor.download = `pt-level-diagnostics-${String(data.manifest.generated_at || '').replace(/[^0-9]/g, '').slice(0, 14) || 'export'}.json`
     document.body.appendChild(anchor)
     anchor.click()
-    notify(data.failed_sites.length ? `已导出 ${data.failed_sites.length} 个异常站点的匹配信息` : '未发现养老进度匹配异常，已导出检查结果')
+    notify(`已导出 ${data.sites.length} 个站点的匹配信息，其中 ${data.manifest.failed_sites || 0} 个异常`)
   } catch (err) {
     notify(err?.message || '导出排障数据失败', 'error')
   } finally {
@@ -1550,7 +1550,7 @@ onBeforeUnmount(() => {
           <div class="settings-card settings-card--wide"><div class="section-heading"><div><span class="section-kicker">LEVEL RULES</span><h2>等级规则</h2></div><div class="rules-upload__actions"><VBtn variant="tonal" color="primary" prepend-icon="mdi-upload-outline" @click="rulesFileInput?.click()">上传规则文件</VBtn><VBtn variant="text" prepend-icon="mdi-file-download-outline" @click="downloadRuleTemplate">下载模板</VBtn><VBtn v-if="customRuleSites.length" variant="text" color="error" prepend-icon="mdi-delete-outline" @click="clearUploadedRules">清空</VBtn></div></div><input ref="rulesFileInput" class="rules-file-input" type="file" accept="application/json,.json" @change="uploadRuleFile"><div v-if="customRuleSites.length" class="rules-upload"><div><strong>已载入 {{ customRuleSites.length }} 个站点</strong><p>{{ customRuleSites.join('、') }}</p><small v-if="rulesUploadName">文件：{{ rulesUploadName }}</small></div></div><div class="setting-hint mt-3">自定义规则优先级最高，上传并保存后，匹配站点以自定义规则为主；未匹配的站点继续使用内置规则。</div></div>
           <div class="settings-card settings-card--wide">
             <div class="section-heading"><div><span class="section-kicker">DIAGNOSTICS</span><h2>排障数据导出</h2></div><VBtn variant="tonal" color="primary" prepend-icon="mdi-file-download-outline" :loading="exportingDiagnostics" :disabled="saving" @click="exportDiagnostics">导出排障数据</VBtn></div>
-            <div class="setting-hint">仅导出养老进度匹配异常的站点：当前等级、等级来源、命中规则、等级名称及别名和失败原因。不含历史记录、流量数据、域名或认证信息。修改规则后请先保存再导出。</div>
+            <div class="setting-hint">每个启用站点仅导出一条养老匹配记录：当前等级及来源、命中规则、匹配到的等级、等级名称及别名和异常原因，方便核对匹配失败或误匹配。不含历史、流量、域名或认证信息。修改规则后请先保存再导出。</div>
           </div>
           <div class="settings-card settings-card--wide settings-actions"><div><strong>数据来源</strong><p>上传、下载、分享率等仍仅来自 MoviePilot；PTD 只补充最新时魔和做种积分。</p></div><VBtn color="primary" size="large" variant="flat" prepend-icon="mdi-content-save-outline" :loading="saving" @click="saveSettings">保存设置</VBtn></div>
         </section>

@@ -70,8 +70,8 @@ function diagnosticFixture() {
 }
 
 test('diagnostic download uses the authenticated API once and writes the returned JSON', async () => {
-  const { state, requests, downloads, blobs, revoked, timers } = diagnosticFixture()
-  const data = { manifest: { generated_at: '2026-10-23T14:35:00+08:00' }, failed_sites: [] }
+  const { state, requests, downloads, blobs, revoked, timers, messages } = diagnosticFixture()
+  const data = { manifest: { generated_at: '2026-10-23T14:35:00+08:00', failed_sites: 0 }, sites: [{ site_id: 1, status: 'matched' }] }
   const pending = state.exportDiagnostics()
   await state.exportDiagnostics()
   assert.equal(requests.length, 1)
@@ -80,6 +80,7 @@ test('diagnostic download uses the authenticated API once and writes the returne
   requests[0].resolve(data)
   await pending
   assert.deepEqual(JSON.parse(await blobs[0].text()), data)
+  assert.equal(messages[0].message, '已导出 1 个站点的匹配信息，其中 0 个异常')
   assert.deepEqual(downloads, [{ filename: 'pt-level-diagnostics-20261023143500.json', attached: true }])
   assert.equal(state.exportingDiagnostics.value, false)
   assert.deepEqual(revoked, [])
@@ -99,7 +100,7 @@ test('failed or invalid diagnostic responses show an error and allow retry witho
     assert.deepEqual(downloads, [])
     const retry = state.exportDiagnostics()
     assert.equal(requests.length, 2)
-    requests[1].resolve({ manifest: {}, failed_sites: [] })
+    requests[1].resolve({ manifest: {}, sites: [] })
     await retry
     assert.equal(downloads.length, 1)
   }

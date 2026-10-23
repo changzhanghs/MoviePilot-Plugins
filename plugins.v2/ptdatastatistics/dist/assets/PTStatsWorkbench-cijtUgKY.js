@@ -15798,14 +15798,14 @@ async function exportDiagnostics() {
   let anchor;
   try {
     const data = unwrapResponse(await props.api.get(`${pluginBase.value}/diagnostics/export`, { feedback: 'silent' }));
-    if (!data?.manifest || !Array.isArray(data?.failed_sites)) throw new Error('导出数据不完整，请刷新页面后重试')
+    if (!data?.manifest || !Array.isArray(data?.sites)) throw new Error('导出数据不完整，请更新插件并刷新页面后重试')
     url = URL.createObjectURL(new Blob([JSON.stringify(data, null, 2)], { type: 'application/json;charset=utf-8' }));
     anchor = document.createElement('a');
     anchor.href = url;
     anchor.download = `pt-level-diagnostics-${String(data.manifest.generated_at || '').replace(/[^0-9]/g, '').slice(0, 14) || 'export'}.json`;
     document.body.appendChild(anchor);
     anchor.click();
-    notify(data.failed_sites.length ? `已导出 ${data.failed_sites.length} 个异常站点的匹配信息` : '未发现养老进度匹配异常，已导出检查结果');
+    notify(`已导出 ${data.sites.length} 个站点的匹配信息，其中 ${data.manifest.failed_sites || 0} 个异常`);
   } catch (err) {
     notify(err?.message || '导出排障数据失败', 'error');
   } finally {
@@ -17870,7 +17870,7 @@ return (_ctx, _cache) => {
                     _: 1
                   }, 8, ["loading", "disabled"])
                 ]),
-                _cache[101] || (_cache[101] = _createElementVNode("div", { class: "setting-hint" }, "仅导出养老进度匹配异常的站点：当前等级、等级来源、命中规则、等级名称及别名和失败原因。不含历史记录、流量数据、域名或认证信息。修改规则后请先保存再导出。", -1))
+                _cache[101] || (_cache[101] = _createElementVNode("div", { class: "setting-hint" }, "每个启用站点仅导出一条养老匹配记录：当前等级及来源、命中规则、匹配到的等级、等级名称及别名和异常原因，方便核对匹配失败或误匹配。不含历史、流量、域名或认证信息。修改规则后请先保存再导出。", -1))
               ]),
               _createElementVNode("div", _hoisted_155, [
                 _cache[103] || (_cache[103] = _createElementVNode("div", null, [
@@ -17903,6 +17903,6 @@ return (_ctx, _cache) => {
 }
 
 };
-const PTStatsWorkbench = /*#__PURE__*/_export_sfc(_sfc_main, [['__scopeId',"data-v-8940867e"]]);
+const PTStatsWorkbench = /*#__PURE__*/_export_sfc(_sfc_main, [['__scopeId',"data-v-e50b569a"]]);
 
 export { PTStatsWorkbench as P };

@@ -116,7 +116,7 @@ class DatabaseHandle:
 
 
 class HostContractTests(unittest.TestCase):
-    def test_diagnostic_export_only_contains_failed_match_and_no_history_or_metrics(self):
+    def test_diagnostic_export_contains_one_match_per_site_and_no_history_or_metrics(self):
         plugin = PTDataStatistics.__new__(PTDataStatistics)
         plugin._apply_settings(SettingsData(
             enabled=True, ptd_cookiecloud_enabled=True,
@@ -145,9 +145,9 @@ class HostContractTests(unittest.TestCase):
             oper.return_value.list.return_value = [site]
             oper.return_value.get_userdata.return_value = rows
             data = plugin.api_export_diagnostics()
-        self.assertEqual(set(data), {"manifest", "failed_sites"})
-        self.assertEqual(len(data["failed_sites"]), 1)
-        failure = data["failed_sites"][0]
+        self.assertEqual(set(data), {"manifest", "sites"})
+        self.assertEqual(len(data["sites"]), 1)
+        failure = data["sites"][0]
         self.assertEqual(failure["effective_level"], "陌生等级")
         self.assertEqual(failure["level_source"], "ptd")
         self.assertEqual(failure["mp_updated_at"], "2026-10-23 10:00:00")
@@ -168,13 +168,13 @@ class HostContractTests(unittest.TestCase):
         self.assertEqual(route["auth"], "bear")
         self.assertFalse(route.get("allow_anonymous", False))
 
-    def test_diagnostic_export_omits_inactive_archived_and_normal_sites_and_sanitizes_errors(self):
+    def test_diagnostic_export_omits_inactive_and_archived_sites_and_sanitizes_errors(self):
         plugin = PTDataStatistics.__new__(PTDataStatistics)
         plugin._apply_settings(SettingsData())
         with patch.object(plugin_module, "SiteOper") as oper:
             oper.return_value.list.return_value = []
             oper.return_value.get_userdata.return_value = []
-            self.assertEqual(plugin.api_export_diagnostics()["failed_sites"], [])
+            self.assertEqual(plugin.api_export_diagnostics()["sites"], [])
         sites = [SimpleNamespace(id=i, name=f"Unlisted{i}", domain=f"site{i}.invalid", is_active=i != 2)
                  for i in (1, 2, 3)]
         rows = [SimpleNamespace(domain=domain, user_level="User", updated_day="2026-10-23")
@@ -188,9 +188,9 @@ class HostContractTests(unittest.TestCase):
             oper.return_value.get_userdata.return_value = rows
             data = plugin.api_export_diagnostics()
         self.assertEqual(data["manifest"]["checked_sites"], 2)
-        self.assertEqual([item["site_id"] for item in data["failed_sites"]], [1, 3])
-        self.assertEqual(data["failed_sites"][0]["reason"], "未匹配到站点规则")
-        self.assertIn("没有成功", data["failed_sites"][1]["reason"])
+        self.assertEqual([item["site_id"] for item in data["sites"]], [1, 3])
+        self.assertEqual(data["sites"][0]["reason"], "未匹配到站点规则")
+        self.assertIn("没有成功", data["sites"][1]["reason"])
         serialized = json.dumps(data, ensure_ascii=False)
         for excluded in ("site3.invalid", "private-user", "999888", "secret", "unseen-auth", "archived.invalid"):
             self.assertNotIn(excluded, serialized)
@@ -223,8 +223,33 @@ class HostContractTests(unittest.TestCase):
                     settings={"wealthy_retirement_sites": manual}, rules=rules,
                 )
                 expected = core.build_retirement_progress([{**mp, "user_level": mp_level or ptd_level}], rules, manual)
-                self.assertEqual(bool(data["failed_sites"]), failed)
-                self.assertEqual(bool(data["failed_sites"]), expected["sites"][0]["status"] == "rule_missing")
+                self.assertEqual(len(data["sites"]), 1)
+                self.assertEqual(data["sites"][0]["status"] == "unmatched", failed)
+                self.assertEqual(data["manifest"]["failed_sites"], int(expected["sites"][0]["status"] == "rule_missing"))
+
+    def test_diagnostic_export_keeps_all_eleven_sites_even_when_no_match_failed(self):
+        diagnostics = importlib.import_module("ptdatastatistics.diagnostics")
+        sites = [{"id": index, "name": f"示例站点{index}", "domain": f"site{index}.invalid", "is_active": True}
+                 for index in range(1, 12)]
+        snapshots = [{"site_id": site["id"], "site_name": site["name"], "domain": site["domain"], "user_level": "PU"}
+                     for site in sites]
+        rules = {site["name"]: {
+            "levels": [{"name": "User"}, {"name": "Power User", "aliases": ["PU"]}, {"name": "Keeper"}],
+            "retirement_level": "Keeper",
+        } for site in sites}
+        data = diagnostics.build_diagnostic_export(
+            plugin_version="test", generated_at="2026-10-23", configured_sites=sites,
+            latest_successful=snapshots, latest_records=snapshots, ptd_metrics={}, settings={}, rules=rules,
+        )
+        self.assertEqual(data["manifest"]["checked_sites"], 11)
+        self.assertEqual(data["manifest"]["failed_sites"], 0)
+        self.assertEqual(len(data["sites"]), 11)
+        self.assertEqual({item["site_id"] for item in data["sites"]}, set(range(1, 12)))
+        for item in data["sites"]:
+            self.assertEqual(item["status"], "matched")
+            self.assertEqual(item["mp_level"], "PU")
+            self.assertEqual(item["rule_match"]["matched_level"], "Power User")
+            self.assertEqual(item["rule_match"]["name"], item["site_name"])
 
     def test_site_projection_exposes_priority_without_credentials(self):
         site = SimpleNamespace(
