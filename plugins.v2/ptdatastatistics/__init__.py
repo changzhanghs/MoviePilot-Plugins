@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hmac
 import threading
+from collections.abc import Iterable
 from datetime import date, datetime, timedelta
 from typing import Any, ClassVar
 from zoneinfo import ZoneInfo
@@ -54,6 +55,7 @@ from .core import (
     overall_ratio,
 )
 from .database import LocalDatabaseHandle
+from .diagnostics import build_diagnostic_export
 from .ptd_cookiecloud import PTDCookieCloudError, match_metrics, parse_backup_response
 from .repository import SnapshotRepository
 
@@ -64,7 +66,7 @@ class PTDataStatistics(_PluginBase):
     plugin_name = "PT数据统计"
     plugin_desc = "统计 PT 站点累计与每日上传下载，提供历史、养老进度和通知。"
     plugin_icon = "https://raw.githubusercontent.com/changzhanghs/MoviePilot-Plugins/main/icons/ptdatastatistics.png"
-    plugin_version = "2.1.11"
+    plugin_version = "2.1.12"
     plugin_author = "changzhanghs"
     author_url = "https://github.com/changzhanghs"
     plugin_config_prefix = "ptdatastatistics_"
@@ -345,6 +347,14 @@ class PTDataStatistics(_PluginBase):
                 "response_model": SettingsResponse,
             },
             {
+                "path": "/diagnostics/export",
+                "endpoint": self.api_export_diagnostics,
+                "methods": ["GET"],
+                "auth": "bear",
+                "summary": "导出脱敏的等级规则排障数据",
+                "response_model": None,
+            },
+            {
                 "path": "/rules/template",
                 "endpoint": self.api_rule_template,
                 "methods": ["GET"],
@@ -442,9 +452,16 @@ class PTDataStatistics(_PluginBase):
         sites_by_domain = {
             site["domain"]: site for site in configured_sites if site["domain"]
         }
+        return self._deduplicate_daily_snapshots(
+            self._snapshot_dict(row, sites_by_domain) for row in site_oper.get_userdata() or []
+        )
+
+    @staticmethod
+    def _deduplicate_daily_snapshots(snapshots: Iterable[dict[str, Any]]) -> list[dict[str, Any]]:
+        """页面与排障导出使用相同的日级去重规则。"""
+
         snapshots_by_day: dict[tuple[str, str], dict[str, Any]] = {}
-        for row in site_oper.get_userdata() or []:
-            item = self._snapshot_dict(row, sites_by_domain)
+        for item in snapshots:
             key = (item["domain"], item["updated_day"])
             current = snapshots_by_day.get(key)
             item_score = (not bool(item["err_msg"].strip()), item["updated_time"])
@@ -733,9 +750,6 @@ class PTDataStatistics(_PluginBase):
 
         configured_all = self._configured_sites()
         configured = [site for site in configured_all if site["is_active"]]
-        configured_by_domain = {
-            site["domain"]: site for site in configured_all if site.get("domain")
-        }
         valid_by_domain = {item["domain"]: item for item in latest_valid}
         any_by_domain = {item["domain"]: item for item in latest_any}
         sites: list[dict[str, Any]] = []
@@ -863,7 +877,45 @@ class PTDataStatistics(_PluginBase):
         )
         # 养老列表与总览一致，只展示 MP 站点管理中当前启用域名的最新成功快照。
         # 已停用的旧域名只保留在历史中，避免同一站点在养老列表重复。
-        retirement_snapshots = [
+        retirement_snapshots = self._retirement_snapshots(repository, configured_all, ptd_by_domain)
+        retirement = RetirementProgressData.model_validate(
+            build_retirement_progress(
+                retirement_snapshots,
+                self._retirement_rules(),
+                self._wealthy_retirement_sites,
+            )
+        )
+        first_day, last_day = repository.date_bounds()
+        last_mp_update = max(
+            (item.get("source_updated_at") or "" for item in latest_any),
+            default="",
+        )
+        return OverviewResponse(
+            server_date=server_day,
+            generated_at=now.isoformat(timespec="seconds"),
+            last_mp_update=last_mp_update,
+            first_history_day=first_day,
+            last_history_day=last_day,
+            summary=summary,
+            sites=[SiteSnapshotData.model_validate(item) for item in sites],
+            today_sites=[SiteSnapshotData.model_validate(item) for item in today_sites],
+            history_sites=[SiteSnapshotData.model_validate(item) for item in history_sites],
+            twelve=twelve,
+            retirement=retirement,
+        )
+
+    @staticmethod
+    def _retirement_snapshots(
+        repository: SnapshotRepository,
+        configured_sites: list[dict[str, Any]],
+        ptd_by_domain: dict[str, dict[str, Any]],
+    ) -> list[dict[str, Any]]:
+        """页面和导出共享等级计算输入，避免 PTD 覆盖口径不一致。"""
+
+        latest_valid_all = repository.latest(active_only=False, valid_only=True)
+        previous_bonus_rows = repository.previous_successful(latest_valid_all)
+        configured_by_domain = {site["domain"]: site for site in configured_sites if site.get("domain")}
+        return [
             {
                 **item,
                 "user_level": as_text(item.get("user_level")) or as_text(
@@ -890,31 +942,6 @@ class PTDataStatistics(_PluginBase):
             for item in latest_valid_all
             if configured_by_domain.get(item["domain"], {}).get("is_active")
         ]
-        retirement = RetirementProgressData.model_validate(
-            build_retirement_progress(
-                retirement_snapshots,
-                self._retirement_rules(),
-                self._wealthy_retirement_sites,
-            )
-        )
-        first_day, last_day = repository.date_bounds()
-        last_mp_update = max(
-            (item.get("source_updated_at") or "" for item in latest_any),
-            default="",
-        )
-        return OverviewResponse(
-            server_date=server_day,
-            generated_at=now.isoformat(timespec="seconds"),
-            last_mp_update=last_mp_update,
-            first_history_day=first_day,
-            last_history_day=last_day,
-            summary=summary,
-            sites=[SiteSnapshotData.model_validate(item) for item in sites],
-            today_sites=[SiteSnapshotData.model_validate(item) for item in today_sites],
-            history_sites=[SiteSnapshotData.model_validate(item) for item in history_sites],
-            twelve=twelve,
-            retirement=retirement,
-        )
 
     def api_overview(self) -> OverviewResponse:
         """返回侧栏与仪表盘总览。"""
@@ -1058,6 +1085,29 @@ class PTDataStatistics(_PluginBase):
             day=selected_day.isoformat(),
             monthly=aggregate(monthly_rows),
             daily=aggregate(daily_rows),
+        )
+
+    def api_export_diagnostics(self) -> dict[str, Any]:
+        """只读取已保存数据，不刷新站点、导入 PTD 或写入历史。"""
+
+        configured = self._configured_sites()
+        by_domain = {site["domain"]: site for site in configured if site.get("domain")}
+        raw_records = [self._snapshot_dict(row, by_domain) for row in SiteOper().get_userdata() or []]
+        daily_records = self._deduplicate_daily_snapshots(raw_records)
+        repository = SnapshotRepository(None, daily_records)
+        ptd_metrics = self._ptd_metrics_by_domain()
+        inputs = self._retirement_snapshots(repository, configured, ptd_metrics)
+        return build_diagnostic_export(
+            plugin_version=self.plugin_version,
+            generated_at=self._now().isoformat(timespec="seconds"),
+            timezone=settings.TZ,
+            configured_sites=configured,
+            raw_records=raw_records,
+            daily_records=daily_records,
+            calculation_inputs=inputs,
+            ptd_metrics=ptd_metrics,
+            settings=self._settings().model_dump(),
+            rules=self._retirement_rules(),
         )
 
     def api_settings(self) -> SettingsResponse:

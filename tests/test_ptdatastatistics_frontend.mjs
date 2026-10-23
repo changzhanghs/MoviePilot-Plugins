@@ -39,6 +39,72 @@ function fixture() {
   return { state, requests, errors }
 }
 
+function diagnosticFixture() {
+  const requests = []
+  const messages = []
+  const downloads = []
+  const blobs = []
+  const revoked = []
+  const timers = []
+  const state = {
+    exportingDiagnostics: { value: false },
+    pluginBase: { value: 'plugin/PTDataStatistics' },
+    props: { api: { get(path) {
+      return new Promise((resolve, reject) => requests.push({ path, resolve, reject }))
+    } } },
+    unwrapResponse: response => response,
+    notify: (message, type) => messages.push({ message, type }),
+    Blob,
+    URL: { createObjectURL(blob) { blobs.push(blob); return 'blob:diagnostics' }, revokeObjectURL: url => revoked.push(url) },
+    document: {
+      body: { appendChild(anchor) { anchor.attached = true } },
+      createElement() {
+        return { click() { downloads.push({ filename: this.download, attached: this.attached }) }, remove() {} }
+      },
+    },
+    setTimeout: callback => timers.push(callback),
+  }
+  vm.createContext(state)
+  vm.runInContext(sourceFunction('async function exportDiagnostics()', 'function distributionSegments'), state)
+  return { state, requests, messages, downloads, blobs, revoked, timers }
+}
+
+test('diagnostic download uses the authenticated API once and writes the returned JSON', async () => {
+  const { state, requests, downloads, blobs, revoked, timers } = diagnosticFixture()
+  const data = { manifest: { generated_at: '2026-10-23T14:35:00+08:00' }, settings_and_rules: {} }
+  const pending = state.exportDiagnostics()
+  await state.exportDiagnostics()
+  assert.equal(requests.length, 1)
+  assert.equal(requests[0].path, 'plugin/PTDataStatistics/diagnostics/export')
+  assert.equal(state.exportingDiagnostics.value, true)
+  requests[0].resolve(data)
+  await pending
+  assert.deepEqual(JSON.parse(await blobs[0].text()), data)
+  assert.deepEqual(downloads, [{ filename: 'pt-level-diagnostics-20261023143500.json', attached: true }])
+  assert.equal(state.exportingDiagnostics.value, false)
+  assert.deepEqual(revoked, [])
+  timers[0]()
+  assert.deepEqual(revoked, ['blob:diagnostics'])
+})
+
+test('failed or invalid diagnostic responses show an error and allow retry without a download', async () => {
+  for (const failure of [true, false]) {
+    const { state, requests, messages, downloads } = diagnosticFixture()
+    const pending = state.exportDiagnostics()
+    if (failure) requests[0].reject(new Error('连接失败'))
+    else requests[0].resolve({ message: 'invalid payload' })
+    await pending
+    assert.equal(state.exportingDiagnostics.value, false)
+    assert.equal(messages[0].type, 'error')
+    assert.deepEqual(downloads, [])
+    const retry = state.exportDiagnostics()
+    assert.equal(requests.length, 2)
+    requests[1].resolve({ manifest: {}, settings_and_rules: {} })
+    await retry
+    assert.equal(downloads.length, 1)
+  }
+})
+
 test('older hourly success or failure cannot overwrite the selected site', async () => {
   for (const failure of [false, true]) {
     const { state, requests, errors } = fixture()

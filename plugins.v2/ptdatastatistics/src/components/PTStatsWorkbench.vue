@@ -19,6 +19,7 @@ const hostToast = inject('moviepilot:toast', null)
 const activeTab = ref(props.initialTab)
 const loading = ref(false)
 const saving = ref(false)
+const exportingDiagnostics = ref(false)
 const historyLoading = ref(false)
 const distributionLoading = ref(false)
 const error = ref('')
@@ -671,6 +672,29 @@ async function downloadRuleTemplate() {
     URL.revokeObjectURL(url)
   } catch (err) {
     notify(err?.message || '下载规则模板失败', 'error')
+  }
+}
+async function exportDiagnostics() {
+  if (exportingDiagnostics.value) return
+  exportingDiagnostics.value = true
+  let url
+  let anchor
+  try {
+    const data = unwrapResponse(await props.api.get(`${pluginBase.value}/diagnostics/export`, { feedback: 'silent' }))
+    if (!data?.manifest || !data?.settings_and_rules) throw new Error('导出数据不完整，请刷新页面后重试')
+    url = URL.createObjectURL(new Blob([JSON.stringify(data, null, 2)], { type: 'application/json;charset=utf-8' }))
+    anchor = document.createElement('a')
+    anchor.href = url
+    anchor.download = `pt-level-diagnostics-${String(data.manifest.generated_at || '').replace(/[^0-9]/g, '').slice(0, 14) || 'export'}.json`
+    document.body.appendChild(anchor)
+    anchor.click()
+    notify('排障数据已导出')
+  } catch (err) {
+    notify(err?.message || '导出排障数据失败', 'error')
+  } finally {
+    anchor?.remove()
+    if (url) setTimeout(() => URL.revokeObjectURL(url), 1000)
+    exportingDiagnostics.value = false
   }
 }
 function distributionSegments(items) {
@@ -1524,6 +1548,10 @@ onBeforeUnmount(() => {
             </VDialog>
           </div>
           <div class="settings-card settings-card--wide"><div class="section-heading"><div><span class="section-kicker">LEVEL RULES</span><h2>等级规则</h2></div><div class="rules-upload__actions"><VBtn variant="tonal" color="primary" prepend-icon="mdi-upload-outline" @click="rulesFileInput?.click()">上传规则文件</VBtn><VBtn variant="text" prepend-icon="mdi-file-download-outline" @click="downloadRuleTemplate">下载模板</VBtn><VBtn v-if="customRuleSites.length" variant="text" color="error" prepend-icon="mdi-delete-outline" @click="clearUploadedRules">清空</VBtn></div></div><input ref="rulesFileInput" class="rules-file-input" type="file" accept="application/json,.json" @change="uploadRuleFile"><div v-if="customRuleSites.length" class="rules-upload"><div><strong>已载入 {{ customRuleSites.length }} 个站点</strong><p>{{ customRuleSites.join('、') }}</p><small v-if="rulesUploadName">文件：{{ rulesUploadName }}</small></div></div><div class="setting-hint mt-3">自定义规则优先级最高，上传并保存后，匹配站点以自定义规则为主；未匹配的站点继续使用内置规则。</div></div>
+          <div class="settings-card settings-card--wide">
+            <div class="section-heading"><div><span class="section-kicker">DIAGNOSTICS</span><h2>排障数据导出</h2></div><VBtn variant="tonal" color="primary" prepend-icon="mdi-file-download-outline" :loading="exportingDiagnostics" :disabled="saving" @click="exportDiagnostics">导出排障数据</VBtn></div>
+            <div class="setting-hint">导出站点信息、账号与日级历史、设置与等级规则，以及实际匹配规则和计算结果，用于排查等级异常。文件不含域名、账号标识和认证信息。使用已保存的设置；如有修改，请先保存再导出。</div>
+          </div>
           <div class="settings-card settings-card--wide settings-actions"><div><strong>数据来源</strong><p>上传、下载、分享率等仍仅来自 MoviePilot；PTD 只补充最新时魔和做种积分。</p></div><VBtn color="primary" size="large" variant="flat" prepend-icon="mdi-content-save-outline" :loading="saving" @click="saveSettings">保存设置</VBtn></div>
         </section>
       </VWindowItem>

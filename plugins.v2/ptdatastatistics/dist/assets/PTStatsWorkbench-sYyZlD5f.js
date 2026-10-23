@@ -15109,7 +15109,9 @@ const _hoisted_151 = {
   class: "rules-upload"
 };
 const _hoisted_152 = { key: 0 };
-const _hoisted_153 = { class: "settings-card settings-card--wide settings-actions" };
+const _hoisted_153 = { class: "settings-card settings-card--wide" };
+const _hoisted_154 = { class: "section-heading" };
+const _hoisted_155 = { class: "settings-card settings-card--wide settings-actions" };
 
 const {computed,inject,nextTick,onBeforeUnmount,onMounted,ref,watch} = await importShared('vue');
 
@@ -15134,6 +15136,7 @@ const hostToast = inject('moviepilot:toast', null);
 const activeTab = ref(props.initialTab);
 const loading = ref(false);
 const saving = ref(false);
+const exportingDiagnostics = ref(false);
 const historyLoading = ref(false);
 const distributionLoading = ref(false);
 const error = ref('');
@@ -15786,6 +15789,29 @@ async function downloadRuleTemplate() {
     URL.revokeObjectURL(url);
   } catch (err) {
     notify(err?.message || '下载规则模板失败', 'error');
+  }
+}
+async function exportDiagnostics() {
+  if (exportingDiagnostics.value) return
+  exportingDiagnostics.value = true;
+  let url;
+  let anchor;
+  try {
+    const data = unwrapResponse(await props.api.get(`${pluginBase.value}/diagnostics/export`, { feedback: 'silent' }));
+    if (!data?.manifest || !data?.settings_and_rules) throw new Error('导出数据不完整，请刷新页面后重试')
+    url = URL.createObjectURL(new Blob([JSON.stringify(data, null, 2)], { type: 'application/json;charset=utf-8' }));
+    anchor = document.createElement('a');
+    anchor.href = url;
+    anchor.download = `pt-level-diagnostics-${String(data.manifest.generated_at || '').replace(/[^0-9]/g, '').slice(0, 14) || 'export'}.json`;
+    document.body.appendChild(anchor);
+    anchor.click();
+    notify('排障数据已导出');
+  } catch (err) {
+    notify(err?.message || '导出排障数据失败', 'error');
+  } finally {
+    anchor?.remove();
+    if (url) setTimeout(() => URL.revokeObjectURL(url), 1000);
+    exportingDiagnostics.value = false;
   }
 }
 function distributionSegments(items) {
@@ -17825,7 +17851,29 @@ return (_ctx, _cache) => {
                 _cache[98] || (_cache[98] = _createElementVNode("div", { class: "setting-hint mt-3" }, "自定义规则优先级最高，上传并保存后，匹配站点以自定义规则为主；未匹配的站点继续使用内置规则。", -1))
               ]),
               _createElementVNode("div", _hoisted_153, [
-                _cache[100] || (_cache[100] = _createElementVNode("div", null, [
+                _createElementVNode("div", _hoisted_154, [
+                  _cache[100] || (_cache[100] = _createElementVNode("div", null, [
+                    _createElementVNode("span", { class: "section-kicker" }, "DIAGNOSTICS"),
+                    _createElementVNode("h2", null, "排障数据导出")
+                  ], -1)),
+                  _createVNode(_component_VBtn, {
+                    variant: "tonal",
+                    color: "primary",
+                    "prepend-icon": "mdi-file-download-outline",
+                    loading: exportingDiagnostics.value,
+                    disabled: saving.value,
+                    onClick: exportDiagnostics
+                  }, {
+                    default: _withCtx(() => [...(_cache[99] || (_cache[99] = [
+                      _createTextVNode("导出排障数据", -1)
+                    ]))]),
+                    _: 1
+                  }, 8, ["loading", "disabled"])
+                ]),
+                _cache[101] || (_cache[101] = _createElementVNode("div", { class: "setting-hint" }, "导出站点信息、账号与日级历史、设置与等级规则，以及实际匹配规则和计算结果，用于排查等级异常。文件不含域名、账号标识和认证信息。使用已保存的设置；如有修改，请先保存再导出。", -1))
+              ]),
+              _createElementVNode("div", _hoisted_155, [
+                _cache[103] || (_cache[103] = _createElementVNode("div", null, [
                   _createElementVNode("strong", null, "数据来源"),
                   _createElementVNode("p", null, "上传、下载、分享率等仍仅来自 MoviePilot；PTD 只补充最新时魔和做种积分。")
                 ], -1)),
@@ -17837,7 +17885,7 @@ return (_ctx, _cache) => {
                   loading: saving.value,
                   onClick: saveSettings
                 }, {
-                  default: _withCtx(() => [...(_cache[99] || (_cache[99] = [
+                  default: _withCtx(() => [...(_cache[102] || (_cache[102] = [
                     _createTextVNode("保存设置", -1)
                   ]))]),
                   _: 1
@@ -17855,6 +17903,6 @@ return (_ctx, _cache) => {
 }
 
 };
-const PTStatsWorkbench = /*#__PURE__*/_export_sfc(_sfc_main, [['__scopeId',"data-v-1877d2f3"]]);
+const PTStatsWorkbench = /*#__PURE__*/_export_sfc(_sfc_main, [['__scopeId',"data-v-6771d8cc"]]);
 
 export { PTStatsWorkbench as P };

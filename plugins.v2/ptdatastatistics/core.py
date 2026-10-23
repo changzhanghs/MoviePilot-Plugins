@@ -325,6 +325,30 @@ def _match_named_rule(
     return max(candidates, key=lambda item: item[0])[1] if candidates else None
 
 
+def match_retirement_rule(
+    snapshot: Mapping[str, Any],
+    rules: Mapping[str, Mapping[str, Any]],
+) -> dict[str, Any]:
+    """共用实际规则选择逻辑，并保留不含域名的匹配依据。"""
+
+    values = (snapshot.get("site_name"), snapshot.get("domain"))
+    for custom in (True, False):
+        candidates = {
+            name: rule for name, rule in rules.items()
+            if bool(rule.get("_custom_rule")) == custom
+        }
+        selected = _match_named_rule(values, candidates)
+        if selected is not None:
+            by_name = _match_named_rule(values[0], candidates) is selected
+            return {
+                "rule_key": next(name for name, rule in candidates.items() if rule is selected),
+                "source": "custom" if custom else "builtin",
+                "matched_by": "name_or_alias" if by_name else "domain",
+                "rule": selected,
+            }
+    return {"rule_key": "", "source": "", "matched_by": "unmatched", "rule": None}
+
+
 def _match_level_index(
     current_level: Any, levels: Iterable[Mapping[str, Any]], *, exact_only: bool = False
 ) -> int:
@@ -662,20 +686,7 @@ def build_retirement_progress(
             "levels_remaining": None,
             "route": [],
         }
-        match_values = (snapshot.get("site_name"), snapshot.get("domain"))
-        custom_rules = {
-            name: candidate
-            for name, candidate in source_rules.items()
-            if candidate.get("_custom_rule")
-        }
-        rule = _match_named_rule(match_values, custom_rules)
-        if not rule:
-            builtin_rules = {
-                name: candidate
-                for name, candidate in source_rules.items()
-                if not candidate.get("_custom_rule")
-            }
-            rule = _match_named_rule(match_values, builtin_rules)
+        rule = match_retirement_rule(snapshot, source_rules)["rule"]
         raw_levels = list(rule.get("levels") or []) if rule else []
         vip_levels = list(rule.get("vip_levels") or []) if rule else []
         retirement_name = as_text(rule.get("retirement_level")) if rule else ""
