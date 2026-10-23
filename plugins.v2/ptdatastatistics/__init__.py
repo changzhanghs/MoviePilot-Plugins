@@ -66,7 +66,7 @@ class PTDataStatistics(_PluginBase):
     plugin_name = "PT数据统计"
     plugin_desc = "统计 PT 站点累计与每日上传下载，提供历史、养老进度和通知。"
     plugin_icon = "https://raw.githubusercontent.com/changzhanghs/MoviePilot-Plugins/main/icons/ptdatastatistics.png"
-    plugin_version = "2.1.14"
+    plugin_version = "2.1.15"
     plugin_author = "changzhanghs"
     author_url = "https://github.com/changzhanghs"
     plugin_config_prefix = "ptdatastatistics_"
@@ -1087,10 +1087,18 @@ class PTDataStatistics(_PluginBase):
             daily=aggregate(daily_rows),
         )
 
-    def api_export_diagnostics(self) -> dict[str, Any]:
+    def api_export_diagnostics(self, site_ids: str | None = None) -> dict[str, Any]:
         """只读取已保存数据，不刷新站点、导入 PTD 或写入历史。"""
 
         configured = self._configured_sites()
+        if site_ids is not None:
+            selected_ids = set(self._parse_site_ids(site_ids))
+            if not selected_ids:
+                raise HTTPException(status_code=422, detail="请至少选择一个站点")
+            active_ids = {site["id"] for site in configured if site.get("is_active")}
+            if selected_ids - active_ids:
+                raise HTTPException(status_code=422, detail="所选站点已停用或不存在，请重新选择")
+            configured = [site for site in configured if site.get("id") in selected_ids]
         repository = SnapshotRepository(None, self._mp_daily_snapshots())
         return build_diagnostic_export(
             plugin_version=self.plugin_version,
@@ -1101,6 +1109,7 @@ class PTDataStatistics(_PluginBase):
             ptd_metrics=self._ptd_metrics_by_domain(),
             settings=self._settings().model_dump(),
             rules=self._retirement_rules(),
+            include_rule_candidates=site_ids is None,
         )
 
     def api_settings(self) -> SettingsResponse:

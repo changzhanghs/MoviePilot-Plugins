@@ -2,6 +2,7 @@ import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import test from 'node:test'
 import vm from 'node:vm'
+import { withQuery } from '../plugins.v2/ptdatastatistics/src/utils.js'
 
 const source = readFileSync(new URL('../plugins.v2/ptdatastatistics/src/components/PTStatsWorkbench.vue', import.meta.url), 'utf8')
 function sourceFunction(start, end) {
@@ -48,6 +49,9 @@ function diagnosticFixture() {
   const timers = []
   const state = {
     exportingDiagnostics: { value: false },
+    diagnosticExportScope: { value: 'all' },
+    diagnosticSiteIds: { value: [] },
+    withQuery,
     pluginBase: { value: 'plugin/PTDataStatistics' },
     props: { api: { get(path) {
       return new Promise((resolve, reject) => requests.push({ path, resolve, reject }))
@@ -104,6 +108,32 @@ test('failed or invalid diagnostic responses show an error and allow retry witho
     await retry
     assert.equal(downloads.length, 1)
   }
+})
+
+test('selected diagnostic export sends exactly the chosen site IDs and all mode clears the filter', async () => {
+  const { state, requests, downloads } = diagnosticFixture()
+  state.diagnosticExportScope.value = 'selected'
+  state.diagnosticSiteIds.value = [2, 7]
+  const selected = state.exportDiagnostics()
+  assert.equal(new URL(requests[0].path, 'https://example.invalid/').searchParams.get('site_ids'), '2,7')
+  requests[0].resolve({ manifest: {}, sites: [{ site_id: 2 }, { site_id: 7 }] })
+  await selected
+  state.diagnosticExportScope.value = 'all'
+  const all = state.exportDiagnostics()
+  assert.equal(requests[1].path, 'plugin/PTDataStatistics/diagnostics/export')
+  requests[1].resolve({ manifest: {}, sites: [] })
+  await all
+  assert.equal(downloads.length, 2)
+})
+
+test('selected mode with no sites never requests or downloads all-site diagnostics', async () => {
+  const { state, requests, downloads, messages } = diagnosticFixture()
+  state.diagnosticExportScope.value = 'selected'
+  await state.exportDiagnostics()
+  assert.equal(requests.length, 0)
+  assert.equal(downloads.length, 0)
+  assert.equal(state.exportingDiagnostics.value, false)
+  assert.deepEqual(messages, [{ message: '请至少选择一个站点', type: 'warning' }])
 })
 
 test('older hourly success or failure cannot overwrite the selected site', async () => {
