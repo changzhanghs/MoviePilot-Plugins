@@ -20,8 +20,7 @@ const activeTab = ref(props.initialTab)
 const loading = ref(false)
 const saving = ref(false)
 const exportingDiagnostics = ref(false)
-const diagnosticExportScope = ref('all')
-const diagnosticSiteIds = ref([])
+const diagnosticSiteIds = ref(['all'])
 const historyLoading = ref(false)
 const distributionLoading = ref(false)
 const error = ref('')
@@ -93,7 +92,10 @@ const ptdReceiverUrl = computed(() => {
   return url.toString()
 })
 const currentSites = computed(() => overview.value.sites || [])
-const diagnosticSiteOptions = computed(() => currentSites.value.filter(site => site.site_id))
+const diagnosticSiteOptions = computed(() => [
+  { site_id: 'all', site_name: '全部' },
+  ...currentSites.value.filter(site => site.site_id),
+])
 function compareSiteNames(left, right) {
   return String(left?.site_name || '').localeCompare(String(right?.site_name || ''), 'zh-CN')
 }
@@ -677,9 +679,18 @@ async function downloadRuleTemplate() {
     notify(err?.message || '下载规则模板失败', 'error')
   }
 }
+function updateDiagnosticSites(values) {
+  if (values.includes('all')) {
+    diagnosticSiteIds.value = diagnosticSiteIds.value.includes('all') && values.length > 1
+      ? values.filter(value => value !== 'all')
+      : ['all']
+  } else {
+    diagnosticSiteIds.value = values
+  }
+}
 async function exportDiagnostics() {
   if (exportingDiagnostics.value) return
-  if (diagnosticExportScope.value === 'selected' && !diagnosticSiteIds.value.length) {
+  if (!diagnosticSiteIds.value.length) {
     notify('请至少选择一个站点', 'warning')
     return
   }
@@ -688,7 +699,7 @@ async function exportDiagnostics() {
   let anchor
   try {
     const path = withQuery(`${pluginBase.value}/diagnostics/export`, {
-      site_ids: diagnosticExportScope.value === 'selected' ? diagnosticSiteIds.value : null,
+      site_ids: diagnosticSiteIds.value.includes('all') ? null : diagnosticSiteIds.value,
     })
     const data = unwrapResponse(await props.api.get(path, { feedback: 'silent' }))
     if (!data?.manifest || !Array.isArray(data?.sites)) throw new Error('导出数据不完整，请更新插件并刷新页面后重试')
@@ -1559,13 +1570,9 @@ onBeforeUnmount(() => {
           </div>
           <div class="settings-card settings-card--wide"><div class="section-heading"><div><span class="section-kicker">LEVEL RULES</span><h2>等级规则</h2></div><div class="rules-upload__actions"><VBtn variant="tonal" color="primary" prepend-icon="mdi-upload-outline" @click="rulesFileInput?.click()">上传规则文件</VBtn><VBtn variant="text" prepend-icon="mdi-file-download-outline" @click="downloadRuleTemplate">下载模板</VBtn><VBtn v-if="customRuleSites.length" variant="text" color="error" prepend-icon="mdi-delete-outline" @click="clearUploadedRules">清空</VBtn></div></div><input ref="rulesFileInput" class="rules-file-input" type="file" accept="application/json,.json" @change="uploadRuleFile"><div v-if="customRuleSites.length" class="rules-upload"><div><strong>已载入 {{ customRuleSites.length }} 个站点</strong><p>{{ customRuleSites.join('、') }}</p><small v-if="rulesUploadName">文件：{{ rulesUploadName }}</small></div></div><div class="setting-hint mt-3">自定义规则优先级最高，上传并保存后，匹配站点以自定义规则为主；未匹配的站点继续使用内置规则。</div></div>
           <div class="settings-card settings-card--wide">
-            <div class="section-heading"><div><span class="section-kicker">DIAGNOSTICS</span><h2>排障数据导出</h2></div><VBtn variant="tonal" color="primary" prepend-icon="mdi-file-download-outline" :loading="exportingDiagnostics" :disabled="saving || loading || (diagnosticExportScope === 'selected' && !diagnosticSiteIds.length)" @click="exportDiagnostics">导出排障数据</VBtn></div>
-            <VRadioGroup v-model="diagnosticExportScope" inline hide-details class="mb-3" :disabled="exportingDiagnostics">
-              <VRadio label="全部站点" value="all" />
-              <VRadio label="选择站点" value="selected" />
-            </VRadioGroup>
-            <VAutocomplete v-if="diagnosticExportScope === 'selected'" v-model="diagnosticSiteIds" :items="diagnosticSiteOptions" item-title="site_name" item-value="site_id" label="选择要导出的站点" placeholder="可搜索并多选站点" multiple clear-on-select chips closable-chips clearable hide-details variant="outlined" density="comfortable" class="diagnostic-site-select mb-3" no-data-text="暂无可选择的启用站点" :disabled="exportingDiagnostics || loading" />
-            <div class="setting-hint">可导出全部启用站点，也可选择一个或多个站点。每站仅一条养老匹配记录，包含当前等级及来源、命中规则、匹配到的等级、等级名称及别名和异常原因。不含历史、流量、域名或认证信息。修改规则后请先保存再导出。</div>
+            <div class="section-heading"><div><span class="section-kicker">DIAGNOSTICS</span><h2>排障数据导出</h2></div><VBtn variant="tonal" color="primary" prepend-icon="mdi-file-download-outline" :loading="exportingDiagnostics" :disabled="saving || loading || !diagnosticSiteIds.length" @click="exportDiagnostics">导出排障数据</VBtn></div>
+            <VAutocomplete :model-value="diagnosticSiteIds" @update:model-value="updateDiagnosticSites" :items="diagnosticSiteOptions" item-title="site_name" item-value="site_id" label="选择要导出的站点" placeholder="可搜索并多选站点" multiple clear-on-select chips closable-chips clearable hide-details variant="outlined" density="comfortable" class="diagnostic-site-select mb-3" no-data-text="暂无可选择的启用站点" :disabled="exportingDiagnostics || loading" />
+            <div class="setting-hint">数据包含当前等级及来源、命中规则、匹配到的等级、等级名称及别名和异常原因。不含历史、流量、域名或认证信息。</div>
           </div>
           <div class="settings-card settings-card--wide settings-actions"><div><strong>数据来源</strong><p>上传、下载、分享率等仍仅来自 MoviePilot；PTD 只补充最新时魔和做种积分。</p></div><VBtn color="primary" size="large" variant="flat" prepend-icon="mdi-content-save-outline" :loading="saving" @click="saveSettings">保存设置</VBtn></div>
         </section>
