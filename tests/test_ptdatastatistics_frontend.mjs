@@ -49,8 +49,7 @@ function diagnosticFixture() {
   const timers = []
   const state = {
     exportingDiagnostics: { value: false },
-    diagnosticExportScope: { value: 'all' },
-    diagnosticSiteIds: { value: [] },
+    diagnosticSiteIds: { value: ['all'] },
     withQuery,
     pluginBase: { value: 'plugin/PTDataStatistics' },
     props: { api: { get(path) {
@@ -69,7 +68,7 @@ function diagnosticFixture() {
     setTimeout: callback => timers.push(callback),
   }
   vm.createContext(state)
-  vm.runInContext(sourceFunction('async function exportDiagnostics()', 'function distributionSegments'), state)
+  vm.runInContext(sourceFunction('function updateDiagnosticSites(', 'function distributionSegments'), state)
   return { state, requests, messages, downloads, blobs, revoked, timers }
 }
 
@@ -110,15 +109,17 @@ test('failed or invalid diagnostic responses show an error and allow retry witho
   }
 })
 
-test('selected diagnostic export sends exactly the chosen site IDs and all mode clears the filter', async () => {
+test('diagnostic dropdown switches between all sites and selected sites without mixing filters', async () => {
   const { state, requests, downloads } = diagnosticFixture()
-  state.diagnosticExportScope.value = 'selected'
-  state.diagnosticSiteIds.value = [2, 7]
+  state.updateDiagnosticSites(['all', 2])
+  assert.deepEqual(Array.from(state.diagnosticSiteIds.value), [2])
+  state.updateDiagnosticSites([2, 7])
   const selected = state.exportDiagnostics()
   assert.equal(new URL(requests[0].path, 'https://example.invalid/').searchParams.get('site_ids'), '2,7')
   requests[0].resolve({ manifest: {}, sites: [{ site_id: 2 }, { site_id: 7 }] })
   await selected
-  state.diagnosticExportScope.value = 'all'
+  state.updateDiagnosticSites([2, 7, 'all'])
+  assert.deepEqual(Array.from(state.diagnosticSiteIds.value), ['all'])
   const all = state.exportDiagnostics()
   assert.equal(requests[1].path, 'plugin/PTDataStatistics/diagnostics/export')
   requests[1].resolve({ manifest: {}, sites: [] })
@@ -126,9 +127,9 @@ test('selected diagnostic export sends exactly the chosen site IDs and all mode 
   assert.equal(downloads.length, 2)
 })
 
-test('selected mode with no sites never requests or downloads all-site diagnostics', async () => {
+test('clearing the diagnostic dropdown never requests or downloads all-site diagnostics', async () => {
   const { state, requests, downloads, messages } = diagnosticFixture()
-  state.diagnosticExportScope.value = 'selected'
+  state.updateDiagnosticSites([])
   await state.exportDiagnostics()
   assert.equal(requests.length, 0)
   assert.equal(downloads.length, 0)
