@@ -81,8 +81,88 @@ const hourlyLoading = ref(false)
 const historyChartCanvas = ref(null)
 let historyChart = null
 const selectedRetirementSiteKey = ref('')
+const retirementSiteScroller = ref(null)
+const canScrollRetirementLeft = ref(false)
+const canScrollRetirementRight = ref(false)
+let retirementSiteResizeObserver = null
+let retirementSiteDrag = null
+let retirementSiteClickSuppressedUntil = 0
+const retirementSiteDragging = ref(false)
 const selectedRouteLevelName = ref('')
 const springUpgradeTaskIndex = ref(0)
+
+function updateRetirementScrollState() {
+  const list = retirementSiteScroller.value
+  canScrollRetirementLeft.value = Boolean(list && list.scrollLeft > 1)
+  canScrollRetirementRight.value = Boolean(list && list.scrollWidth - list.clientWidth - list.scrollLeft > 1)
+}
+function scrollRetirementSites(direction) {
+  const list = retirementSiteScroller.value
+  if (!list) return
+  const card = list.querySelector('.retirement-site-option')
+  const step = (card?.offsetWidth || 245) + (parseFloat(getComputedStyle(list).columnGap) || 0)
+  const distance = Math.max(1, Math.floor(list.clientWidth / step)) * step
+  list.scrollBy({
+    left: direction * distance,
+    behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth',
+  })
+}
+function startRetirementSiteDrag(event) {
+  retirementSiteClickSuppressedUntil = 0
+  const list = retirementSiteScroller.value
+  if (event.pointerType !== 'mouse' || event.button !== 0 || !list || list.scrollWidth <= list.clientWidth + 1) return
+  retirementSiteDrag = {
+    pointerId: event.pointerId,
+    startX: event.clientX,
+    startY: event.clientY,
+    scrollLeft: list.scrollLeft,
+    list,
+  }
+}
+function moveRetirementSiteDrag(event) {
+  const drag = retirementSiteDrag
+  if (!drag || event.pointerId !== drag.pointerId) return
+  if (!(event.buttons & 1)) {
+    endRetirementSiteDrag(event)
+    return
+  }
+  const distance = event.clientX - drag.startX
+  if (!retirementSiteDragging.value) {
+    if (Math.abs(distance) <= 5 || Math.abs(distance) <= Math.abs(event.clientY - drag.startY)) return
+    retirementSiteDragging.value = true
+    // Capture only after a real drag so ordinary button clicks retain their target.
+    drag.list.setPointerCapture(event.pointerId)
+  }
+  event.preventDefault()
+  drag.list.scrollLeft = Math.max(0, Math.min(drag.list.scrollWidth - drag.list.clientWidth, drag.scrollLeft - distance))
+  updateRetirementScrollState()
+}
+function endRetirementSiteDrag(event) {
+  const drag = retirementSiteDrag
+  if (!drag || (event && event.pointerId !== drag.pointerId)) return
+  if (retirementSiteDragging.value) retirementSiteClickSuppressedUntil = performance.now() + 320
+  retirementSiteDrag = null
+  retirementSiteDragging.value = false
+  if (drag.list.hasPointerCapture(drag.pointerId)) drag.list.releasePointerCapture(drag.pointerId)
+}
+function leaveRetirementSiteScroller(event) {
+  if (!retirementSiteDragging.value) endRetirementSiteDrag(event)
+}
+function guardRetirementSiteClick(event) {
+  if (event.detail > 0 && performance.now() < retirementSiteClickSuppressedUntil) {
+    event.preventDefault()
+    event.stopPropagation()
+  }
+}
+watch(retirementSiteScroller, list => {
+  endRetirementSiteDrag()
+  retirementSiteResizeObserver?.disconnect()
+  if (list && typeof ResizeObserver !== 'undefined') {
+    retirementSiteResizeObserver = new ResizeObserver(updateRetirementScrollState)
+    retirementSiteResizeObserver.observe(list)
+  }
+  updateRetirementScrollState()
+}, { flush: 'post' })
 
 const pluginBase = computed(() => `plugin/${props.pluginId || 'PTDataStatistics'}`)
 const ptdReceiverUrl = computed(() => {
@@ -1153,6 +1233,10 @@ watch(
   },
   { immediate: true },
 )
+watch(sortedRetirementSites, async () => {
+  await nextTick()
+  updateRetirementScrollState()
+})
 watch(selectedRetirementSiteKey, () => {
   selectedRouteLevelName.value = ''
   springUpgradeTaskIndex.value = 0
@@ -1184,6 +1268,8 @@ watch(activeTab, value => {
 }, { immediate: true })
 onMounted(loadAll)
 onBeforeUnmount(() => {
+  endRetirementSiteDrag()
+  retirementSiteResizeObserver?.disconnect()
   hourlyRequestSequence += 1
   historyRequestSequence += 1
   distributionRequestSequence += 1
@@ -1252,7 +1338,7 @@ onBeforeUnmount(() => {
           </div>
         </section>
 
-        <section class="section-block">
+        <section class="section-block site-data-section">
           <div class="section-heading site-data-heading">
             <div><span class="section-kicker">CURRENT SNAPSHOT</span><h2>站点数据</h2></div>
             <VSelect v-model="siteSortKey" :items="siteSortOptions" label="排序方式" prepend-inner-icon="mdi-sort-descending" density="compact" variant="outlined" hide-details class="site-sort-select" />
@@ -1371,8 +1457,30 @@ onBeforeUnmount(() => {
           <div v-if="selectedRetirementSite" class="retirement-explorer">
             <aside class="retirement-site-list" aria-label="养老进度站点列表">
               <div class="retirement-site-list__heading"><strong>站点列表</strong><span>共 {{ retirement.sites?.length || 0 }} 个站点</span></div>
-              <VSelect v-model="retirementSortKey" :items="retirementSortOptions" label="排序方式" prepend-inner-icon="mdi-sort" density="compact" variant="outlined" hide-details class="retirement-site-sort" />
-              <div class="retirement-site-list__items">
+              <div class="retirement-site-toolbar">
+                <VSelect v-model="retirementSortKey" :items="retirementSortOptions" label="排序方式" prepend-inner-icon="mdi-sort" density="compact" variant="outlined" hide-details class="retirement-site-sort" />
+                <div class="retirement-site-navigation" role="group" aria-label="滚动站点列表">
+                  <VBtn icon="mdi-chevron-left" size="small" variant="tonal" aria-label="向左滚动站点列表" :disabled="!canScrollRetirementLeft" @click="scrollRetirementSites(-1)" />
+                  <VBtn icon="mdi-chevron-right" size="small" variant="tonal" aria-label="向右滚动站点列表" :disabled="!canScrollRetirementRight" @click="scrollRetirementSites(1)" />
+                </div>
+              </div>
+              <div
+                ref="retirementSiteScroller"
+                class="retirement-site-list__items"
+                :class="{ 'is-dragging': retirementSiteDragging }"
+                tabindex="0"
+                role="region"
+                aria-label="可滚动站点列表"
+                @scroll.passive="updateRetirementScrollState"
+                @pointerdown="startRetirementSiteDrag"
+                @pointermove="moveRetirementSiteDrag"
+                @pointerup="endRetirementSiteDrag"
+                @pointercancel="endRetirementSiteDrag"
+                @lostpointercapture="endRetirementSiteDrag"
+                @pointerleave="leaveRetirementSiteScroller"
+                @click.capture="guardRetirementSiteClick"
+                @dragstart.prevent
+              >
                 <button
                   v-for="site in sortedRetirementSites"
                   :key="retirementSiteKey(site)"
@@ -1393,7 +1501,7 @@ onBeforeUnmount(() => {
               </div>
             </aside>
 
-            <article class="retirement-detail">
+            <article class="retirement-detail" tabindex="0" aria-label="站点养老详情">
               <header class="retirement-detail__header">
                 <div class="retirement-detail__identity">
                   <SiteAvatar :api="api" :site="selectedRetirementSite" :size="58" />
@@ -1621,21 +1729,26 @@ onBeforeUnmount(() => {
 .history-record-shell{max-height:460px;overflow-x:hidden;overflow-y:auto;margin:0 14px 14px;border:1px solid var(--pt-border);border-radius:10px;background:rgba(var(--v-theme-surface),.42);scrollbar-gutter:stable}.history-record-table{width:100%;min-width:0;table-layout:fixed;background:transparent}.history-record-table th{color:rgba(var(--v-theme-on-surface),.55)!important;font-size:.62rem;white-space:nowrap}.history-record-table td{overflow:hidden;font-size:.66rem;text-overflow:ellipsis;white-space:nowrap}
 .stacked-metric{display:block;overflow:hidden;font-size:.7rem;line-height:1.45;text-overflow:ellipsis;white-space:nowrap}
 .site-data-list{display:grid;gap:12px}
-.site-data-card{min-width:0;padding:16px;border:1px solid var(--pt-border);border-radius:16px;background:rgba(var(--v-theme-surface-variant),.12)}
+.pt-workbench .site-data-section{background:rgba(var(--v-theme-surface),.28)}
+.site-data-card{min-width:0;padding:16px;border:1px solid var(--pt-border);border-radius:16px;background:rgba(var(--v-theme-on-surface),.025);box-shadow:inset 0 1px 0 rgba(var(--v-theme-on-surface),.05),0 8px 22px rgba(0,0,0,.06);color:rgb(var(--v-theme-on-surface))}
 .site-data-card__header{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:12px;padding-bottom:12px;border-bottom:1px solid var(--pt-border)}
 .site-data-card__header .site-identity>div{display:flex;flex-direction:column;min-width:0}
-.site-data-card__header .site-identity span,.site-account-meta{color:rgba(var(--v-theme-on-surface),.56);font-size:.72rem}
+.site-data-card__header .site-identity span,.site-account-meta{color:rgba(var(--v-theme-on-surface),.72);font-size:.72rem}
 .site-account-meta{display:flex;flex-wrap:wrap;align-items:center;justify-content:flex-end;gap:7px}
 .site-stat-grid{display:grid;grid-template-columns:repeat(10,minmax(0,1fr));gap:8px;margin-top:12px}
-.site-stat-grid>div{display:flex;min-width:0;flex-direction:column;gap:4px;padding:10px 12px;border-radius:10px;background:rgba(var(--v-theme-surface),.54)}
-.site-stat-grid span{color:rgba(var(--v-theme-on-surface),.52);font-size:.68rem}
-.site-stat-grid strong{overflow-wrap:anywhere;font-size:.82rem}
-.retirement-explorer{display:grid;grid-template-columns:minmax(240px,300px) minmax(0,1fr);align-items:start;min-height:0;overflow:visible;border:1px solid var(--pt-border);border-radius:18px;background:rgba(var(--v-theme-surface),.44)}
-.retirement-site-list{display:flex;min-width:0;height:auto;min-height:0;flex-direction:column;padding:14px;border-right:1px solid var(--pt-border);background:rgba(var(--v-theme-surface-variant),.1)}
-.retirement-site-list__heading{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:2px 4px 12px}
+.site-stat-grid>div{display:flex;min-width:0;flex-direction:column;justify-content:center;gap:6px;padding:10px 12px;border:1px solid var(--pt-border);border-radius:10px;background:rgba(var(--v-theme-on-surface),.035);box-shadow:inset 0 1px 0 rgba(var(--v-theme-on-surface),.04)}
+.site-stat-grid span{color:rgba(var(--v-theme-on-surface),.74);font-size:.68rem;line-height:1.4}
+.site-stat-grid strong{overflow-wrap:anywhere;font-size:.82rem;font-weight:700;line-height:1.4;font-variant-numeric:tabular-nums}
+.retirement-explorer{display:grid;grid-template-columns:minmax(240px,300px) minmax(0,1fr);align-items:stretch;height:clamp(480px,calc(100vh - 230px),800px);height:clamp(480px,calc(100dvh - 230px),800px);min-height:0;overflow:hidden;border:1px solid var(--pt-border);border-radius:18px;background:rgba(var(--v-theme-surface),.44)}
+.retirement-site-list{display:flex;min-width:0;height:100%;min-height:0;overflow:hidden;flex-direction:column;padding:14px;border-right:1px solid var(--pt-border);background:rgba(var(--v-theme-surface-variant),.1)}
+.retirement-site-list__heading{display:flex;flex:0 0 auto;align-items:center;justify-content:space-between;gap:12px;padding:2px 4px 12px}
 .retirement-site-list__heading span{color:rgba(var(--v-theme-on-surface),.52);font-size:.7rem}
-.retirement-site-sort{width:100%;flex:0 0 auto;margin-bottom:10px}
-.retirement-site-list__items{display:grid;align-content:start;gap:5px}
+.retirement-site-toolbar{display:flex;flex:0 0 auto;align-items:center;justify-content:space-between;gap:12px;margin-bottom:10px}
+.retirement-site-sort{width:220px;max-width:100%;min-width:0;flex:0 1 220px}
+.retirement-site-navigation{display:none;flex:0 0 auto;align-items:center;gap:6px}
+.retirement-site-list__items{display:grid;flex:1 1 auto;min-height:0;align-content:start;gap:5px;overflow-x:hidden;overflow-y:auto;overscroll-behavior:contain;scrollbar-gutter:stable;scrollbar-width:thin;scrollbar-color:rgba(var(--v-theme-on-surface),.28) transparent}
+.retirement-site-list__items:focus-visible,.retirement-detail:focus-visible{outline:2px solid rgb(var(--v-theme-primary));outline-offset:-2px}
+.retirement-site-list__items.is-dragging,.retirement-site-list__items.is-dragging .retirement-site-option{cursor:grabbing}
 .retirement-site-option{appearance:none;display:grid;grid-template-columns:auto minmax(0,1fr) auto;align-items:center;gap:10px;width:100%;padding:11px 10px;border:1px solid transparent;border-radius:12px;background:transparent;color:inherit;font:inherit;text-align:left;cursor:pointer;transition:background-color .16s ease,border-color .16s ease}
 .retirement-site-option:hover,.retirement-site-option:focus-visible{border-color:rgba(var(--v-theme-primary),.34);background:rgba(var(--v-theme-primary),.08);outline:none}
 .retirement-site-option--selected{border-color:rgba(var(--v-theme-primary),.46);background:rgba(var(--v-theme-primary),.12)}
@@ -1646,7 +1759,7 @@ onBeforeUnmount(() => {
 .retirement-site-option__title em{flex:0 0 auto;font-size:.66rem;font-style:normal;font-weight:700}
 .retirement-site-option>small{color:rgba(var(--v-theme-on-surface),.52);font-size:.68rem;font-weight:700}
 .status-wealthy_retired{color:#f5b942}.status-retired{color:rgb(var(--v-theme-success))}.status-upgrading{color:rgb(var(--v-theme-primary))}.status-rule_missing{color:rgb(var(--v-theme-warning))}
-.retirement-detail{min-width:0;min-height:0;overflow:visible;padding:20px}
+.retirement-detail{min-width:0;min-height:0;overflow-x:hidden;overflow-y:auto;overscroll-behavior:contain;scrollbar-gutter:stable;padding:20px}
 .retirement-detail__header{display:flex;align-items:center;justify-content:space-between;gap:24px;padding-bottom:18px;border-bottom:1px solid var(--pt-border)}
 .retirement-detail__identity{display:flex;min-width:0;align-items:center;gap:14px}
 .retirement-detail__identity>div{display:flex;min-width:0;flex-direction:column;gap:3px}
@@ -1757,8 +1870,9 @@ onBeforeUnmount(() => {
 .twelve-remaining{display:flex;justify-content:flex-end;gap:4px;min-width:920px;color:rgba(var(--v-theme-on-surface),.52);font-size:.7rem}
 .twelve-remaining strong{color:rgb(var(--v-theme-success));font-size:.8rem}
 .pt-workbench--compact .retirement-explorer{grid-template-columns:1fr;height:auto;min-height:0;overflow:visible}
-.pt-workbench--compact .retirement-site-list{position:static;max-height:none;overflow:visible;border-right:0;border-bottom:1px solid var(--pt-border)}
-.pt-workbench--compact .retirement-site-list__items{display:flex;max-height:none;overflow-x:auto;overflow-y:hidden;scrollbar-gutter:auto}
+.pt-workbench--compact .retirement-site-list{position:static;height:auto;max-height:none;overflow:visible;border-right:0;border-bottom:1px solid var(--pt-border)}
+.pt-workbench--compact .retirement-site-list__items{display:flex;flex:0 0 auto;max-height:none;overflow-x:auto;overflow-y:hidden;scrollbar-gutter:auto;overscroll-behavior-x:contain;overscroll-behavior-y:auto;cursor:grab;user-select:none}
+.pt-workbench--compact .retirement-site-navigation{display:flex}
 .pt-workbench--compact .retirement-site-option{width:245px;flex:0 0 245px}
 .pt-workbench--compact .retirement-detail{min-width:0;overflow:visible;scrollbar-gutter:auto}
 .pt-workbench--compact .requirement-overview{grid-template-columns:1fr}
@@ -1766,6 +1880,7 @@ onBeforeUnmount(() => {
 .pt-workbench--compact .requirement-table,.pt-workbench--compact .retirement-levels{max-width:100%;overflow-x:auto;overflow-y:hidden;overscroll-behavior-x:contain}
 .pt-workbench--compact .requirement-table__head,.pt-workbench--compact .requirement-row{min-width:840px}
 @media(max-width:1280px){.metric-grid{grid-template-columns:repeat(3,minmax(0,1fr))}.site-stat-grid{grid-template-columns:repeat(5,minmax(0,1fr))}.retirement-target-grid{grid-template-columns:1fr}}
+@media(max-width:960px){.retirement-site-navigation{display:flex}.retirement-site-list{height:auto}.retirement-site-list__items{flex:0 0 auto;overscroll-behavior-x:contain;overscroll-behavior-y:auto;cursor:grab;user-select:none}}
 @media(max-width:960px){.workbench-nav{align-items:stretch;flex-direction:column;gap:5px}.workbench-nav__actions{align-self:flex-end;padding-bottom:10px}.history-workspace{grid-template-columns:1fr;height:auto;overflow:visible}.history-site-sidebar{overflow:visible;border-right:0;border-bottom:1px solid var(--pt-border)}.history-site-sidebar__items{display:flex;max-height:none;overflow-x:auto;overflow-y:hidden;scrollbar-gutter:auto}.history-site-option{width:210px;flex:0 0 210px}.history-workspace__main{overflow:visible;scrollbar-gutter:auto}.history-record-shell{overflow-x:auto}.history-record-table{min-width:900px;table-layout:auto}.distribution-grid{grid-template-columns:1fr}.retirement-explorer{grid-template-columns:1fr;height:auto;min-height:0;overflow:visible}.retirement-site-list{overflow:visible;border-right:0;border-bottom:1px solid var(--pt-border)}.retirement-site-list__items{display:flex;max-height:none;overflow-x:auto;overflow-y:hidden;scrollbar-gutter:auto}.retirement-site-option{width:245px;flex:0 0 245px}.retirement-detail{overflow:visible;scrollbar-gutter:auto}.requirement-overview{grid-template-columns:1fr}.requirement-overview__score{border-right:0;border-bottom:1px solid var(--pt-border);padding-bottom:14px}.requirement-table,.retirement-levels{overflow-x:auto}}
 .ptd-settings-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin-top:14px}.ptd-receiver-url{grid-column:1/-1}
 @media(max-width:720px){.workbench-nav__actions{align-self:stretch}.section-block{padding:14px}.metric-grid,.settings-layout,.ptd-settings-grid{grid-template-columns:1fr}.ptd-receiver-url{grid-column:auto}.settings-card--wide{grid-column:auto}.settings-actions{align-items:stretch;flex-direction:column}.section-heading,.distribution-heading{align-items:flex-start;flex-direction:column}.pie-layout{grid-template-columns:1fr}.pie{width:180px}.history-detail-summary{align-items:flex-start;flex-direction:column}.history-detail-metrics{width:100%;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}.history-period-card{min-width:142px}.history-line-chart{height:220px}.history-site-panel .history-detail-shell{overflow-x:auto}.history-site-panel .history-detail-table{min-width:720px}}

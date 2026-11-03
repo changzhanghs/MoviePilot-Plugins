@@ -12,6 +12,109 @@ function sourceFunction(start, end) {
   assert(stop > offset)
   return source.slice(offset, stop)
 }
+
+function retirementScrollFixture() {
+  let capturedPointer = null
+  const list = {
+    clientWidth: 500, scrollWidth: 2000, scrollLeft: 0,
+    setPointerCapture(id) { capturedPointer = id },
+    hasPointerCapture(id) { return capturedPointer === id },
+    releasePointerCapture() { capturedPointer = null },
+  }
+  const state = {
+    retirementSiteScroller: { value: list },
+    retirementSiteDragging: { value: false },
+    canScrollRetirementLeft: { value: false },
+    canScrollRetirementRight: { value: false },
+    now: 1000,
+  }
+  state.performance = { now: () => state.now }
+  vm.createContext(state)
+  vm.runInContext(`let retirementSiteDrag = null; let retirementSiteClickSuppressedUntil = 0;\n${sourceFunction('function updateRetirementScrollState()', 'watch(retirementSiteScroller,')}`, state)
+  const pointer = (overrides = {}) => ({
+    pointerType: 'mouse', pointerId: 1, button: 0, buttons: 1, clientX: 400, clientY: 50,
+    prevented: false, preventDefault() { this.prevented = true }, ...overrides,
+  })
+  const click = (detail = 1) => ({
+    detail, prevented: false, stopped: false,
+    preventDefault() { this.prevented = true }, stopPropagation() { this.stopped = true },
+  })
+  return { state, list, pointer, click, captured: () => capturedPointer }
+}
+
+test('horizontal mouse drag waits for intentional motion and suppresses its following click', () => {
+  const { state, list, pointer, click, captured } = retirementScrollFixture()
+  state.startRetirementSiteDrag(pointer())
+  state.moveRetirementSiteDrag(pointer({ clientX: 397 }))
+  assert.equal(captured(), null)
+  assert.equal(list.scrollLeft, 0)
+  const move = pointer({ clientX: 100 })
+  state.moveRetirementSiteDrag(move)
+  assert.equal(captured(), 1)
+  assert.equal(move.prevented, true)
+  assert.equal(list.scrollLeft, 300)
+  assert.equal(state.canScrollRetirementLeft.value, true)
+  state.endRetirementSiteDrag(pointer())
+  assert.equal(captured(), null)
+  assert.equal(state.retirementSiteDragging.value, false)
+  const afterDrag = click()
+  state.guardRetirementSiteClick(afterDrag)
+  assert.equal(afterDrag.prevented, true)
+  assert.equal(afterDrag.stopped, true)
+  const keyboardClick = click(0)
+  state.guardRetirementSiteClick(keyboardClick)
+  assert.equal(keyboardClick.prevented, false)
+  state.now += 321
+  const laterClick = click()
+  state.guardRetirementSiteClick(laterClick)
+  assert.equal(laterClick.prevented, false)
+})
+
+test('ordinary clicks, touch, secondary buttons and vertical gestures retain native behavior', () => {
+  for (const options of [{ pointerType: 'touch' }, { pointerType: 'pen' }, { button: 2 }]) {
+    const { state, list, pointer, captured } = retirementScrollFixture()
+    state.startRetirementSiteDrag(pointer(options))
+    const move = pointer({ ...options, clientX: 100 })
+    state.moveRetirementSiteDrag(move)
+    assert.equal(move.prevented, false)
+    assert.equal(list.scrollLeft, 0)
+    assert.equal(captured(), null)
+  }
+  const { state, list, pointer, click, captured } = retirementScrollFixture()
+  state.startRetirementSiteDrag(pointer())
+  const vertical = pointer({ clientX: 390, clientY: 150 })
+  state.moveRetirementSiteDrag(vertical)
+  assert.equal(vertical.prevented, false)
+  assert.equal(list.scrollLeft, 0)
+  assert.equal(captured(), null)
+  state.endRetirementSiteDrag(pointer())
+  const normalClick = click()
+  state.guardRetirementSiteClick(normalClick)
+  assert.equal(normalClick.prevented, false)
+})
+
+test('drag cleanup releases capture, clamps to bounds and permits a fresh intentional click', () => {
+  const { state, list, pointer, click, captured } = retirementScrollFixture()
+  state.startRetirementSiteDrag(pointer())
+  state.moveRetirementSiteDrag(pointer({ clientX: -2000 }))
+  assert.equal(list.scrollLeft, 1500)
+  assert.equal(state.canScrollRetirementRight.value, false)
+  state.endRetirementSiteDrag()
+  assert.equal(captured(), null)
+  state.startRetirementSiteDrag(pointer())
+  state.endRetirementSiteDrag(pointer())
+  const normalClick = click()
+  state.guardRetirementSiteClick(normalClick)
+  assert.equal(normalClick.prevented, false)
+  state.startRetirementSiteDrag(pointer())
+  state.moveRetirementSiteDrag(pointer({ clientX: 3000 }))
+  assert.equal(list.scrollLeft, 0)
+  assert.equal(state.canScrollRetirementLeft.value, false)
+  state.endRetirementSiteDrag(pointer({ type: 'pointercancel' }))
+  assert.equal(captured(), null)
+  assert.equal(state.retirementSiteDragging.value, false)
+})
+
 function fixture() {
   const requests = []
   const errors = []

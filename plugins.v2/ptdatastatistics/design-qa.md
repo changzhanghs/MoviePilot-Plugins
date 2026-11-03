@@ -87,3 +87,21 @@
 - Production avatars will be visually richer than the standalone QA fallbacks because MoviePilot supplies the actual site icons.
 
 final result: passed
+
+## 2026-11-03 workbench follow-up
+
+- Scope: compact retirement sort selector at the left, horizontal site navigation at the right, and clearer site data surfaces under glass themes.
+- Browser verification: local Vite harness with API-shaped mock data, headless Edge, 1440 × 1050 and 390 × 844 viewports, dark and light Vuetify themes. Production MoviePilot was not exercised.
+- Retirement toolbar: selector measured 220 px in a 1302 px toolbar; navigation aligned with the right edge. Both directions, keyboard activation, disabled boundaries, unchanged site selection, single-site disabled state, and the regular desktop sidebar passed.
+- Site data: all ten metrics remained visible in ten desktop columns and two mobile columns; labels used 74% theme foreground with 3.5% foreground translucent metric surfaces. No document horizontal overflow or browser runtime errors occurred.
+- Visually inspected dark/light site cards and mobile retirement toolbar captures. Repeated cards use translucent fills and inset highlights without additional backdrop-filter layers.
+
+## Issue #7: independent retirement scrolling
+
+- Confirmed the previous wide-screen explorer had automatic height and visible overflow, so neither pane independently scrolled.
+- Restored bounded wide-screen pane height, independent list/detail scroll containers, fixed list heading and toolbar, contained scroll boundaries, and keyboard-focusable scroll regions. Compact/narrow layouts retain natural page height with a horizontal site strip and the previously requested right-aligned navigation.
+- Added mouse-only horizontal dragging after 5 px of intentional horizontal movement, delayed pointer capture, cleanup on release/cancel/lost capture/unmount, and a 320 ms click guard. Touch and keyboard clicks retain native behavior; a fresh pointer press immediately permits a deliberate selection.
+- Headless Edge with 45 mock sites, 1600 × 1000: sidebar scrollTop 0 → 400 while page scrollY stayed 207 and detail scrollTop stayed 0. Scrolling the detail to 350 preserved both page scrollY and sidebar scrollTop. Additional wheel input at the sidebar boundary did not scroll the page.
+- 1280 px compact, 900 px narrow and 390 px mobile: real mouse drag moved scrollLeft 0 → 200 with the page position and selection unchanged; normal clicks selected the next site; both navigation directions and boundary disabled states passed. Single-site and wide/narrow resize cases passed without runtime errors or horizontal document overflow.
+- CDP touch input moved the narrow strip by 268 px with page position and selection unchanged. Smooth navigation also passed without reduced motion. Visually inspected wide/compact captures; verification used a local Vue/Vuetify mock host, not a live MoviePilot instance.
+- Frontend regression suite: 19 passing tests, including drag intent, click suppression, native gesture preservation, capture cleanup and boundary clamping. Production build passed.
