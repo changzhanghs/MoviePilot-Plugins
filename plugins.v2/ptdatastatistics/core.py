@@ -691,6 +691,16 @@ def build_retirement_progress(
         vip_levels = list(rule.get("vip_levels") or []) if rule else []
         retirement_name = as_text(rule.get("retirement_level")) if rule else ""
         vip_index = _match_level_index(base["current_level"], vip_levels)
+        base["vip_levels"] = [
+            {
+                "name": as_text(level.get("name")),
+                "aliases": list(level.get("aliases") or []),
+                "description": as_text(level.get("description")),
+                "is_current": index == vip_index,
+                "reached": index == vip_index,
+            }
+            for index, level in enumerate(vip_levels)
+        ]
         if not raw_levels:
             if forced_wealthy or vip_index >= 0:
                 counts["wealthy_retired"] += 1

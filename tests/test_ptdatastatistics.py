@@ -1380,6 +1380,61 @@ class TwelveAndExportTests(unittest.TestCase):
         self.assertTrue(site["wealthy_retirement_manual"])
         self.assertFalse(site["is_vip"])
 
+    def test_rainbow_guest_aliases_use_wealthy_retirement_with_low_traffic(self):
+        for site_name in ("彩虹岛", "Rainbow", "CHDBits"):
+            for user_level in ("贵宾", "VIP", "贵宾(VIP)"):
+                with self.subTest(site_name=site_name, user_level=user_level):
+                    progress = core.build_retirement_progress([{
+                        "site_name": site_name,
+                        "user_level": user_level,
+                        "upload": int(184.8 * core.GIB),
+                        "download": 1_855_979,
+                        "ratio": 106704.45,
+                        "updated_day": "2026-11-08",
+                    }])
+                    site = progress["sites"][0]
+                    self.assertEqual(progress["rule_missing"], 0)
+                    self.assertEqual(progress["wealthy_retired"], 1)
+                    self.assertEqual(site["status"], "wealthy_retired")
+                    self.assertTrue(site["is_vip"])
+                    self.assertFalse(site["wealthy_retirement_manual"])
+                    self.assertEqual(site["next_level"], "")
+                    self.assertEqual(site["retirement_level"], "Ultimate User")
+                    self.assertTrue(site["route"])
+                    self.assertEqual([level["name"] for level in site["vip_levels"]], ["贵宾(VIP)"])
+                    self.assertTrue(site["vip_levels"][0]["is_current"])
+                    self.assertIn("免除自动降级", site["vip_levels"][0]["description"])
+                    self.assertNotIn("贵宾(VIP)", [level["name"] for level in site["route"]])
+
+    def test_rainbow_normal_levels_require_strict_ratio_and_bonus_boundaries(self):
+        rule = core.DEFAULT_RETIREMENT_RULES["彩虹岛"]
+        for level in rule["levels"]:
+            if level["source_id"] < 2:
+                continue
+            with self.subTest(level=level["name"]):
+                snapshot = {
+                    "join_at": "2020-01-01",
+                    "updated_day": "2026-11-08",
+                    "download": level["min_download"],
+                    "ratio": level["min_ratio"] + 0.01,
+                    "bonus": level["min_bonus"] + 1,
+                }
+                self.assertEqual(core._requirement_missing(level, snapshot), [])
+                self.assertEqual(
+                    core._requirement_missing(level, {**snapshot, "ratio": level["min_ratio"]}),
+                    [f"分享率需大于 {level['min_ratio']:g}"],
+                )
+                self.assertEqual(
+                    core._requirement_missing(level, {**snapshot, "bonus": level["min_bonus"]}),
+                    [f"魔力需大于 {level['min_bonus']:,}"],
+                )
+
+        progress = core.build_retirement_progress([{
+            "site_name": "彩虹岛", "user_level": "(冰人)Peasant", "updated_day": "2026-11-08",
+        }])
+        self.assertEqual(progress["rule_missing"], 0)
+        self.assertEqual(progress["sites"][0]["next_level"], "User")
+
     def test_vip_only_rule_uses_domain_alias_for_wealthy_retirement(self):
         progress = core.build_retirement_progress(
             [{
@@ -1544,8 +1599,8 @@ class PackagingTests(unittest.TestCase):
         self.assertNotIn("等级升级中", source)
         self.assertIn("!site.retirement_level && !site.next_level", source)
         self.assertIn("--route-count", source)
-        self.assertIn(".retirement-detail{min-width:0;min-height:0;overflow:visible", source)
-        self.assertNotIn(".retirement-detail{min-width:0;min-height:0;overflow-y:auto", source)
+        self.assertIn(".retirement-detail{min-width:0;min-height:0;overflow-x:hidden;overflow-y:auto", source)
+        self.assertIn(".pt-workbench--compact .retirement-detail{min-width:0;overflow:visible", source)
         self.assertNotIn("还差", source)
         self.assertNotIn("MoviePilot 不提供站点等级门槛和保号等级", source)
         self.assertIn('class="requirement-panel"', source)
@@ -1570,7 +1625,7 @@ class PackagingTests(unittest.TestCase):
         self.assertIn('class="retirement-levels__columns"', source)
         self.assertIn('<details v-for="level in selectedRetirementView.levels"', source)
         self.assertIn("const route = retirementRoute(site)", source)
-        self.assertIn("const levels = site.route || []", source)
+        self.assertIn("const levels = retirementLevels(site)", source)
         self.assertNotIn("route.slice(currentIndex)", source)
         self.assertIn("route.slice(userIndex)", source)
         self.assertNotIn("route.slice(0, retirementIndex + 1)", source)
