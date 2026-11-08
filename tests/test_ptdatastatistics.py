@@ -1625,7 +1625,7 @@ class PackagingTests(unittest.TestCase):
         self.assertIn('class="retirement-levels__columns"', source)
         self.assertIn('<details v-for="level in selectedRetirementView.levels"', source)
         self.assertIn("const route = retirementRoute(site)", source)
-        self.assertIn("const levels = retirementLevels(site)", source)
+        self.assertIn("const levels = retirementLevels(originalSite)", source)
         self.assertNotIn("route.slice(currentIndex)", source)
         self.assertIn("route.slice(userIndex)", source)
         self.assertNotIn("route.slice(0, retirementIndex + 1)", source)

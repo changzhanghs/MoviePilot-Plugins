@@ -352,6 +352,74 @@ test('special levels stay in the requirements list without entering the ordinary
   assert.deepEqual(site.route, [peasant, user, power])
 })
 
+test('VIP route toggle shows real requirement progress and restores the original membership view', () => {
+  const state = retirementFixture()
+  const peasant = { name: '(冰人)Peasant' }
+  const user = { name: 'User', reached: false, is_current: false }
+  const power = { name: 'Power User', min_upload: 400, min_download: 200, min_ratio: 2, min_bonus: 80000 }
+  const vip = { name: '贵宾(VIP)' }
+  const site = {
+    site_name: '彩虹岛', current_level: '贵宾', status: 'wealthy_retired', is_vip: true,
+    upload: 191, download: 2, ratio: 110369, bonus: 100, next_level: '',
+    retirement_level: 'Ultimate User', route: [peasant, user, power], vip_levels: [vip],
+  }
+  const before = structuredClone(site)
+  Object.assign(state, {
+    selectedRetirementSite: { value: site },
+    showOrdinaryRoute: { value: false },
+    selectedRouteLevelName: { value: 'Power User' },
+    springUpgradeTaskIndex: { value: 1 },
+    computed: getter => getter,
+  })
+  vm.runInContext(sourceFunction('function nextLevelRule(', 'function durationLabel('), state)
+  const getView = vm.runInContext(`${sourceFunction('const selectedRetirementView = computed(', '\nwatch(')}\nselectedRetirementView`, state)
+  assert.equal(getView().site.status, 'wealthy_retired')
+  state.toggleOrdinaryRoute()
+  assert.equal(state.showOrdinaryRoute.value, true)
+  assert.equal(state.selectedRouteLevelName.value, '')
+  assert.equal(state.springUpgradeTaskIndex.value, 0)
+  const view = getView()
+  assert.equal(view.site.next_level, 'Power User')
+  assert.equal(view.displayedLevel.name, 'Power User')
+  assert(view.overallProgress < 100)
+  assert.equal(view.route.length, 2)
+  assert.equal(view.route[0].reached, true)
+  assert(view.route.every(level => !level.is_current))
+  assert.deepEqual(Array.from(view.levels), [peasant, user, power, vip])
+  assert.equal(view.site.current_level, '贵宾')
+  state.toggleOrdinaryRoute()
+  assert.equal(state.showOrdinaryRoute.value, false)
+  assert.equal(getView().site.status, 'wealthy_retired')
+  assert.deepEqual(site, before)
+})
+
+test('manual VIP uses the same condition preview and unknown requirements stay pending', () => {
+  const state = retirementFixture()
+  vm.runInContext(sourceFunction('function retirementRoute(', 'function nextLevelOverallProgress('), state)
+  const ordinary = { status: 'upgrading', route: [{ name: 'User', is_current: true }] }
+  assert.equal(state.ordinaryRouteSite(ordinary), ordinary)
+  const manual = {
+    ...ordinary, status: 'wealthy_retired', wealthy_retirement_manual: true, next_level: '',
+    route: [{ name: 'User', is_current: true, reached: true }, { name: 'Power User', min_download: 200 }],
+  }
+  const before = structuredClone(manual)
+  const manualPreview = state.ordinaryRouteSite(manual)
+  assert.equal(manualPreview.next_level, 'Power User')
+  assert(manualPreview.route.every(level => !level.is_current))
+  assert.equal(manualPreview.route[0].reached, true)
+  assert.equal(manualPreview.route[1].reached, false)
+  assert.equal(manualPreview.wealthy_retirement_manual, true)
+  assert.deepEqual(manual, before)
+  const vip = {
+    status: 'wealthy_retired', is_vip: true,
+    route: [{ name: 'User' }, { name: 'Power User', min_seeding_points: 100 }],
+  }
+  assert.equal(state.ordinaryRouteSite(vip).next_level, 'Power User')
+  const complete = state.ordinaryRouteSite({ ...vip, seeding_points: 100 })
+  assert.equal(complete.next_level, '')
+  assert(complete.route.every(level => level.reached && !level.is_current))
+})
+
 test('unknown mandatory requirements remain visible and prevent 100 percent progress', () => {
   const state = retirementFixture()
   const rows = state.requirementRows({ upload: 1000 }, {
