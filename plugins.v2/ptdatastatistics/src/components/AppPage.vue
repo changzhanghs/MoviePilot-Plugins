@@ -21,4 +21,8 @@ defineEmits(['action'])
 :global(.layout-content-wrapper:has(.plugin-app-page .pt-workbench) > .layout-footer > .footer-content-container:empty) {
   block-size: 0;
 }
+/* 外层底部 4px 加工作台自身 4px，与 MP 导航栏底部 8px 对齐。 */
+:global(.layout-page-content:has(.plugin-app-page .pt-workbench)) {
+  padding-block-end: 4px;
+}
 </style>

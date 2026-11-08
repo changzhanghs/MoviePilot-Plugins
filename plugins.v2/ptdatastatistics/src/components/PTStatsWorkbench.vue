@@ -89,6 +89,7 @@ let retirementSiteDrag = null
 let retirementSiteClickSuppressedUntil = 0
 const retirementSiteDragging = ref(false)
 const selectedRouteLevelName = ref('')
+const showOrdinaryRoute = ref(false)
 const springUpgradeTaskIndex = ref(0)
 
 function updateRetirementScrollState() {
@@ -830,6 +831,23 @@ function retirementRoute(site) {
 function retirementLevels(site) {
   return [...(site.route || []), ...(site.vip_levels || [])]
 }
+function ordinaryRouteSite(site) {
+  if (site.status !== 'wealthy_retired') return site
+  // 自动识别或手动标记的 VIP 均按条件预览，不推定账号的实际普通等级。
+  let pending = false
+  const route = retirementRoute(site).map(level => {
+    const complete = requirementRows(site, { ...level, reached: false }).every(row => row.complete)
+    pending ||= !complete
+    return { ...level, reached: !pending, is_current: false }
+  })
+  const nextLevel = route.find(level => !level.reached)
+  return { ...site, route, next_level: nextLevel?.name || '', status: nextLevel ? 'upgrading' : 'retired' }
+}
+function toggleOrdinaryRoute() {
+  showOrdinaryRoute.value = !showOrdinaryRoute.value
+  selectedRouteLevelName.value = ''
+  springUpgradeTaskIndex.value = 0
+}
 function nextLevelOverallProgress(site) {
   if (site?.status === 'wealthy_retired') return 100
   const nextLevel = nextLevelRule(site)
@@ -1188,11 +1206,12 @@ function levelAlternativeRequirements(level, site) {
 }
 
 const selectedRetirementView = computed(() => {
-  const site = selectedRetirementSite.value
-  if (!site) return null
+  const originalSite = selectedRetirementSite.value
+  if (!originalSite) return null
+  const site = showOrdinaryRoute.value ? ordinaryRouteSite(originalSite) : originalSite
 
   const route = retirementRoute(site)
-  const levels = retirementLevels(site)
+  const levels = retirementLevels(originalSite)
   const nextLevel = nextLevelRule(site)
   const displayedLevel = route.find(level => level.name === selectedRouteLevelName.value) || nextLevel
   const upgradeTasks = alternativeTaskOptions(site, displayedLevel)
@@ -1201,12 +1220,15 @@ const selectedRetirementView = computed(() => {
   const overallProgress = averageRequirementProgress(requirements)
   const completedCount = requirements.filter(row => row.complete).length
   const routeCount = route.length
-  const currentRouteIndex = route.findIndex(level => level.is_current)
+  const currentRouteIndex = route.findLastIndex(level => (
+    level.is_current || (showOrdinaryRoute.value && originalSite.status === 'wealthy_retired' && level.reached)
+  ))
   const completedRouteSegments = currentRouteIndex >= 0
     ? Math.min(currentRouteIndex, Math.max(routeCount - 1, 0))
     : site.status === 'retired' ? Math.max(routeCount - 1, 0) : 0
 
   return {
+    site,
     route,
     levels,
     routeStyle: routeCount ? {
@@ -1244,6 +1266,7 @@ watch(sortedRetirementSites, async () => {
 })
 watch(selectedRetirementSiteKey, () => {
   selectedRouteLevelName.value = ''
+  showOrdinaryRoute.value = false
   springUpgradeTaskIndex.value = 0
 })
 watch(
@@ -1513,7 +1536,7 @@ onBeforeUnmount(() => {
                   <div><h3>{{ selectedRetirementSite.site_name }}</h3><span>当前等级 <strong>{{ selectedRetirementSite.current_level || '站点未提供' }}</strong></span><span v-if="selectedRetirementSite.retirement_level">目标等级 <strong class="target-level">{{ selectedRetirementSite.retirement_level }}（保号）</strong></span></div>
                 </div>
                 <div class="retirement-detail__right">
-                  <VChip v-if="selectedRetirementSite.status === 'wealthy_retired'" class="wealthy-retirement-badge" prepend-icon="mdi-crown" variant="flat">富贵养老</VChip>
+                  <VChip v-if="selectedRetirementSite.status === 'wealthy_retired'" class="wealthy-retirement-badge" tag="button" type="button" :prepend-icon="showOrdinaryRoute ? 'mdi-routes' : 'mdi-crown'" variant="flat" :disabled="!selectedRetirementView.route.length" :aria-pressed="showOrdinaryRoute" :aria-label="showOrdinaryRoute ? '切换到富贵养老' : '切换到普通路线'" @click="toggleOrdinaryRoute">{{ showOrdinaryRoute ? '普通路线' : '富贵养老' }}</VChip>
                   <div class="retirement-detail__metrics">
                     <span>上传<strong>{{ formatBytes(selectedRetirementSite.upload) }}</strong></span>
                     <span>下载<strong>{{ formatBytes(selectedRetirementSite.download) }}</strong></span>
@@ -1522,7 +1545,7 @@ onBeforeUnmount(() => {
                 </div>
               </header>
 
-              <div v-if="selectedRetirementSite.status === 'wealthy_retired'" class="wealthy-retirement-state" aria-label="富贵养老状态">
+              <div v-if="selectedRetirementSite.status === 'wealthy_retired' && !showOrdinaryRoute" class="wealthy-retirement-state" aria-label="富贵养老状态">
                 <div class="wealthy-retirement-state__icon"><VIcon icon="mdi-crown" size="28" /></div>
                 <div><span>{{ selectedRetirementSite.wealthy_retirement_manual ? '手动指定站点' : 'VIP 会员等级' }}</span><strong>富贵养老</strong><small>{{ selectedRetirementSite.wealthy_retirement_manual ? '已在设置中手动标记；完整等级路线仍可在下方查看。' : '会员等级不强行映射普通等级，完整等级路线仍可在下方查看。' }}</small></div>
               </div>
@@ -1541,20 +1564,20 @@ onBeforeUnmount(() => {
                       :key="level.name"
                       type="button"
                       class="retirement-route-node"
-                      :class="{ 'is-reached': level.reached, 'is-current': level.is_current, 'is-next': level.name === selectedRetirementSite.next_level, 'is-retirement': level.is_retirement, 'is-selected': level.name === selectedRetirementView.displayedLevel?.name }"
+                      :class="{ 'is-reached': level.reached, 'is-current': level.is_current, 'is-next': level.name === selectedRetirementView.site.next_level, 'is-retirement': level.is_retirement, 'is-selected': level.name === selectedRetirementView.displayedLevel?.name }"
                       :aria-pressed="level.name === selectedRetirementView.displayedLevel?.name"
                       :aria-label="`查看 ${level.name} 等级进度`"
                       @click="selectedRouteLevelName = level.name; springUpgradeTaskIndex = 0"
                     >
                       <i class="retirement-route-node__marker" aria-hidden="true">{{ index + 1 }}</i>
                       <strong class="retirement-route-node__name"><span>{{ splitLevelName(level).local }}</span><span v-if="splitLevelName(level).english">{{ splitLevelName(level).english }}</span></strong>
-                      <em class="retirement-route-node__badge">{{ routeNodeStatus(selectedRetirementSite, level) }}</em>
+                      <em class="retirement-route-node__badge">{{ routeNodeStatus(selectedRetirementView.site, level) }}</em>
                     </button>
                   </div>
                 </div>
               </div>
 
-              <div v-if="selectedRetirementSite.status !== 'wealthy_retired' && selectedRetirementView.route.length" class="retirement-target-grid">
+              <div v-if="(selectedRetirementSite.status !== 'wealthy_retired' || showOrdinaryRoute) && selectedRetirementView.route.length" class="retirement-target-grid">
                 <section class="requirement-panel">
                   <div class="requirement-panel__heading">
                     <div><VIcon icon="mdi-target" color="primary" size="34" /><span>{{ selectedRetirementView.isDefaultLevel ? '下一等级' : '所选等级' }}</span><strong>{{ selectedRetirementView.displayedLevel?.name || '已是最高等级' }}</strong></div>
@@ -1778,11 +1801,11 @@ onBeforeUnmount(() => {
 .retirement-detail__metrics{display:flex;flex:0 0 auto;align-items:center;gap:22px}
 .retirement-detail__metrics span{display:flex;flex-direction:column;gap:3px;color:rgba(var(--v-theme-on-surface),.52);font-size:.68rem}
 .retirement-detail__metrics strong{color:rgba(var(--v-theme-on-surface),.9);font-size:.86rem}
-.retirement-route-rail{overflow-x:auto;padding:22px 12px 14px}
-.retirement-route-rail__track{position:relative;min-width:860px}
+.retirement-route-rail{overflow-x:auto;padding:22px 6px 14px}
+.retirement-route-rail__track{position:relative;min-width:max(860px,calc(var(--route-count) * 110px))}
 .retirement-route-rail__line{position:absolute;z-index:0;top:23px;left:var(--route-inset);width:var(--route-span)}
 .retirement-route-rail__nodes{position:relative;z-index:1;display:grid;grid-template-columns:repeat(var(--route-count),minmax(80px,1fr));align-items:start}
-.retirement-route-node{appearance:none;display:grid;min-width:0;grid-template-rows:48px auto 24px;place-items:center;gap:5px;padding:0 5px;border:0;border-radius:12px;background:transparent;color:inherit;font:inherit;text-align:center;cursor:pointer}
+.retirement-route-node{appearance:none;display:grid;min-width:0;grid-template-rows:48px auto 24px;place-items:center;gap:5px;padding:0 1px;border:0;border-radius:12px;background:transparent;color:inherit;font:inherit;text-align:center;cursor:pointer}
 .retirement-route-node:hover,.retirement-route-node:focus-visible{background:rgba(var(--v-theme-primary),.08);outline:none}
 .retirement-route-node:focus-visible{box-shadow:inset 0 0 0 2px rgb(var(--v-theme-primary))}
 .retirement-route-node__marker{position:relative;z-index:1;display:grid;width:38px;height:38px;place-items:center;border:4px solid rgba(var(--v-theme-on-surface),.32);border-radius:50%;background:rgb(var(--v-theme-surface));box-shadow:0 0 0 4px rgb(var(--v-theme-surface));color:rgba(var(--v-theme-on-surface),.82);font-size:.9rem;font-style:normal;font-weight:900}
@@ -1792,7 +1815,7 @@ onBeforeUnmount(() => {
 .retirement-route-rail__nodes .is-retirement .retirement-route-node__marker{border-color:rgb(var(--v-theme-success));background:rgb(var(--v-theme-success))}
 .retirement-route-rail__nodes .is-selected .retirement-route-node__marker{box-shadow:0 0 0 4px rgb(var(--v-theme-surface)),0 0 0 8px rgb(var(--v-theme-primary))}
 .retirement-route-rail__nodes strong{max-width:100%;color:rgba(var(--v-theme-on-surface),.78);font-size:.7rem;line-height:1.2}
-.retirement-route-node__name{display:grid;min-height:34px;align-content:start;place-items:center;gap:1px}.retirement-route-node__name>span{display:block;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.retirement-route-node__name>span+span{font-size:.66rem;text-transform:uppercase}
+.retirement-route-node__name{display:grid;min-width:0;min-height:34px;align-content:start;place-items:center;gap:1px}.retirement-route-node__name>span{display:block;max-width:100%;white-space:nowrap;letter-spacing:-.02em}.retirement-route-node__name>span+span{font-size:.66rem;text-transform:uppercase}
 .retirement-route-node__badge{padding:2px 9px;border-radius:999px;background:rgba(var(--v-theme-on-surface),.1);color:rgba(var(--v-theme-on-surface),.68);font-size:.6rem;font-style:normal;font-weight:800;line-height:16px;white-space:nowrap}
 .retirement-route-rail__nodes .is-current strong,.retirement-route-rail__nodes .is-current .retirement-route-node__badge{color:rgb(var(--v-theme-primary))}
 .retirement-route-rail__nodes .is-next strong,.retirement-route-rail__nodes .is-next .retirement-route-node__badge{color:rgb(var(--v-theme-primary))}
