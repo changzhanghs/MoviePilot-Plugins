@@ -334,6 +334,24 @@ function retirementFixture() {
   return state
 }
 
+test('special levels stay in the requirements list without entering the ordinary progress rail', () => {
+  const state = {}
+  vm.createContext(state)
+  vm.runInContext(sourceFunction('function retirementRoute(', 'function nextLevelOverallProgress('), state)
+  const peasant = { name: '(冰人)Peasant', description: '7天内恢复分享率' }
+  const user = { name: 'User', is_current: true }
+  const power = { name: 'Power User', min_ratio: 2, min_ratio_strict: true }
+  const vip = { name: '贵宾(VIP)', description: '免除自动降级' }
+  const site = { route: [peasant, user, power], vip_levels: [vip] }
+  assert.deepEqual(Array.from(state.retirementRoute(site)), [user, power])
+  assert.deepEqual(Array.from(state.retirementLevels(site)), [peasant, user, power, vip])
+  // Localized or custom routes can include special levels after User as well.
+  assert.deepEqual(Array.from(state.retirementRoute({ route: [user, peasant, power, vip] })), [user, power])
+  const lv0 = { name: 'Lv0', aliases: ['User', 'Peasant'] }
+  assert.deepEqual(Array.from(state.retirementRoute({ route: [lv0, power] })), [lv0, power])
+  assert.deepEqual(site.route, [peasant, user, power])
+})
+
 test('unknown mandatory requirements remain visible and prevent 100 percent progress', () => {
   const state = retirementFixture()
   const rows = state.requirementRows({ upload: 1000 }, {

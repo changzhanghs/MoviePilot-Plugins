@@ -172,6 +172,41 @@ def _spring_alternatives(download: int, real_download: str, points: int, uploads
 
 # 用户依据各站当前等级页校正的规则。上游生成文件保持原样，便于后续重新生成和审计。
 _SITE_RULE_PATCHES: dict[str, dict[str, Any]] = {
+    "彩虹岛": {
+        "retirement_source_id": 8,
+        "additional_levels": [{
+            "id": 0,
+            "name": "(冰人)Peasant",
+            "privilege": "被降级的用户有7天时间提升分享率，否则会被系统自动清理。下载超过50GB、100GB、200GB、400GB、800GB时，分享率应分别大于0.4、0.5、0.6、0.7、0.8。",
+        }],
+        "vip_levels": [{
+            "id": 100,
+            "name": "贵宾(VIP)",
+            "nameAka": ["贵宾", "VIP"],
+            "privilege": "由管理员仔细斟酌后分配给对站点某方面有特殊贡献的用户。和Nexus Master拥有相同权限并被认为是精英成员。免除自动降级。",
+        }],
+        "levels": {
+            1: {"aliases": ("未烧",), "description_suffix": "冰人在7天内分享率达到1，恢复未烧等级。"},
+            **{
+                level_id: {
+                    "aliases": (alias,),
+                    "min_ratio_strict": True,
+                    "min_bonus_strict": True,
+                    "description_suffix": f"分享率低于 {ratio:g} 或魔力值小于 {bonus:,} 时自动降级。",
+                }
+                for level_id, alias, ratio, bonus in (
+                    (2, "感冒", 1.98, 80_000),
+                    (3, "发热", 2.98, 150_000),
+                    (4, "低烧", 3.98, 300_000),
+                    (5, "中烧", 4.98, 650_000),
+                    (6, "高烧", 5.98, 1_000_000),
+                    (7, "烧糊涂", 6.98, 2_200_000),
+                    (8, "走火入魔", 7.98, 3_500_000),
+                    (9, "骨灰", 9.98, 5_000_000),
+                )
+            },
+        },
+    },
     "憨憨": {
         "retirement_source_id": 8,
         "levels": {

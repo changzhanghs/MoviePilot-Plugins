@@ -1,5 +1,6 @@
 import { importShared } from './__federation_fn_import-JrT3xvdd.js';
-import { P as PTStatsWorkbench } from './PTStatsWorkbench-BUp0k55H.js';
+import { P as PTStatsWorkbench } from './PTStatsWorkbench-Czcel6gO.js';
+import { _ as _export_sfc } from './SiteAvatar-DCSfizL-.js';
 
 const {openBlock:_openBlock,createBlock:_createBlock} = await importShared('vue');
 
@@ -30,5 +31,6 @@ return (_ctx, _cache) => {
 }
 
 };
+const AppPage = /*#__PURE__*/_export_sfc(_sfc_main, [['__scopeId',"data-v-f197cec5"]]);
 
-export { _sfc_main as default };
+export { AppPage as default };

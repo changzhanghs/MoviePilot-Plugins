@@ -821,9 +821,14 @@ function nextLevelRule(site) {
   return (site.route || []).find(level => level.name === site.next_level) || null
 }
 function retirementRoute(site) {
-  const route = site.route || []
+  const route = (site.route || []).filter(level => (
+    !/\b(?:peasant|vip)\b|冰人|贵宾|貴賓/i.test(String(level.name || ''))
+  ))
   const userIndex = route.findIndex(level => String(level.name || '').replace(/[^a-z0-9]/gi, '').toLowerCase() === 'user')
   return userIndex >= 0 ? route.slice(userIndex) : route
+}
+function retirementLevels(site) {
+  return [...(site.route || []), ...(site.vip_levels || [])]
 }
 function nextLevelOverallProgress(site) {
   if (site?.status === 'wealthy_retired') return 100
@@ -1187,7 +1192,7 @@ const selectedRetirementView = computed(() => {
   if (!site) return null
 
   const route = retirementRoute(site)
-  const levels = site.route || []
+  const levels = retirementLevels(site)
   const nextLevel = nextLevelRule(site)
   const displayedLevel = route.find(level => level.name === selectedRouteLevelName.value) || nextLevel
   const upgradeTasks = alternativeTaskOptions(site, displayedLevel)
@@ -1496,7 +1501,7 @@ onBeforeUnmount(() => {
                     <span>{{ site.current_level || '站点未提供等级' }}</span>
                     <VProgressLinear :model-value="nextLevelOverallProgress(site)" :color="site.status === 'wealthy_retired' ? 'warning' : 'primary'" bg-color="surface-variant" height="4" rounded />
                   </span>
-                  <small>{{ site.status === 'wealthy_retired' ? '富贵养老' : `${nextLevelOverallProgress(site)}%` }}</small>
+                  <small v-if="site.status !== 'wealthy_retired'">{{ nextLevelOverallProgress(site) }}%</small>
                 </button>
               </div>
             </aside>

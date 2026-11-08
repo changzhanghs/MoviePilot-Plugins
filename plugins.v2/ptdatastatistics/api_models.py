@@ -162,6 +162,7 @@ class RetirementSiteData(BaseModel):
     updated_day: str = ""
     levels_remaining: int | None = None
     route: list[LevelRequirementData] = Field(default_factory=list)
+    vip_levels: list[LevelRequirementData] = Field(default_factory=list)
 
 
 class RetirementProgressData(BaseModel):
