@@ -1802,10 +1802,10 @@ onBeforeUnmount(() => {
 .retirement-detail__metrics span{display:flex;flex-direction:column;gap:3px;color:rgba(var(--v-theme-on-surface),.52);font-size:.68rem}
 .retirement-detail__metrics strong{color:rgba(var(--v-theme-on-surface),.9);font-size:.86rem}
 .retirement-route-rail{overflow-x:auto;padding:22px 6px 14px}
-.retirement-route-rail__track{position:relative;min-width:max(860px,calc(var(--route-count) * 110px))}
+.retirement-route-rail__track{position:relative;min-width:min(860px,100%)}
 .retirement-route-rail__line{position:absolute;z-index:0;top:23px;left:var(--route-inset);width:var(--route-span)}
 .retirement-route-rail__nodes{position:relative;z-index:1;display:grid;grid-template-columns:repeat(var(--route-count),minmax(80px,1fr));align-items:start}
-.retirement-route-node{appearance:none;display:grid;min-width:0;grid-template-rows:48px auto 24px;place-items:center;gap:5px;padding:0 1px;border:0;border-radius:12px;background:transparent;color:inherit;font:inherit;text-align:center;cursor:pointer}
+.retirement-route-node{appearance:none;display:grid;min-width:0;container-type:inline-size;grid-template-rows:48px auto 24px;place-items:center;gap:5px;padding:0 1px;border:0;border-radius:12px;background:transparent;color:inherit;font:inherit;text-align:center;cursor:pointer}
 .retirement-route-node:hover,.retirement-route-node:focus-visible{background:rgba(var(--v-theme-primary),.08);outline:none}
 .retirement-route-node:focus-visible{box-shadow:inset 0 0 0 2px rgb(var(--v-theme-primary))}
 .retirement-route-node__marker{position:relative;z-index:1;display:grid;width:38px;height:38px;place-items:center;border:4px solid rgba(var(--v-theme-on-surface),.32);border-radius:50%;background:rgb(var(--v-theme-surface));box-shadow:0 0 0 4px rgb(var(--v-theme-surface));color:rgba(var(--v-theme-on-surface),.82);font-size:.9rem;font-style:normal;font-weight:900}
@@ -1815,7 +1815,7 @@ onBeforeUnmount(() => {
 .retirement-route-rail__nodes .is-retirement .retirement-route-node__marker{border-color:rgb(var(--v-theme-success));background:rgb(var(--v-theme-success))}
 .retirement-route-rail__nodes .is-selected .retirement-route-node__marker{box-shadow:0 0 0 4px rgb(var(--v-theme-surface)),0 0 0 8px rgb(var(--v-theme-primary))}
 .retirement-route-rail__nodes strong{max-width:100%;color:rgba(var(--v-theme-on-surface),.78);font-size:.7rem;line-height:1.2}
-.retirement-route-node__name{display:grid;min-width:0;min-height:34px;align-content:start;place-items:center;gap:1px}.retirement-route-node__name>span{display:block;max-width:100%;white-space:nowrap;letter-spacing:-.02em}.retirement-route-node__name>span+span{font-size:.66rem;text-transform:uppercase}
+.retirement-route-node__name{display:grid;min-width:0;min-height:34px;align-content:start;place-items:center;gap:1px}.retirement-route-node__name>span{display:block;max-width:100%;white-space:nowrap;letter-spacing:-.02em}.retirement-route-node__name>span+span{font-size:clamp(.5rem,9.5cqi,.66rem);text-transform:uppercase}
 .retirement-route-node__badge{padding:2px 9px;border-radius:999px;background:rgba(var(--v-theme-on-surface),.1);color:rgba(var(--v-theme-on-surface),.68);font-size:.6rem;font-style:normal;font-weight:800;line-height:16px;white-space:nowrap}
 .retirement-route-rail__nodes .is-current strong,.retirement-route-rail__nodes .is-current .retirement-route-node__badge{color:rgb(var(--v-theme-primary))}
 .retirement-route-rail__nodes .is-next strong,.retirement-route-rail__nodes .is-next .retirement-route-node__badge{color:rgb(var(--v-theme-primary))}
